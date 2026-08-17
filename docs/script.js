@@ -1,81 +1,23 @@
-// Inicialização das Animações GSAP e Interatividades
+// Syrius Agent - Ultra-Fast 120FPS Performance Scripts
 document.addEventListener("DOMContentLoaded", () => {
-  // 1. Registro do ScrollTrigger com Segurança Total (Cards nunca somem)
-  if (window.gsap && window.ScrollTrigger) {
-    gsap.registerPlugin(ScrollTrigger);
+  // 1. Intersection Observer Nativo (Sem scroll lag, zero dependência pesada)
+  const observerOptions = {
+    threshold: 0.08,
+    rootMargin: "0px 0px -40px 0px",
+  };
 
-    // Hero Animations (Entrada suave)
-    const tl = gsap.timeline();
-    tl.fromTo(
-      ".hero-pill",
-      { y: -20, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.6, ease: "power3.out", clearProps: "all" }
-    )
-      .fromTo(
-        ".hero-title",
-        { y: 25, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.7, ease: "power3.out", clearProps: "all" },
-        "-=0.3"
-      )
-      .fromTo(
-        ".hero-desc",
-        { y: 15, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.6, ease: "power3.out", clearProps: "all" },
-        "-=0.4"
-      )
-      .fromTo(
-        ".hero-cta-group",
-        { y: 15, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.5, ease: "power3.out", clearProps: "all" },
-        "-=0.4"
-      )
-      .fromTo(
-        ".hero-mockup-wrapper",
-        { y: 40, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.8, ease: "power3.out", clearProps: "all" },
-        "-=0.3"
-      );
-
-    // Pipeline Cards (Garante que nunca ficam invisíveis)
-    gsap.fromTo(
-      ".pipeline-card",
-      { y: 25, opacity: 0 },
-      {
-        scrollTrigger: {
-          trigger: ".pipeline-grid",
-          start: "top 85%",
-          once: true, // Anima apenas uma vez e nunca reseta para invisível
-        },
-        y: 0,
-        opacity: 1,
-        duration: 0.5,
-        stagger: 0.08,
-        ease: "power2.out",
-        clearProps: "all", // Limpa todos os estilos inline para evitar bugs de scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
       }
-    );
+    });
+  }, observerOptions);
 
-    // Bento Grid Animation (Garante que nunca ficam invisíveis)
-    gsap.fromTo(
-      ".bento-card",
-      { y: 25, opacity: 0 },
-      {
-        scrollTrigger: {
-          trigger: ".bento-grid",
-          start: "top 85%",
-          once: true,
-        },
-        y: 0,
-        opacity: 1,
-        duration: 0.5,
-        stagger: 0.1,
-        ease: "power2.out",
-        clearProps: "all",
-      }
-    );
-
-    ScrollTrigger.refresh();
-  }
+  document.querySelectorAll(".animate-item").forEach((el) => {
+    observer.observe(el);
+  });
 
   // 2. Sistema de Abas da Demonstração Real
   const tabBtns = document.querySelectorAll(".demo-tab-btn");
@@ -143,6 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const slideBodyEl = document.getElementById("slide-body");
   const prevBtn = document.getElementById("slide-prev");
   const nextBtn = document.getElementById("slide-next");
+  const slideCard = document.getElementById("slide-card");
 
   function updateSlide(idx) {
     if (!slideHeadlineEl) return;
@@ -152,12 +95,13 @@ document.addEventListener("DOMContentLoaded", () => {
     slideHeadlineEl.textContent = data.headline;
     slideBodyEl.textContent = data.body;
 
-    if (window.gsap) {
-      gsap.fromTo(
-        "#slide-card",
-        { opacity: 0.5, scale: 0.98 },
-        { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out", clearProps: "all" }
-      );
+    if (slideCard) {
+      slideCard.style.transform = "scale(0.99)";
+      slideCard.style.opacity = "0.7";
+      setTimeout(() => {
+        slideCard.style.transform = "scale(1)";
+        slideCard.style.opacity = "1";
+      }, 100);
     }
   }
 
