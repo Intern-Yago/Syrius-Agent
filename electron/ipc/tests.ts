@@ -136,11 +136,18 @@ export function registerTestsIPC(getMainWindow: () => BrowserWindow | null) {
 
   // EXECUTAR UM TESTE ESPECÍFICO
   ipcMain.handle("tests:run", async (_event, filename: string): Promise<TestRunResult> => {
-    if (runningProcesses.has(filename)) {
+    // Sanitização de Segurança contra Path Traversal
+    const baseName = path.basename(filename).replace(/\.ts$/, "").replace(/[^a-zA-Z0-9_-]/g, "");
+    if (!baseName) {
+      return { success: false, message: "Nome de teste inválido." };
+    }
+    const cleanFilename = `${baseName}.ts`;
+
+    if (runningProcesses.has(cleanFilename)) {
       return { success: false, message: "Este teste já está em execução." };
     }
 
-    const testPath = `src/tests/${filename.endsWith(".ts") ? filename : `${filename}.ts`}`;
+    const testPath = `src/tests/${cleanFilename}`;
     const startTime = Date.now();
     const accumulatedLogs: TestLogEntry[] = [];
 

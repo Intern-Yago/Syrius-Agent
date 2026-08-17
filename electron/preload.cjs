@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAnalyticsHistory: () => ipcRenderer.invoke("analytics:list"),
   runAnalyticsAudit: (options) => ipcRenderer.invoke("analytics:run", options),
   getAnalyticsRunning: () => ipcRenderer.invoke("analytics:is-running"),
+  exportAnalyticsReport: (format, report) => ipcRenderer.invoke("analytics:export-report", { format, report }),
   onAnalyticsStatusChange: (callback) => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on("analytics:status-change", listener);

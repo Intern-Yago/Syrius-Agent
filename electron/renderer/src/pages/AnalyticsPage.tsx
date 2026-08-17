@@ -22,6 +22,7 @@ import {
   IconSearch,
   IconChevronLeft,
   IconMessageSquare,
+  IconDownload,
 } from "../components/common/Icons";
 
 const PERIOD_OPTIONS = [
@@ -43,6 +44,8 @@ export function AnalyticsPage() {
   const [loadingRag, setLoadingRag] = useState(false);
   const [sendingBriefing, setSendingBriefing] = useState(false);
   const [briefingFeedback, setBriefingFeedback] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [exportingReport, setExportingReport] = useState(false);
+  const [exportFeedback, setExportFeedback] = useState<{ success?: boolean; message?: string } | null>(null);
   const [viewMode, setViewMode] = useState<"ACTIVE_AUDIT" | "HISTORY_LIST">("ACTIVE_AUDIT");
   
   // ESTADOS DOS FILTROS ESTATÍSTICOS
@@ -180,6 +183,38 @@ export function AnalyticsPage() {
       });
     } finally {
       setSendingBriefing(false);
+    }
+  }
+
+  async function handleExportReport(format: "markdown" | "json") {
+    if (!selectedReport) return;
+    try {
+      setExportingReport(true);
+      setExportFeedback(null);
+      if (!window.electronAPI?.exportAnalyticsReport) {
+        setExportFeedback({ success: false, message: "Exportação não suportada nesta versão." });
+        return;
+      }
+      const res = await window.electronAPI.exportAnalyticsReport(format, selectedReport);
+      if (res.success && res.filePath) {
+        const fileName = res.filePath.split(/[\\/]/).pop();
+        setExportFeedback({
+          success: true,
+          message: `Relatório exportado com sucesso: ${fileName}`,
+        });
+      } else if (res.error) {
+        setExportFeedback({
+          success: false,
+          message: res.error,
+        });
+      }
+    } catch (err) {
+      setExportFeedback({
+        success: false,
+        message: err instanceof Error ? err.message : "Erro ao exportar relatório.",
+      });
+    } finally {
+      setExportingReport(false);
     }
   }
 
@@ -1011,7 +1046,34 @@ export function AnalyticsPage() {
                   </h3>
                 </div>
 
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  {/* BOTÃO EXPORTAR MARKDOWN */}
+                  <button
+                    type="button"
+                    onClick={() => handleExportReport("markdown")}
+                    disabled={exportingReport}
+                    className="secondary-button"
+                    style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)" }}
+                    title="Exportar este relatório em formato Markdown (.md)"
+                  >
+                    <IconDownload size={12} color="#38bdf8" />
+                    <span>{exportingReport ? "Exportando..." : "Exportar .MD"}</span>
+                  </button>
+
+                  {/* BOTÃO EXPORTAR JSON */}
+                  <button
+                    type="button"
+                    onClick={() => handleExportReport("json")}
+                    disabled={exportingReport}
+                    className="secondary-button"
+                    style={{ padding: "6px 10px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                    title="Exportar dados brutos em JSON (.json)"
+                  >
+                    <IconDownload size={12} />
+                    <span>JSON</span>
+                  </button>
+
+                  {/* BOTÃO DESPACHAR E-MAIL */}
                   <button
                     type="button"
                     onClick={handleSendBriefingEmail}
@@ -1021,7 +1083,7 @@ export function AnalyticsPage() {
                     title="Enviar este briefing agora para o e-mail cadastrado nas Configurações"
                   >
                     {sendingBriefing ? <IconLoader size={12} /> : <IconMail size={12} />}
-                    <span>{sendingBriefing ? "Enviando..." : "Despachar Briefing por E-mail"}</span>
+                    <span>{sendingBriefing ? "Enviando..." : "Despachar E-mail"}</span>
                   </button>
 
                   {/* BADGE DO SCORE GERAL */}
@@ -1051,6 +1113,22 @@ export function AnalyticsPage() {
                   })()}
                 </div>
               </div>
+
+              {exportFeedback && (
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    marginBottom: "12px",
+                    background: exportFeedback.success ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                    border: `1px solid ${exportFeedback.success ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                    color: exportFeedback.success ? "#34d399" : "#f87171",
+                  }}
+                >
+                  {exportFeedback.message}
+                </div>
+              )}
 
               {briefingFeedback && (
                 <div

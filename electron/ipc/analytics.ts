@@ -1,4 +1,5 @@
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, dialog } from "electron";
+import fs from "node:fs";
 import {
   getAnalyticsHistory,
   runAnalyticsAudit,
@@ -82,6 +83,101 @@ export function registerAnalyticsIPC(getMainWindow?: () => BrowserWindow | null)
           success: false,
           error: errMsg,
         };
+      }
+    }
+  );
+
+  // 4. Exportar Relatório de Auditoria (Markdown ou JSON)
+  ipcMain.handle(
+    "analytics:export-report",
+    async (
+      _event,
+      { format, report }: { format: "markdown" | "json"; report: AnalyticsReport }
+    ): Promise<{ success: boolean; filePath?: string; error?: string }> => {
+      try {
+        if (!report) {
+          return { success: false, error: "Nenhum relatório selecionado para exportação." };
+        }
+
+        const window = getMainWindow ? getMainWindow() : null;
+        const defaultDate = report.createdAt
+          ? new Date(report.createdAt).toISOString().slice(0, 10)
+          : new Date().toISOString().slice(0, 10);
+        const defaultFilename = `syrius-audit-${defaultDate}.${format === "json" ? "json" : "md"}`;
+
+        const { canceled, filePath } = await dialog.showSaveDialog(window || (undefined as any), {
+          title: "Exportar Relatório de Auditoria Syrius Agent",
+          defaultPath: defaultFilename,
+          filters:
+            format === "json"
+              ? [{ name: "Arquivo JSON (*.json)", extensions: ["json"] }]
+              : [{ name: "Documento Markdown (*.md)", extensions: ["md"] }],
+        });
+
+        if (canceled || !filePath) {
+          return { success: false };
+        }
+
+        let content = "";
+        if (format === "json") {
+          content = JSON.stringify(report, null, 2);
+        } else {
+          const d = report.createdAt
+            ? new Date(report.createdAt).toLocaleDateString("pt-BR")
+            : new Date().toLocaleDateString("pt-BR");
+
+          let healthLabel = "Saudável";
+          if (report.score >= 8.5) healthLabel = "Excelente";
+          else if (report.score >= 7.0) healthLabel = "Saudável";
+          else if (report.score >= 5.0) healthLabel = "Atenção";
+          else healthLabel = "Crítico";
+
+          content =
+            `# 🌌 Syrius Agent - Relatório Executivo de Auditoria & Inteligência\n\n` +
+            `> **Data da Análise:** ${d}  \n` +
+            `> **Período Auditado:** ${report.periodLabel || "Últimos 7 dias"}  \n` +
+            `> **Score Geral da Conta:** ${report.score?.toFixed(1) || "N/A"}/10 (${healthLabel})\n\n` +
+            `---\n\n` +
+            `## 📊 Métricas Consolidadas do Período\n\n` +
+            `- **Alcance Total:** ${(report.reachTotal || 0).toLocaleString("pt-BR")} contas alcançadas\n` +
+            `- **Interações Totais:** ${(report.interactionsTotal || 0).toLocaleString("pt-BR")} engajamentos\n` +
+            `- **Novos Seguidores:** +${report.followersGained || 0}\n` +
+            `- **Taxa de Engajamento:** ${report.engagementRate || 0}%\n` +
+            `- **Salvamentos (Bookmarks):** ${report.savesCount || 0}\n` +
+            `- **Post Campeão do Período:** ${report.bestPerformingTopic || "N/A"}\n\n` +
+            `---\n\n` +
+            `## 🧠 Diagnóstico Macro da Estratégia\n\n` +
+            `${report.quantitativeSummary || "Sem observações macro registradas."}\n\n` +
+            `### 🎯 Pontos Fortes Identificados\n\n` +
+            `${(report.qualitativeStrengths || []).map((s) => `- ${s}`).join("\n") || "- Nenhum ponto forte listado."}\n\n` +
+            `### ⚠️ Pontos de Atenção & Oportunidades\n\n` +
+            `${(report.qualitativeWeaknesses || []).map((w) => `- ${w}`).join("\n") || "- Nenhum ponto fraco listado."}\n\n` +
+            `### 💡 Hipóteses RAG & Diretrizes Estratégicas\n\n` +
+            `${(report.strategicDirectives || []).map((dir) => `- ${dir}`).join("\n") || "- Nenhuma diretriz cadastrada."}\n\n` +
+            `---\n\n` +
+            `## 🔍 Diagnóstico Micro Post a Post\n\n` +
+            (report.individualPostsBreakdown && report.individualPostsBreakdown.length > 0
+              ? report.individualPostsBreakdown
+                  .map(
+                    (p, idx) =>
+                      `### ${idx + 1}. ${p.postTopic || "Publicação"}\n\n` +
+                      `- **Formato:** \`${p.postFormat || "DESCONHECIDO"}\`\n` +
+                      `- **Nota do Post:** \`${p.individualScore !== undefined ? p.individualScore + "/10" : "N/A"}\`\n` +
+                      `- **Qualidade do Gancho (Hook):** ${p.hookAnalysis || "N/A"}\n` +
+                      `- **Por que funcionou:** ${p.whyItWorked || "N/A"}\n` +
+                      `- **Gargalos & O que prejudicou:** ${p.whatHurtIt || "N/A"}\n`
+                  )
+                  .join("\n")
+              : "_Nenhum post detalhado disponível nesta auditoria._\n") +
+            `\n---\n\n` +
+            `*Gerado automaticamente pelo **Syrius Agent** em ${new Date().toLocaleString("pt-BR")}*\n`;
+        }
+
+        fs.writeFileSync(filePath, content, "utf-8");
+        return { success: true, filePath };
+      } catch (err: any) {
+        console.error("[analytics] Erro ao exportar relatório:", err);
+        return { success: false, error: err.message || "Falha ao gravar arquivo." };
       }
     }
   );

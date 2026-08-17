@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   ipcMain,
   nativeImage,
+  shell,
 } from "electron";
 
 import fs from "node:fs";
@@ -112,6 +113,30 @@ function createWindow() {
       )
     );
   }
+
+  // Blindagem de Segurança: Bloquear abertura de popups arbitrários e redirecionar links externos para o navegador padrão do SO
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("http:") || url.startsWith("https:")) {
+      shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+
+  // Impedir redirecionamento ou navegação não autorizada para fora da aplicação
+  mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
+    try {
+      const parsedUrl = new URL(navigationUrl);
+      if (isDev && parsedUrl.origin === "http://localhost:5173") {
+        return;
+      }
+      if (!isDev && parsedUrl.protocol === "file:") {
+        return;
+      }
+    } catch {
+      // url inválida
+    }
+    event.preventDefault();
+  });
 
   mainWindow.on(
     "closed",

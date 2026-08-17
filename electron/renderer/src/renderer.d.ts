@@ -142,6 +142,7 @@ declare global {
     getAnalyticsHistory: () => Promise<any[]>;
     runAnalyticsAudit: (options: { days?: number; startDate?: string; endDate?: string }) => Promise<{ success: boolean; report?: any; error?: string }>;
     getAnalyticsRunning: () => Promise<boolean>;
+    exportAnalyticsReport: (format: "markdown" | "json", report: any) => Promise<{ success: boolean; filePath?: string; error?: string }>;
     onAnalyticsStatusChange: (
       callback: (data: { running: boolean; report?: any; error?: string }) => void
     ) => () => void;
