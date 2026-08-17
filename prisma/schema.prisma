@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PostStatus {
+  DRAFT
+  GENERATED
+  REVIEW
+  APPROVED
+  READY
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+enum ReviewStatus {
+  APPROVED
+  NEEDS_REVISION
+}
+
+model Post {
+  id String @id @default(cuid())
+
+  topic   String
+  format  String
+  caption String?
+
+  hashtags String[] @default([])
+
+  status PostStatus @default(DRAFT)
+
+  scheduledAt DateTime?
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  slides  Slide[]
+  logs    GenerationLog[]
+  reviews ContentReview[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+}
+
+model Slide {
+  id String @id @default(cuid())
+
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  number          Int
+  title           String
+  text            String
+  visualDirection String
+  imagePath       String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([postId, number])
+  @@index([postId])
+}
+
+model GenerationLog {
+  id String @id @default(cuid())
+
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  provider String
+  model    String
+  prompt   String
+
+  status String
+  error  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+  @@index([createdAt])
+}
+
+model ContentReview {
+  id String @id @default(cuid())
+
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  status ReviewStatus
+
+  score Float
+
+  technicalAccuracy   Float
+  hookQuality         Float
+  structureQuality    Float
+  educationalValue    Float
+  engagementPotential Float
+  visualConsistency   Float
+
+  strengths   Json
+  problems    Json
+  suggestions Json
+
+  summary String
+
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum InsightStatus {
+  HYPOTHESIS
+  VALIDATED
+  REFUTED
+}
+
+enum InsightType {
+  HOOK_PERFORMANCE
+  FORMAT_EFFICIENCY
+  TIMING_OPTIMIZATION
+  AUDIENCE_PAIN
+  HASHTAG_CLUSTER
+  DESIGN_RETENTION
+}
+
+model PostAnalyticsAudit {
+  id String @id @default(cuid())
+
+  reportId    String?
+  report      GlobalAnalyticsReport? @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  postId      String?
+  postTopic   String
+  postFormat  String
+  publishedAt DateTime?
+
+  likesCount    Int @default(0)
+  commentsCount Int @default(0)
+  savesCount    Int @default(0)
+  sharesCount   Int @default(0)
+  reachTotal    Int @default(0)
+  impressions   Int @default(0)
+
+  whyItWorked       String
+  whatHurtIt        String
+  hookAnalysis      String
+  retentionEstimate String?
+  individualScore   Float   @default(7.0)
+
+  createdAt DateTime @default(now())
+
+  @@index([reportId])
+  @@index([postTopic])
+  @@index([createdAt])
+}
+
+model GlobalAnalyticsReport {
+  id String @id @default(cuid())
+
+  periodLabel String
+  startDate   String
+  endDate     String
+  score       Float
+
+  reachTotal         Int
+  impressionsTotal   Int
+  interactionsTotal  Int
+  engagementRate     Float
+  followersGained    Int
+  totalPostsAnalyzed Int
+
+  bestPerformingTopic   String
+  formatPerformance     Json
+  quantitativeSummary   String
+  qualitativeStrengths  Json
+  qualitativeWeaknesses Json
+  strategicDirectives   Json
+  recommendedTopics     Json
+
+  individualPosts PostAnalyticsAudit[]
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model LearningInsightEmbedding {
+  id String @id @default(cuid())
+
+  type            InsightType
+  title           String
+  content         String
+  embedding       Float[]
+  status          InsightStatus @default(HYPOTHESIS)
+  confidenceScore Float         @default(0.5)
+
+  evidencePostsCount  Int     @default(1)
+  correctionReasoning String?
+  supersededById      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([confidenceScore])
+}

@@ -1,0 +1,10 @@
+node_modules/
+.env
+dist/
+dist-electron/
+output/
+.agents/
+.claude/
+.windsurf/
+/src/generated/prisma
+*.log

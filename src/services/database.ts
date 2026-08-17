@@ -1,0 +1,1 @@
+export { prisma, getDatabase } from "../core/database.js";

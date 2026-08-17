@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: social-media-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: social_media
+      POSTGRES_PASSWORD: social_media_dev
+      POSTGRES_DB: social_media
+    ports:
+      - "5431:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U social_media -d social_media"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - social_media_network
+
+  minio:
+    image: minio/minio:latest
+    container_name: social-media-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: social_media
+      MINIO_ROOT_PASSWORD: social_media_minio_dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - social_media_network
+
+volumes:
+  postgres_data:
+    name: social-media-postgres-data
+  minio_data:
+    name: social-media-minio-data
+
+networks:
+  social_media_network:
+    name: social-media-network
