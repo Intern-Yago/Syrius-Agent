@@ -382,31 +382,70 @@
     </div>
   </section>
 
-  <!-- CALCULADORA DE ROI -->
+  <!-- CALCULADORA DE ROI INTERATIVA -->
   <section id="roi" class="section">
     <div class="section-header animate-item">
       <span class="section-badge">Impact & Efficiency</span>
       <h2 class="section-title">Quanto Tempo o Syrius Agent Economiza?</h2>
       <p class="section-desc">
-        Compare a criação manual tradicional de conteúdo técnico com a velocidade da pipeline autônoma.
+        Arraste a barra ou selecione uma frequência para comparar a criação manual com a automação total.
       </p>
     </div>
 
-    <div class="animate-item" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 36px; max-width: 680px; margin: 0 auto; text-align: center;">
-      <label style="font-size: 14px; color: var(--text-muted); display: block; margin-bottom: 12px;">
-        Quantos posts técnicos você publica por semana?
-      </label>
-      <input type="range" id="posts-per-week" min="1" max="14" value="5" style="width: 100%; max-width: 380px; accent-color: var(--primary); margin-bottom: 20px;" />
+    <div class="roi-card animate-item">
+      <!-- BADGE DINÂMICO QUE MOSTRA O NÚMERO EXATO -->
+      <div>
+        <span id="roi-frequency-badge" class="roi-header-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span id="roi-badge-text">5 posts técnicos por semana</span>
+        </span>
+      </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px;">
-        <div style="background: #09090b; padding: 18px; border-radius: 12px; border: 1px solid var(--border);">
-          <span style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">Tempo Economizado</span>
-          <strong id="hours-saved" style="font-size: 22px; color: #38bdf8; display: block; margin-top: 4px;">12.5h / semana</strong>
+      <!-- BOTÕES RÁPIDOS DE SELEÇÃO -->
+      <div class="roi-chips">
+        <button type="button" class="roi-chip" data-val="3">3 posts / semana</button>
+        <button type="button" class="roi-chip active" data-val="5">5 posts (Recomendado)</button>
+        <button type="button" class="roi-chip" data-val="7">7 posts (1 por dia)</button>
+        <button type="button" class="roi-chip" data-val="10">10 posts / semana</button>
+      </div>
+
+      <!-- SLIDER COM BOTÕES DE PASSO (-) E (+) -->
+      <div class="roi-slider-row">
+        <button type="button" id="roi-minus" class="roi-step-btn" title="Diminuir posts">−</button>
+        <input type="range" id="posts-per-week" min="1" max="14" value="5" class="roi-range-input" />
+        <button type="button" id="roi-plus" class="roi-step-btn" title="Aumentar posts">+</button>
+      </div>
+
+      <div class="roi-range-labels">
+        <span>1 post (mínimo)</span>
+        <span>Arraste para ajustar</span>
+        <span>14 posts (máximo)</span>
+      </div>
+
+      <!-- 4 CARDS DE RESULTADOS CLAROS -->
+      <div class="roi-results-grid">
+        <div class="roi-result-card">
+          <span>Tempo Manual Gasto</span>
+          <strong id="hours-manual" style="color: #f87171;">12.5h / semana</strong>
+          <small>~2.5h por post (pesquisa, redação e design)</small>
         </div>
 
-        <div style="background: #09090b; padding: 18px; border-radius: 12px; border: 1px solid var(--border);">
-          <span style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">Valor do Tempo Gerado</span>
-          <strong id="cost-saved" style="font-size: 22px; color: #34d399; display: block; margin-top: 4px;">R$ 3.000 / mês</strong>
+        <div class="roi-result-card">
+          <span>Com Syrius Agent</span>
+          <strong style="color: #34d399;">0.0h (100% Autônomo)</strong>
+          <small>Pipeline executa e posta sozinho</small>
+        </div>
+
+        <div class="roi-result-card">
+          <span>Tempo Livre Recuperado</span>
+          <strong id="hours-saved" style="color: #38bdf8;">50h / mês</strong>
+          <small>Mais tempo para código e produto</small>
+        </div>
+
+        <div class="roi-result-card">
+          <span>Economia de Produtividade</span>
+          <strong id="cost-saved" style="color: #c084fc;">R$ 3.000 / mês</strong>
+          <small>Estimativa a R$ 60/h de dev</small>
         </div>
       </div>
     </div>

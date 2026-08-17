@@ -117,25 +117,84 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 4. Calculadora de Tempo Economizado
+  // 4. Calculadora de ROI Interativa & Intuitiva
   const postsInput = document.getElementById("posts-per-week");
+  const roiBadgeText = document.getElementById("roi-badge-text");
+  const hoursManualEl = document.getElementById("hours-manual");
   const hoursSavedEl = document.getElementById("hours-saved");
   const costSavedEl = document.getElementById("cost-saved");
+  const roiMinusBtn = document.getElementById("roi-minus");
+  const roiPlusBtn = document.getElementById("roi-plus");
+  const roiChips = document.querySelectorAll(".roi-chip");
 
-  function calculateROI() {
-    if (!postsInput || !hoursSavedEl) return;
+  function updateROI() {
+    if (!postsInput) return;
     const posts = parseInt(postsInput.value, 10) || 5;
-    const hours = posts * 2.5;
-    const monthlyCost = hours * 4 * 60;
+    const min = parseInt(postsInput.min, 10) || 1;
+    const max = parseInt(postsInput.max, 10) || 14;
 
-    hoursSavedEl.textContent = `${hours}h / semana`;
-    if (costSavedEl) {
-      costSavedEl.textContent = `R$ ${monthlyCost.toLocaleString("pt-BR")} / mês`;
+    // Atualiza o preenchimento visual do slider
+    const percentage = ((posts - min) / (max - min)) * 100;
+    postsInput.style.background = `linear-gradient(to right, #38bdf8 0%, #38bdf8 ${percentage}%, #181820 ${percentage}%, #181820 100%)`;
+
+    // Atualiza o texto do badge
+    if (roiBadgeText) {
+      roiBadgeText.textContent = `${posts} ${posts === 1 ? "post técnico por semana" : "posts técnicos por semana"}`;
     }
+
+    // Cálculos
+    const weeklyManualHours = posts * 2.5;
+    const monthlySavedHours = weeklyManualHours * 4;
+    const monthlyCostSaved = monthlySavedHours * 60; // Base R$ 60/h de dev
+
+    if (hoursManualEl) hoursManualEl.textContent = `${weeklyManualHours.toFixed(1)}h / semana`;
+    if (hoursSavedEl) hoursSavedEl.textContent = `${monthlySavedHours.toFixed(0)}h / mês`;
+    if (costSavedEl) costSavedEl.textContent = `R$ ${monthlyCostSaved.toLocaleString("pt-BR")} / mês`;
+
+    // Sincroniza estado ativo dos chips
+    roiChips.forEach((chip) => {
+      const chipVal = parseInt(chip.getAttribute("data-val"), 10);
+      if (chipVal === posts) {
+        chip.classList.add("active");
+      } else {
+        chip.classList.remove("active");
+      }
+    });
   }
 
   if (postsInput) {
-    postsInput.addEventListener("input", calculateROI);
-    calculateROI();
+    postsInput.addEventListener("input", updateROI);
+
+    if (roiMinusBtn) {
+      roiMinusBtn.addEventListener("click", () => {
+        let current = parseInt(postsInput.value, 10) || 5;
+        if (current > parseInt(postsInput.min, 10)) {
+          postsInput.value = current - 1;
+          updateROI();
+        }
+      });
+    }
+
+    if (roiPlusBtn) {
+      roiPlusBtn.addEventListener("click", () => {
+        let current = parseInt(postsInput.value, 10) || 5;
+        if (current < parseInt(postsInput.max, 10)) {
+          postsInput.value = current + 1;
+          updateROI();
+        }
+      });
+    }
+
+    roiChips.forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const val = parseInt(chip.getAttribute("data-val"), 10);
+        if (val) {
+          postsInput.value = val;
+          updateROI();
+        }
+      });
+    });
+
+    updateROI();
   }
 });
