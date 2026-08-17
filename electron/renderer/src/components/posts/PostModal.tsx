@@ -349,7 +349,7 @@ export function PostModal({
             {!isPublished && (
               <button
                 type="button"
-                onClick={handlePublishPost}
+                onClick={handlePublish}
                 disabled={publishing}
                 className="primary-button"
                 style={{
