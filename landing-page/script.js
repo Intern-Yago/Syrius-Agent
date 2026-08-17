@@ -1,42 +1,80 @@
 // Inicialização das Animações GSAP e Interatividades
 document.addEventListener("DOMContentLoaded", () => {
-  // 1. Registro do ScrollTrigger
+  // 1. Registro do ScrollTrigger com Segurança Total (Cards nunca somem)
   if (window.gsap && window.ScrollTrigger) {
     gsap.registerPlugin(ScrollTrigger);
 
-    // Hero Animations
+    // Hero Animations (Entrada suave)
     const tl = gsap.timeline();
-    tl.from(".hero-pill", { y: -20, opacity: 0, duration: 0.6, ease: "power3.out" })
-      .from(".hero-title", { y: 30, opacity: 0, duration: 0.8, ease: "power3.out" }, "-=0.3")
-      .from(".hero-desc", { y: 20, opacity: 0, duration: 0.7, ease: "power3.out" }, "-=0.4")
-      .from(".hero-cta-group", { y: 20, opacity: 0, duration: 0.6, ease: "power3.out" }, "-=0.4")
-      .from(".hero-mockup-wrapper", { y: 60, opacity: 0, duration: 1, ease: "power3.out" }, "-=0.3");
+    tl.fromTo(
+      ".hero-pill",
+      { y: -20, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.6, ease: "power3.out", clearProps: "all" }
+    )
+      .fromTo(
+        ".hero-title",
+        { y: 25, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.7, ease: "power3.out", clearProps: "all" },
+        "-=0.3"
+      )
+      .fromTo(
+        ".hero-desc",
+        { y: 15, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.6, ease: "power3.out", clearProps: "all" },
+        "-=0.4"
+      )
+      .fromTo(
+        ".hero-cta-group",
+        { y: 15, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.5, ease: "power3.out", clearProps: "all" },
+        "-=0.4"
+      )
+      .fromTo(
+        ".hero-mockup-wrapper",
+        { y: 40, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.8, ease: "power3.out", clearProps: "all" },
+        "-=0.3"
+      );
 
-    // Pipeline Cards Stagger
-    gsap.from(".pipeline-card", {
-      scrollTrigger: {
-        trigger: ".pipeline-grid",
-        start: "top 80%",
-      },
-      y: 40,
-      opacity: 0,
-      duration: 0.6,
-      stagger: 0.1,
-      ease: "power2.out",
-    });
+    // Pipeline Cards (Garante que nunca ficam invisíveis)
+    gsap.fromTo(
+      ".pipeline-card",
+      { y: 25, opacity: 0 },
+      {
+        scrollTrigger: {
+          trigger: ".pipeline-grid",
+          start: "top 85%",
+          once: true, // Anima apenas uma vez e nunca reseta para invisível
+        },
+        y: 0,
+        opacity: 1,
+        duration: 0.5,
+        stagger: 0.08,
+        ease: "power2.out",
+        clearProps: "all", // Limpa todos os estilos inline para evitar bugs de scroll
+      }
+    );
 
-    // Bento Grid Animation
-    gsap.from(".bento-card", {
-      scrollTrigger: {
-        trigger: ".bento-grid",
-        start: "top 80%",
-      },
-      y: 30,
-      opacity: 0,
-      duration: 0.7,
-      stagger: 0.12,
-      ease: "power2.out",
-    });
+    // Bento Grid Animation (Garante que nunca ficam invisíveis)
+    gsap.fromTo(
+      ".bento-card",
+      { y: 25, opacity: 0 },
+      {
+        scrollTrigger: {
+          trigger: ".bento-grid",
+          start: "top 85%",
+          once: true,
+        },
+        y: 0,
+        opacity: 1,
+        duration: 0.5,
+        stagger: 0.1,
+        ease: "power2.out",
+        clearProps: "all",
+      }
+    );
+
+    ScrollTrigger.refresh();
   }
 
   // 2. Sistema de Abas da Demonstração Real
@@ -118,7 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
       gsap.fromTo(
         "#slide-card",
         { opacity: 0.5, scale: 0.98 },
-        { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out" }
+        { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out", clearProps: "all" }
       );
     }
   }
@@ -143,9 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function calculateROI() {
     if (!postsInput || !hoursSavedEl) return;
     const posts = parseInt(postsInput.value, 10) || 5;
-    // Média de 2.5 horas por post (pesquisa, redação, design, agendamento)
     const hours = posts * 2.5;
-    // Custo estimado de R$ 60/hora de profissional técnico
     const monthlyCost = hours * 4 * 60;
 
     hoursSavedEl.textContent = `${hours}h / semana`;
