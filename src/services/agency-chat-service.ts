@@ -69,18 +69,21 @@ interface GeminiClaraResponse {
 const HISTORY_FILE_PATH = path.join(projectRoot, "output", "agency-chat-history.json");
 
 /**
- * Carrega o histórico da conversa com a Clara
+ * Carrega o histórico da conversa com o Gestor Editorial
  */
 export async function getAgencyChatHistory(): Promise<ChatMessage[]> {
   try {
     const data = await fs.readFile(HISTORY_FILE_PATH, "utf-8");
     return JSON.parse(data);
   } catch {
+    const settings = await getSettings();
+    const managerName = settings.agencyManager?.name || "Clara";
+
     return [
       {
         id: "msg-welcome",
         sender: "clara",
-        text: "Olá! Eu sou a Clara, sua Gestora Editorial aqui na Syrius. Estou sempre de olho nas métricas do perfil e nas maiores tendências de desenvolvimento. Me conta: que ideia ou assunto você está pensando em abordar agora? Podemos trocar uma ideia e eu cuido de todo o resto!",
+        text: `Olá! Eu sou ${managerName}, sua Gestora Editorial aqui na Syrius. Estou sempre de olho nas métricas do perfil e nas maiores tendências de desenvolvimento. Me conta: que ideia ou assunto você está pensando em abordar agora? Podemos trocar uma ideia e eu cuido de todo o resto!`,
         timestamp: new Date().toISOString(),
         actionTaken: "NONE",
       },
@@ -111,13 +114,16 @@ export async function clearAgencyChatHistory(): Promise<void> {
 }
 
 /**
- * Sintetiza o áudio da voz da Clara usando Edge TTS (pt-BR-FranciscaNeural)
+ * Sintetiza o áudio da voz do Gestor usando Edge TTS
  */
-export async function synthesizeClaraVoice(text: string): Promise<string> {
+export async function synthesizeClaraVoice(text: string, voiceOverride?: string): Promise<string> {
+  const settings = await getSettings();
+  const voice = voiceOverride || settings.agencyManager?.edgeTtsVoice || "pt-BR-FranciscaNeural";
+
   const audioDir = path.join(projectRoot, "output", "audio");
   await fs.mkdir(audioDir, { recursive: true });
 
-  const fileName = `clara-${Date.now()}.mp3`;
+  const fileName = `agency-manager-${Date.now()}.mp3`;
   const outputPath = path.join(audioDir, fileName);
 
   const cleanText = text
@@ -128,10 +134,10 @@ export async function synthesizeClaraVoice(text: string): Promise<string> {
   const scriptPath = path.join(projectRoot, "scripts", "synthesize_tts.py");
 
   try {
-    await execFileAsync("python", [scriptPath, outputPath, "pt-BR-FranciscaNeural", cleanText]);
+    await execFileAsync("python", [scriptPath, outputPath, voice, cleanText]);
     return outputPath;
   } catch (err) {
-    console.warn("[AgencyChat] Fallback ao gerar voz da Clara:", err);
+    console.warn("[AgencyChat] Fallback ao gerar voz do Gestor:", err);
     return "";
   }
 }
@@ -178,6 +184,9 @@ export async function processAgencyMessage(
   userText: string,
   generateVoice = true
 ): Promise<{ userMsg: ChatMessage; claraMsg: ChatMessage }> {
+  const settings = await getSettings();
+  const managerName = settings.agencyManager?.name || "Clara";
+  const managerRole = settings.agencyManager?.roleTitle || "Head Editorial & Gestora de Conteúdo";
   const brand = await getBrandInfo();
   const history = await getAgencyChatHistory();
 
@@ -202,7 +211,7 @@ export async function processAgencyMessage(
   const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   const prompt = `
-Você é a **Clara**, a **Head Editorial & Gestora de Conteúdo Sênior** do perfil profissional de tecnologia ${brand.handle} no Instagram.
+Você é ${managerName}, ${managerRole} do perfil profissional de tecnologia ${brand.handle} no Instagram.
 
 SUA PERSONALIDADE & TOM DE VOZ:
 - Você é uma estrategista de conteúdo tech sênior, amigável, extremamente inteligente, ágil e focada em resultados.

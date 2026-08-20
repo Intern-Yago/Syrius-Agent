@@ -32,6 +32,15 @@ interface SidebarProps {
 
 export function Sidebar({ currentPage, onNavigate, running, systemAlert, onDismissAlert }: SidebarProps) {
   const { activeCount } = useActivities();
+  const [managerName, setManagerName] = React.useState("Clara");
+
+  React.useEffect(() => {
+    try {
+      window.electronAPI?.getSettings?.().then((s: any) => {
+        if (s?.agencyManager?.name) setManagerName(s.agencyManager.name);
+      }).catch(() => {});
+    } catch {}
+  }, [currentPage]);
 
   return (
     <aside className="sidebar">
@@ -77,7 +86,7 @@ export function Sidebar({ currentPage, onNavigate, running, systemAlert, onDismi
                 border: "1px solid rgba(236, 72, 153, 0.3)",
               }}
             >
-              Clara
+              {managerName}
             </span>
           </span>
         </button>

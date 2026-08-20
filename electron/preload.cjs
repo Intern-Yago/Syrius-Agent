@@ -143,9 +143,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Notificações Nativas do Sistema Operacional (Windows / Tray)
   sendNativeNotification: (payload) => ipcRenderer.invoke("notification:send", payload),
 
-  // Sala de Reunião com a Gestora Editorial (Clara)
+  // Sala de Reunião com o Gestor Editorial
   agencyGetHistory: () => ipcRenderer.invoke("agency:get-history"),
   agencySendMessage: (payload) => ipcRenderer.invoke("agency:send-message", payload),
   agencyTranscribeAudio: (payload) => ipcRenderer.invoke("agency:transcribe-audio", payload),
   agencyClearHistory: () => ipcRenderer.invoke("agency:clear-history"),
+  agencyPreviewVoice: (payload) => ipcRenderer.invoke("agency:preview-voice", payload),
 });

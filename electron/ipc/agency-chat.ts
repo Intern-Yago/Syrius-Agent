@@ -5,9 +5,11 @@ import {
   clearAgencyChatHistory,
   processAgencyMessage,
   transcribeUserAudio,
+  synthesizeClaraVoice,
   ChatMessage,
 } from "../../src/services/agency-chat-service.js";
 import { prisma } from "../../src/core/database.js";
+import { getSettings } from "../../src/config/settings.js";
 import { sendNativeNotification } from "../notification.js";
 
 export function registerAgencyChatHandlers(getMainWindow?: () => any) {
@@ -21,6 +23,20 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
     await clearAgencyChatHistory();
     return true;
   });
+
+  // 2.1. Testar / Preview de Voz do Gestor (Edge TTS)
+  ipcMain.handle(
+    "agency:preview-voice",
+    async (_event, payload: { voice: string; text?: string }): Promise<{ success: boolean; audioPath?: string; error?: string }> => {
+      try {
+        const text = payload.text || "Olá! Este é um teste de voz para o gestor editorial da agência.";
+        const audioPath = await synthesizeClaraVoice(text, payload.voice);
+        return { success: true, audioPath };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : "Erro ao sintetizar voz." };
+      }
+    }
+  );
 
   // 3. Transcrever Áudio do Microfone do Usuário
   ipcMain.handle(
@@ -69,18 +85,21 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
           const slotId = `slot-clara-${Date.now()}`;
           const isUrgent = Boolean(pauta.isUrgent || claraMsg.actionTaken === "SCHEDULED_URGENT");
 
+          const settings = await getSettings();
+          const managerName = settings.agencyManager?.name || "Clara";
+
           // Cria o slot no banco de dados
           const createdSlot = await prisma.editorialScheduleSlot.create({
             data: {
               id: slotId,
               dayOfWeek: targetDay,
               timeSlot: targetTime,
-              editorialPillar: "Briefing da Clara (Gestora)",
+              editorialPillar: `Briefing de ${managerName}`,
               format: pauta.format || "CAROUSEL",
               narrativeAngle: pauta.narrativeAngle || "BEFORE_AFTER",
               topic: pauta.topic,
               objective: pauta.objective || "AUTHORITY",
-              reasoning: pauta.reasoning || "Pauta aprovada na Sala de Reunião com a Gestora Clara.",
+              reasoning: pauta.reasoning || `Pauta aprovada na Sala de Reunião com ${managerName}.`,
               baseCopyPrompt: pauta.baseCopyPrompt,
               baseVisualPrompt: pauta.baseVisualPrompt,
               weekOffset: isUrgent ? 0 : 1,
@@ -107,8 +126,8 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
           autoDispatched = true;
 
           sendNativeNotification(
-            "Pauta Aprovada pela Clara",
-            `A Gestora Clara despachou "${pauta.topic}" para o pipeline (${pauta.format} - ${targetDay}).`
+            `Pauta Aprovada por ${managerName}`,
+            `${managerName} despachou "${pauta.topic}" para o pipeline (${pauta.format} - ${targetDay}).`
           );
         }
 

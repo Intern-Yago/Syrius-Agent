@@ -55,6 +55,8 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [managerName, setManagerName] = useState("Clara");
+  const [managerRole, setManagerRole] = useState("HEAD EDITORIAL SYRIUS");
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem("clara_voice_enabled") !== "false";
@@ -76,7 +78,18 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
 
   useEffect(() => {
     loadChatHistory();
+    loadManagerConfig();
   }, []);
+
+  async function loadManagerConfig() {
+    try {
+      if (window.electronAPI?.getSettings) {
+        const s = await window.electronAPI.getSettings();
+        if (s?.agencyManager?.name) setManagerName(s?.agencyManager.name);
+        if (s?.agencyManager?.roleTitle) setManagerRole(s?.agencyManager.roleTitle);
+      }
+    } catch {}
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -312,7 +325,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
               flexShrink: 0,
             }}
           >
-            C
+            {managerName.charAt(0).toUpperCase()}
             <div
               style={{
                 position: "absolute",
@@ -324,19 +337,19 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                 background: "#10b981",
                 border: "2px solid #09090b",
               }}
-              title="Clara Online"
+              title={`${managerName} Online`}
             />
           </div>
 
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <h2 style={{ margin: 0, fontSize: "15px", color: "#fafafa" }}>Clara</h2>
+              <h2 style={{ margin: 0, fontSize: "15px", color: "#fafafa" }}>{managerName}</h2>
               <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "rgba(236, 72, 153, 0.15)", border: "1px solid rgba(236, 72, 153, 0.3)", color: "#f472b6", fontWeight: "700" }}>
-                HEAD EDITORIAL SYRIUS
+                {managerRole}
               </span>
             </div>
             <p style={{ margin: 0, fontSize: "12px", color: "#a1a1aa" }}>
-              Converse naturalmente sobre ideias de pautas. A Clara cuida de toda a estratégia de mídia, formatos e despacho.
+              Converse naturalmente sobre ideias de pautas. {managerName} cuida de toda a estratégia de mídia, formatos e despacho.
             </p>
           </div>
         </div>
@@ -418,7 +431,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                 {!isUser && (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)", paddingBottom: "6px" }}>
                     <span style={{ fontSize: "11px", fontWeight: "700", color: "#f472b6", textTransform: "uppercase" }}>
-                      Clara
+                      {managerName}
                     </span>
 
                     {msg.audioPath && (
@@ -541,7 +554,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
         {loading && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px", color: "#a1a1aa", fontSize: "13px" }}>
             <IconLoader className="spin" size={16} />
-            <span>Clara está analisando métricas e elaborando a resposta...</span>
+            <span>{managerName} está analisando métricas e elaborando a resposta...</span>
           </div>
         )}
 

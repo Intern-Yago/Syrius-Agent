@@ -30,7 +30,26 @@ import {
   IconTrendingUp,
 } from "../components/common/Icons";
 
-type SettingsTab = "profile" | "voice" | "trending" | "analytics" | "models" | "email";
+type SettingsTab = "profile" | "agency" | "voice" | "trending" | "analytics" | "models" | "email";
+
+const EDGE_TTS_MANAGER_VOICES = [
+  { id: "pt-BR-FranciscaNeural", name: "Francisca (Feminina)", desc: "Natural, fluida e clara (Padrão)", gender: "Feminina" },
+  { id: "pt-BR-ThalitaNeural", name: "Thalita (Feminina)", desc: "Jovem, expressiva e moderna", gender: "Feminina" },
+  { id: "pt-BR-BrendaNeural", name: "Brenda (Feminina)", desc: "Suave e amigável", gender: "Feminina" },
+  { id: "pt-BR-ElzaNeural", name: "Elza (Feminina)", desc: "Dinâmica e confiante", gender: "Feminina" },
+  { id: "pt-BR-GiovannaNeural", name: "Giovanna (Feminina)", desc: "Profissional e articulada", gender: "Feminina" },
+  { id: "pt-BR-LeilaNeural", name: "Leila (Feminina)", desc: "Acolhedora e serena", gender: "Feminina" },
+  { id: "pt-BR-LeticiaNeural", name: "Leticia (Feminina)", desc: "Direta e enérgica", gender: "Feminina" },
+  { id: "pt-BR-ManuelaNeural", name: "Manuela (Feminina)", desc: "Elegante e pausada", gender: "Feminina" },
+  { id: "pt-BR-YaraNeural", name: "Yara (Feminina)", desc: "Madura e executiva", gender: "Feminina" },
+  { id: "pt-BR-AntonioNeural", name: "Antônio (Masculina)", desc: "Corporativo, firme e noticioso", gender: "Masculina" },
+  { id: "pt-BR-DonatoNeural", name: "Donato (Masculina)", desc: "Enérgico e entusiasta", gender: "Masculina" },
+  { id: "pt-BR-FabioNeural", name: "Fábio (Masculina)", desc: "Calmo e didático", gender: "Masculina" },
+  { id: "pt-BR-HumbertoNeural", name: "Humberto (Masculina)", desc: "Voz firme de locutor", gender: "Masculina" },
+  { id: "pt-BR-JulioNeural", name: "Júlio (Masculina)", desc: "Jovem e ágil", gender: "Masculina" },
+  { id: "pt-BR-NicolauNeural", name: "Nicolau (Masculina)", desc: "Clássico e equilibrado", gender: "Masculina" },
+  { id: "pt-BR-ValerioNeural", name: "Valério (Masculina)", desc: "Grave e institucional", gender: "Masculina" },
+];
 
 const MIN_RECORDING_SECONDS = 45; // 45s mínimo para permitir salvar
 const TARGET_TRAINING_SECONDS = 180; // 3 minutos (meta de treinamento neural)
@@ -942,6 +961,52 @@ function encodeWAV(audioBuffer: AudioBuffer): ArrayBuffer {
     }
   }
 
+  const [testingManagerVoiceId, setTestingManagerVoiceId] = useState<string | null>(null);
+  const managerAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
+  function updateManagerConfig(patch: Partial<NonNullable<AppSettings["agencyManager"]>>) {
+    setSettings((curr) => {
+      if (!curr) return curr;
+      const currentManager = curr.agencyManager || {
+        name: "Clara",
+        roleTitle: "HEAD EDITORIAL SYRIUS",
+        edgeTtsVoice: "pt-BR-FranciscaNeural",
+      };
+      return {
+        ...curr,
+        agencyManager: {
+          ...currentManager,
+          ...patch,
+        },
+      };
+    });
+  }
+
+  async function handlePreviewManagerVoice(voiceId: string) {
+    try {
+      setTestingManagerVoiceId(voiceId);
+      const testText = `Olá! Sou ${settings?.agencyManager?.name || "Clara"}, seu gestor editorial aqui na Syrius. Como posso ajudar com suas próximas pautas?`;
+      const res = await window.electronAPI.agencyPreviewVoice?.({
+        voice: voiceId,
+        text: testText,
+      });
+      if (res?.success && res.audioPath) {
+        if (managerAudioPlayerRef.current) {
+          managerAudioPlayerRef.current.pause();
+        }
+        const audio = new Audio(`media://${res.audioPath}`);
+        managerAudioPlayerRef.current = audio;
+        audio.onended = () => setTestingManagerVoiceId(null);
+        audio.onerror = () => setTestingManagerVoiceId(null);
+        audio.play().catch(() => setTestingManagerVoiceId(null));
+      } else {
+        setTestingManagerVoiceId(null);
+      }
+    } catch {
+      setTestingManagerVoiceId(null);
+    }
+  }
+
   if (loading || !settings) {
     return (
       <div className="empty-state">
@@ -1019,6 +1084,15 @@ function encodeWAV(audioBuffer: AudioBuffer): ArrayBuffer {
 
         <button
           type="button"
+          onClick={() => setActiveTab("agency")}
+          className={`settings-tab-btn ${activeTab === "agency" ? "active-purple" : ""}`}
+        >
+          <IconSparkles size={15} />
+          <span>Gestor Editorial (Agência)</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => {
             setActiveTab("voice");
             if (settings.voiceConfig?.elevenLabsApiKey && existingVoices.length === 0) {
@@ -1058,6 +1132,140 @@ function encodeWAV(audioBuffer: AudioBuffer): ArrayBuffer {
           <span>Notificações & SMTP</span>
         </button>
       </div>
+
+      {/* ======================================================== */}
+      {/* ABA: GESTOR EDITORIAL (SALA DE REUNIÃO)                  */}
+      {/* ======================================================== */}
+      {activeTab === "agency" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <h3>Identidade do Gestor Editorial</h3>
+                <p>Personalize quem lidera a Sala de Reunião, analisa pautas com você e despacha a produção para o pipeline.</p>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+              <div className="settings-form-group">
+                <label>Nome do Gestor / Gestora</label>
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={settings.agencyManager?.name || "Clara"}
+                  onChange={(e) => updateManagerConfig({ name: e.target.value })}
+                  placeholder="Ex: Clara, Helena, Lucas, Sofia..."
+                />
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                  Este nome será usado no chat da Sala de Reunião, nas notificações e na barra lateral.
+                </span>
+              </div>
+
+              <div className="settings-form-group">
+                <label>Cargo / Título Oficial</label>
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={settings.agencyManager?.roleTitle || "HEAD EDITORIAL SYRIUS"}
+                  onChange={(e) => updateManagerConfig({ roleTitle: e.target.value })}
+                  placeholder="Ex: HEAD EDITORIAL SYRIUS"
+                />
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                  Título exibido no cabeçalho e nos crachás do gestor.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <h3>Voz Neural do Gestor (Edge TTS)</h3>
+                <p>Escolha a voz neural brasileira usada nas respostas faladas da Sala de Reunião (100% gratuita e local).</p>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "12px" }}>
+              {EDGE_TTS_MANAGER_VOICES.map((v) => {
+                const isSelected = (settings.agencyManager?.edgeTtsVoice || "pt-BR-FranciscaNeural") === v.id;
+                const isPlaying = testingManagerVoiceId === v.id;
+
+                return (
+                  <div
+                    key={v.id}
+                    onClick={() => updateManagerConfig({ edgeTtsVoice: v.id })}
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "12px",
+                      background: isSelected ? "rgba(236, 72, 153, 0.1)" : "var(--bg-surface)",
+                      border: isSelected ? "1px solid rgba(236, 72, 153, 0.4)" : "1px solid var(--border-card)",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "10px",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <strong style={{ fontSize: "13px", color: isSelected ? "#f472b6" : "var(--text-primary)" }}>
+                          {v.name}
+                        </strong>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            background: v.gender === "Feminina" ? "rgba(236, 72, 153, 0.15)" : "rgba(56, 189, 248, 0.15)",
+                            color: v.gender === "Feminina" ? "#f472b6" : "#38bdf8",
+                            fontWeight: "700",
+                          }}
+                        >
+                          {v.gender}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: "11px", color: "var(--text-muted)" }}>
+                        {v.desc}
+                      </p>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "6px", borderTop: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                      <span style={{ fontSize: "11px", color: isSelected ? "#f472b6" : "var(--text-muted)", fontWeight: isSelected ? "700" : "400" }}>
+                        {isSelected ? "Selecionada" : "Clique para selecionar"}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePreviewManagerVoice(v.id);
+                        }}
+                        style={{
+                          background: isPlaying ? "rgba(239, 68, 68, 0.2)" : "rgba(255, 255, 255, 0.08)",
+                          border: `1px solid ${isPlaying ? "rgba(239, 68, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
+                          color: isPlaying ? "#f87171" : "#fafafa",
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          fontSize: "10px",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        {isPlaying ? <IconLoader className="spin" size={10} /> : <IconPlay size={10} />}
+                        <span>{isPlaying ? "Ouvindo..." : "Testar Voz"}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* ABA 1: PERFIL & IDENTIDADE DE MARCA                      */}

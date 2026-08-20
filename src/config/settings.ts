@@ -41,6 +41,12 @@ export interface VoiceCloningConfig {
   isModelTrained?: boolean;
 }
 
+export interface AgencyManagerConfig {
+  name: string; // ex: "Clara"
+  roleTitle?: string; // ex: "Head Editorial Syrius"
+  edgeTtsVoice: string; // ex: "pt-BR-FranciscaNeural"
+}
+
 export interface AppSettings {
   instagramHandle: string;
   accountName: string;
@@ -54,6 +60,7 @@ export interface AppSettings {
   emailNotificationsEnabled?: boolean;
   smtpConfig?: SmtpConfig;
   voiceConfig?: VoiceCloningConfig;
+  agencyManager?: AgencyManagerConfig;
   trendingTopicsCount?: number;
   trendingRefreshIntervalDays?: number;
   lastTrendingRefreshedAt?: string;
@@ -69,6 +76,11 @@ const defaultSettings: AppSettings = {
   accountName: "Tech Creator",
   niche: "Tecnologia, Engenharia de Software e Desenvolvimento",
   positioning: "Desenvolvedor Full Stack e Engenheiro de Software com foco em tecnologia moderna, arquitetura, DevOps e boas práticas.",
+  agencyManager: {
+    name: "Clara",
+    roleTitle: "HEAD EDITORIAL SYRIUS",
+    edgeTtsVoice: "pt-BR-FranciscaNeural",
+  },
   analyticsIntervalHours: 24,
   analyticsSchedule: {
     mode: "WEEKDAYS",

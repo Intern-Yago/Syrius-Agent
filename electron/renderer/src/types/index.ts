@@ -176,6 +176,12 @@ export interface VoiceCloningConfig {
   lastCalibratedAt?: string;
 }
 
+export interface AgencyManagerConfig {
+  name: string;
+  roleTitle?: string;
+  edgeTtsVoice: string;
+}
+
 export interface AppSettings {
   instagramHandle: string;
   accountName: string;
@@ -189,6 +195,7 @@ export interface AppSettings {
   emailNotificationsEnabled?: boolean;
   smtpConfig?: SmtpConfig;
   voiceConfig?: VoiceCloningConfig;
+  agencyManager?: AgencyManagerConfig;
 }
 
 export interface ScheduleSlot {

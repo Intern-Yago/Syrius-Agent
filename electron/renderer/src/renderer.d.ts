@@ -276,7 +276,7 @@ declare global {
     // Notificações Nativas do SO
     sendNativeNotification: (payload: { title: string; body: string }) => Promise<{ success: boolean }>;
 
-    // Sala de Reunião com a Gestora Editorial (Clara)
+    // Sala de Reunião com o Gestor Editorial
     agencyGetHistory: () => Promise<any[]>;
     agencySendMessage: (payload: { text: string; voiceEnabled?: boolean }) => Promise<{
       success: boolean;
@@ -288,6 +288,7 @@ declare global {
     }>;
     agencyTranscribeAudio: (payload: { audioBase64: string; mimeType?: string }) => Promise<{ success: boolean; text?: string; error?: string }>;
     agencyClearHistory: () => Promise<boolean>;
+    agencyPreviewVoice: (payload: { voice: string; text?: string }) => Promise<{ success: boolean; audioPath?: string; error?: string }>;
   }
 
   interface Window {
