@@ -33,22 +33,11 @@ import {
 type SettingsTab = "profile" | "agency" | "voice" | "trending" | "analytics" | "models" | "email";
 
 const EDGE_TTS_MANAGER_VOICES = [
-  { id: "pt-BR-FranciscaNeural", name: "Francisca (Feminina)", desc: "Natural, fluida e clara (Padrão)", gender: "Feminina" },
-  { id: "pt-BR-ThalitaNeural", name: "Thalita (Feminina)", desc: "Jovem, expressiva e moderna", gender: "Feminina" },
-  { id: "pt-BR-BrendaNeural", name: "Brenda (Feminina)", desc: "Suave e amigável", gender: "Feminina" },
-  { id: "pt-BR-ElzaNeural", name: "Elza (Feminina)", desc: "Dinâmica e confiante", gender: "Feminina" },
-  { id: "pt-BR-GiovannaNeural", name: "Giovanna (Feminina)", desc: "Profissional e articulada", gender: "Feminina" },
-  { id: "pt-BR-LeilaNeural", name: "Leila (Feminina)", desc: "Acolhedora e serena", gender: "Feminina" },
-  { id: "pt-BR-LeticiaNeural", name: "Leticia (Feminina)", desc: "Direta e enérgica", gender: "Feminina" },
-  { id: "pt-BR-ManuelaNeural", name: "Manuela (Feminina)", desc: "Elegante e pausada", gender: "Feminina" },
-  { id: "pt-BR-YaraNeural", name: "Yara (Feminina)", desc: "Madura e executiva", gender: "Feminina" },
-  { id: "pt-BR-AntonioNeural", name: "Antônio (Masculina)", desc: "Corporativo, firme e noticioso", gender: "Masculina" },
-  { id: "pt-BR-DonatoNeural", name: "Donato (Masculina)", desc: "Enérgico e entusiasta", gender: "Masculina" },
-  { id: "pt-BR-FabioNeural", name: "Fábio (Masculina)", desc: "Calmo e didático", gender: "Masculina" },
-  { id: "pt-BR-HumbertoNeural", name: "Humberto (Masculina)", desc: "Voz firme de locutor", gender: "Masculina" },
-  { id: "pt-BR-JulioNeural", name: "Júlio (Masculina)", desc: "Jovem e ágil", gender: "Masculina" },
-  { id: "pt-BR-NicolauNeural", name: "Nicolau (Masculina)", desc: "Clássico e equilibrado", gender: "Masculina" },
-  { id: "pt-BR-ValerioNeural", name: "Valério (Masculina)", desc: "Grave e institucional", gender: "Masculina" },
+  { id: "pt-BR-FranciscaNeural", name: "Francisca (Feminina Brasil)", desc: "Natural, fluida e clara (Padrão Recomendado)", gender: "Feminina" },
+  { id: "pt-BR-ThalitaMultilingualNeural", name: "Thalita (Feminina Brasil)", desc: "Multilíngue, jovem, expressiva e moderna", gender: "Feminina" },
+  { id: "pt-BR-AntonioNeural", name: "Antônio (Masculina Brasil)", desc: "Corporativo, firme e noticioso", gender: "Masculina" },
+  { id: "pt-PT-RaquelNeural", name: "Raquel (Feminina Portugal)", desc: "Expressiva, fluida e serena", gender: "Feminina" },
+  { id: "pt-PT-DuarteNeural", name: "Duarte (Masculina Portugal)", desc: "Clássico, firme e profissional", gender: "Masculina" },
 ];
 
 const MIN_RECORDING_SECONDS = 45; // 45s mínimo para permitir salvar
