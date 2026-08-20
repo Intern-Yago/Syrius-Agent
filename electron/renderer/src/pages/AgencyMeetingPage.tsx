@@ -194,7 +194,43 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
     }
   }
 
+  const speechRecognitionRef = useRef<any>(null);
+  const liveTranscriptRef = useRef<string>("");
+
   async function startRecording() {
+    liveTranscriptRef.current = "";
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = "pt-BR";
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        recognition.onresult = (event: any) => {
+          let currentTranscript = "";
+          for (let i = 0; i < event.results.length; ++i) {
+            currentTranscript += event.results[i][0].transcript;
+          }
+          if (currentTranscript.trim()) {
+            liveTranscriptRef.current = currentTranscript.trim();
+            setInputText(currentTranscript.trim());
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn("[WebSpeechAPI] Status nativo:", event.error);
+        };
+
+        recognition.start();
+        speechRecognitionRef.current = recognition;
+      } catch (e) {
+        console.warn("[WebSpeechAPI] Inicialização:", e);
+      }
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
@@ -209,7 +245,13 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         stream.getTracks().forEach((track) => track.stop());
-        await processRecordedAudio(audioBlob);
+
+        const liveText = liveTranscriptRef.current.trim();
+        if (liveText) {
+          handleSendMessage(liveText);
+        } else {
+          await processRecordedAudio(audioBlob);
+        }
       };
 
       mediaRecorder.start();
@@ -226,6 +268,12 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
   }
 
   function stopRecording() {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -582,21 +630,28 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
         }}
       >
         {isRecording ? (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#ef4444", animation: "pulse 1s infinite" }} />
-              <span style={{ fontSize: "13px", fontWeight: "700", color: "#f87171" }}>
-                Gravando áudio ({recordingDuration}s)... Fale sua ideia de pauta!
-              </span>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
+              <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#ef4444", animation: "pulse 1s infinite", flexShrink: 0 }} />
+              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                <span style={{ fontSize: "12px", fontWeight: "700", color: "#f87171" }}>
+                  Ouvindo ({recordingDuration}s)... Fale sua ideia de pauta
+                </span>
+                {inputText && (
+                  <span style={{ fontSize: "11px", color: "#e4e4e7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    "{inputText}"
+                  </span>
+                )}
+              </div>
             </div>
 
             <button
               type="button"
               onClick={stopRecording}
               className="primary-button"
-              style={{ background: "#ef4444", borderColor: "#dc2626", padding: "6px 14px", fontSize: "12px", fontWeight: "700" }}
+              style={{ background: "#ef4444", borderColor: "#dc2626", padding: "6px 14px", fontSize: "12px", fontWeight: "700", flexShrink: 0 }}
             >
-              <span>Concluir e Enviar para Clara</span>
+              <span>Concluir e Enviar para {managerName}</span>
             </button>
           </div>
         ) : (
@@ -619,7 +674,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                 flexShrink: 0,
                 transition: "all 0.15s ease",
               }}
-              title="Gravar áudio com seu microfone"
+              title="Falar pelo microfone (Web Speech API Nativa)"
             >
               <IconSparkles size={16} />
             </button>
@@ -635,7 +690,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                   handleSendMessage();
                 }
               }}
-              placeholder="Digite sua ideia de pauta ou use o microfone para falar com a Clara..."
+              placeholder={`Digite sua ideia de pauta ou use o microfone para falar com ${managerName}...`}
               disabled={loading || transcribing}
               style={{ flex: 1, padding: "10px 14px", fontSize: "13px" }}
             />
