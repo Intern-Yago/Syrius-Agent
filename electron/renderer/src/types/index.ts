@@ -196,12 +196,12 @@ export interface ScheduleSlot {
   timeSlot: string;
   editorialPillar?: string;
   format: "CAROUSEL" | "SINGLE_IMAGE" | "REEL_SCRIPT" | "STORY_PHOTO" | string;
+  narrativeAngle?: string;
   topic: string;
   objective: "AUTHORITY" | "VIRALITY" | "EDUCATION" | "ENGAGEMENT" | string;
   reasoning: string;
   status: "PLANNED" | "READY" | "SCHEDULED" | "PUBLISHED";
   postId?: string;
-  isCustom?: boolean;
   pinned?: boolean;
   baseCopyPrompt?: string;
   baseVisualPrompt?: string;
@@ -270,6 +270,7 @@ export interface Post {
   slotId?: string;
   topic: string;
   format: string;
+  narrativeAngle?: string | null;
   caption: string | null;
   hashtags: string[];
   status: string;

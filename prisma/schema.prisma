@@ -25,9 +25,10 @@ enum ReviewStatus {
 model Post {
   id String @id @default(cuid())
 
-  topic   String
-  format  String
-  caption String?
+  topic          String
+  format         String
+  narrativeAngle String? // "BEFORE_AFTER", "HOT_TAKE", "MIGRATION_GUIDE", "SENIOR_REVIEW", "BREAKING_NEWS", "DEEP_DIVE", "COMMUNITY_PULSE", "TLDR_SUMMARY", "STEP_BY_STEP_TUTORIAL"
+  caption        String?
 
   hashtags String[] @default([])
 
@@ -228,6 +229,7 @@ model EditorialScheduleSlot {
   timeSlot              String    // "18:30", "12:00", etc.
   editorialPillar       String?
   format                String    // "CAROUSEL", "SINGLE_IMAGE", "REEL_SCRIPT", "STORY_PHOTO"
+  narrativeAngle        String?   // "BEFORE_AFTER", "HOT_TAKE", "MIGRATION_GUIDE", "SENIOR_REVIEW", "BREAKING_NEWS", "DEEP_DIVE", "COMMUNITY_PULSE", "TLDR_SUMMARY", "STEP_BY_STEP_TUTORIAL"
   topic                 String
   objective             String    // "AUTHORITY", "VIRALITY", "EDUCATION", "ENGAGEMENT", "REACH"
   reasoning             String
@@ -257,6 +259,7 @@ model PendingRecommendedTopic {
   id               String   @id @default(cuid())
   topic            String
   suggestedFormat  String   @default("CAROUSEL")
+  narrativeAngle   String?
   suggestedDay     String
   suggestedTime    String   @default("18:30")
   reason           String?
@@ -298,6 +301,7 @@ model TrendingTopic {
   summary          String
   whyTrending      String
   suggestedAngle   String
+  narrativeAngle   String?   // "BEFORE_AFTER", "HOT_TAKE", "MIGRATION_GUIDE", "SENIOR_REVIEW", "BREAKING_NEWS", "DEEP_DIVE", "COMMUNITY_PULSE", "TLDR_SUMMARY", "STEP_BY_STEP_TUTORIAL"
   suggestedFormat  String    // "CAROUSEL", "REEL_SCRIPT", "SINGLE_IMAGE", "STORY_PHOTO"
   hookIdea         String
   baseCopyPrompt   String?

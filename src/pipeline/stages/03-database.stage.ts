@@ -15,6 +15,7 @@ export const databaseStage: PipelineStageHandler = {
       data: {
         topic: ctx.content.topic,
         format: ctx.content.format,
+        narrativeAngle: ctx.content.narrativeAngle || ctx.decision?.narrativeAngle || null,
         caption: ctx.content.caption,
         hashtags: ctx.content.hashtags,
         status: "DRAFT",

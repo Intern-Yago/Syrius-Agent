@@ -10,6 +10,7 @@ export interface TrendingTopicItem {
   summary: string;
   whyTrending: string;
   suggestedAngle: string;
+  narrativeAngle?: string | null; // "BEFORE_AFTER", "HOT_TAKE", "MIGRATION_GUIDE", "SENIOR_REVIEW", "BREAKING_NEWS", "DEEP_DIVE", "COMMUNITY_PULSE", "TLDR_SUMMARY", "STEP_BY_STEP_TUTORIAL"
   suggestedFormat: "CAROUSEL" | "REEL_SCRIPT" | "SINGLE_IMAGE" | "STORY_PHOTO" | string;
   hookIdea: string;
   baseCopyPrompt?: string | null;
@@ -29,6 +30,7 @@ interface RawGeminiTrendingTopic {
   summary: string;
   whyTrending: string;
   suggestedAngle: string;
+  narrativeAngle?: string;
   suggestedFormat: string;
   hookIdea: string;
   baseCopyPrompt: string;
@@ -138,6 +140,7 @@ ${recentTitles.length > 0 ? recentTitles.map((t) => `- ${t}`).join("\n") : "Nenh
    - "summary": Resumo de 2 a 3 linhas explicando a essência técnica do assunto.
    - "whyTrending": Explicação detalhada de POR QUE este assunto está em alta agora (novas releases, discussões na comunidade, artigos virais, quebras de paradigmas).
    - "suggestedAngle": Ângulo contra-intuitivo ou prático para abordar o tema no Instagram.
+   - "narrativeAngle": Um dos 9 ângulos editoriais ("BEFORE_AFTER", "HOT_TAKE", "MIGRATION_GUIDE", "SENIOR_REVIEW", "BREAKING_NEWS", "DEEP_DIVE", "COMMUNITY_PULSE", "TLDR_SUMMARY", "STEP_BY_STEP_TUTORIAL").
    - "suggestedFormat": Formato ideal ("CAROUSEL", "REEL_SCRIPT", "SINGLE_IMAGE" ou "STORY_PHOTO").
    - "hookIdea": Gancho provocativo para os primeiros 3 segundos ou capa.
    - "baseCopyPrompt": Diretriz base para a redação do post.
@@ -153,6 +156,7 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "summary": "Como times modernos estão abandonando o excesso de microsserviços para adotar Monólitos Modulares com isolamento por domínios.",
       "whyTrending": "Artigos recentes de engenharia de grandes empresas mostram que a complexidade de rede de microsserviços prematuros custa caro.",
       "suggestedAngle": "Demonstrar como criar boundaries claras em TypeScript sem a dor de cabeça de dezenas de repositórios.",
+      "narrativeAngle": "BEFORE_AFTER",
       "suggestedFormat": "CAROUSEL",
       "hookIdea": "Pare de criar microsserviços antes de atingir 1 milhão de requisições: o guia do Monólito Modular.",
       "baseCopyPrompt": "Carrossel técnico detalhando a estrutura de pastas, inversão de dependência e comunicação interna de eventos.",
@@ -192,6 +196,7 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
           summary: rt.summary,
           whyTrending: rt.whyTrending,
           suggestedAngle: rt.suggestedAngle,
+          narrativeAngle: rt.narrativeAngle || "BEFORE_AFTER",
           suggestedFormat: rt.suggestedFormat || "CAROUSEL",
           hookIdea: rt.hookIdea,
           baseCopyPrompt: rt.baseCopyPrompt,

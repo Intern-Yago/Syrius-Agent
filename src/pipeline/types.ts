@@ -1,3 +1,14 @@
+export type NarrativeAngleType =
+  | "BEFORE_AFTER"
+  | "HOT_TAKE"
+  | "MIGRATION_GUIDE"
+  | "SENIOR_REVIEW"
+  | "BREAKING_NEWS"
+  | "DEEP_DIVE"
+  | "COMMUNITY_PULSE"
+  | "TLDR_SUMMARY"
+  | "STEP_BY_STEP_TUTORIAL";
+
 export interface GeneratedSlideData {
   number: number;
   title: string;
@@ -10,6 +21,7 @@ export interface GeneratedSlideData {
 export interface GeneratedContentData {
   topic: string;
   format: string;
+  narrativeAngle?: NarrativeAngleType;
   objective: string;
   hook: string;
   caption: string;
@@ -19,6 +31,7 @@ export interface GeneratedContentData {
 
 export interface StrategyDecisionData {
   format: string;
+  narrativeAngle?: NarrativeAngleType;
   topic: string;
   objective: string;
   reasoning: string;

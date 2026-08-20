@@ -90,8 +90,23 @@ export function PostCard({ post, slot, onOpen }: PostCardProps) {
 
       <div className="post-card-body">
         <div className="post-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <span className="post-format">{post.format}</span>
+            {post.narrativeAngle && (
+              <span
+                style={{
+                  fontSize: "10px",
+                  fontWeight: "700",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  background: "rgba(168, 85, 247, 0.12)",
+                  border: "1px solid rgba(168, 85, 247, 0.3)",
+                  color: "#c084fc",
+                }}
+              >
+                {post.narrativeAngle.replace("_", " ")}
+              </span>
+            )}
             {isPublishing ? (
               <span
                 style={{
