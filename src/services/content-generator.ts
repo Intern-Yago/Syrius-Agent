@@ -1,9 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import type { ContentDecision } from "./content-strategist";
 
-const TEXT_MODEL =
-  process.env.GEMINI_TEXT_MODEL ||
-  "gemini-2.5-flash";
+export function getGeneratorModel(): string {
+  return process.env.GEMINI_TEXT_MODEL || "gemini-3.6-flash";
+}
 
 const MAX_OUTPUT_TOKENS = 12000;
 
@@ -587,8 +587,10 @@ FORMATO OBRIGATÓRIO:
 }
 `;
 
+  const modelToUse = getGeneratorModel();
+
   console.log(
-    `🤖 Modelo: ${TEXT_MODEL}`
+    `🤖 Modelo: ${modelToUse}`
   );
 
   console.log(
@@ -601,7 +603,7 @@ FORMATO OBRIGATÓRIO:
     response =
       await ai.models.generateContent({
         model:
-          TEXT_MODEL,
+          modelToUse,
 
         contents:
           prompt,

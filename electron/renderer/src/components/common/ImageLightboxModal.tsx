@@ -8,6 +8,7 @@ import {
   IconCheck,
   IconLayers,
 } from "./Icons";
+import { useModal } from "../../context/ModalContext";
 
 export interface LightboxSlide {
   number: number;
@@ -30,9 +31,10 @@ export function ImageLightboxModal({
   onClose,
   slides,
   initialIndex = 0,
-  postTopic = "Publicação",
+  postTopic,
   format = "CAROUSEL",
 }: ImageLightboxModalProps) {
+  const { toast } = useModal();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
@@ -87,12 +89,13 @@ export function ImageLightboxModal({
 
       if (res.success) {
         setDownloadSuccess(`Salvo em: ${res.path}`);
+        toast.success(`Imagem salva com sucesso!`);
         setTimeout(() => setDownloadSuccess(null), 3500);
       } else if (res.error && !res.error.includes("cancelado")) {
-        alert(`Erro ao salvar imagem: ${res.error}`);
+        toast.error(`Erro ao salvar imagem: ${res.error}`);
       }
     } catch (err) {
-      alert(`Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+      toast.error(`Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     } finally {
       setDownloading(false);
     }

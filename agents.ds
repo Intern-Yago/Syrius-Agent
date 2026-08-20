@@ -1,0 +1,5 @@
+# Syrius Agent Definition Sheet (DS)
+# Arquivo de Referência de Agentes e Pipelines
+
+Consulte [AGENTS.md](./AGENTS.md) para a especificação técnica completa e detalhada da arquitetura multi-agente, modelos, fluxos de execução, banco de dados e pipelines de IA.
+Consulte [README.md](./README.md) para o guia de instalação, execução e visão geral da aplicação.

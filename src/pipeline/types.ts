@@ -23,6 +23,9 @@ export interface StrategyDecisionData {
   objective: string;
   reasoning: string;
   hook: string;
+  baseCopyPrompt?: string;
+  baseVisualPrompt?: string;
+  suggestedTime?: string;
 }
 
 export interface QualityReviewResult {
@@ -55,6 +58,7 @@ export type PipelineStageId =
   | "database"
   | "images"
   | "storage"
+  | "video"
   | "review"
   | "finalize";
 

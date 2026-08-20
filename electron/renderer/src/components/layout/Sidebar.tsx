@@ -1,6 +1,19 @@
 import React from "react";
 import { Page } from "../../types";
-import { IconZap, IconLibrary, IconFlask, IconCalendar, IconSettings, IconChart, IconMessageSquare, IconAlertTriangle, IconX } from "../common/Icons";
+import { useActivities } from "../../context/ActivitiesContext";
+import {
+  IconZap,
+  IconLibrary,
+  IconFlask,
+  IconCalendar,
+  IconSettings,
+  IconChart,
+  IconMessageSquare,
+  IconAlertTriangle,
+  IconActivity,
+  IconTrendingUp,
+  IconX,
+} from "../common/Icons";
 import logoImg from "../../assets/logo.png";
 
 export interface SystemAlert {
@@ -18,6 +31,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentPage, onNavigate, running, systemAlert, onDismissAlert }: SidebarProps) {
+  const { activeCount } = useActivities();
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -43,6 +58,47 @@ export function Sidebar({ currentPage, onNavigate, running, systemAlert, onDismi
         </button>
 
         <button
+          className={currentPage === "activities" ? "nav-item active" : "nav-item"}
+          onClick={() => onNavigate("activities")}
+        >
+          <span className="nav-icon" style={{ position: "relative" }}>
+            <IconActivity size={16} />
+            {activeCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-4px",
+                  right: "-4px",
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: "#38bdf8",
+                  boxShadow: "0 0 8px #38bdf8",
+                }}
+              />
+            )}
+          </span>
+          <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+            <span>Atividades</span>
+            {activeCount > 0 && (
+              <span
+                style={{
+                  background: "rgba(56, 189, 248, 0.15)",
+                  color: "#38bdf8",
+                  fontSize: "10px",
+                  fontWeight: "700",
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(56, 189, 248, 0.3)",
+                }}
+              >
+                {activeCount}
+              </span>
+            )}
+          </span>
+        </button>
+
+        <button
           className={currentPage === "schedule" ? "nav-item active" : "nav-item"}
           onClick={() => onNavigate("schedule")}
         >
@@ -50,6 +106,16 @@ export function Sidebar({ currentPage, onNavigate, running, systemAlert, onDismi
             <IconCalendar size={16} />
           </span>
           <span>Cronograma</span>
+        </button>
+
+        <button
+          className={currentPage === "trending" ? "nav-item active" : "nav-item"}
+          onClick={() => onNavigate("trending")}
+        >
+          <span className="nav-icon">
+            <IconTrendingUp size={16} />
+          </span>
+          <span>Temas em Alta</span>
         </button>
 
         <button

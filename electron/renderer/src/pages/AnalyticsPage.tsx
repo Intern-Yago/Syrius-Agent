@@ -24,6 +24,8 @@ import {
   IconMessageSquare,
   IconDownload,
 } from "../components/common/Icons";
+import { useActivities } from "../context/ActivitiesContext";
+import { useModal } from "../context/ModalContext";
 
 const PERIOD_OPTIONS = [
   { days: 7, label: "Últimos 7 dias" },
@@ -31,7 +33,13 @@ const PERIOD_OPTIONS = [
   { days: 30, label: "Últimos 30 dias" },
 ];
 
-export function AnalyticsPage() {
+interface AnalyticsPageProps {
+  onNavigateToSchedule?: () => void;
+  onNavigateToPosts?: () => void;
+}
+
+export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: AnalyticsPageProps) {
+  const { toast } = useModal();
   const [history, setHistory] = useState<AnalyticsReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<AnalyticsReport | null>(null);
   const [selectedDays, setSelectedDays] = useState<number>(7);
@@ -55,6 +63,17 @@ export function AnalyticsPage() {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [sortBy, setSortBy] = useState<"NEWEST" | "OLDEST" | "HIGHEST_SCORE" | "HIGHEST_REACH">("NEWEST");
+
+  // Rastreamento de Pautas Recomendadas já adicionadas à Grade
+  const [addedTopics, setAddedTopics] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("analytics_added_topics");
+      return saved ? new Set(JSON.parse(saved).map((s: string) => s.trim().toLowerCase())) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [scheduleSlots, setScheduleSlots] = useState<any[]>([]);
 
   async function loadHistory() {
     try {
@@ -104,10 +123,22 @@ export function AnalyticsPage() {
     }
   }
 
+  async function loadScheduleSlots() {
+    try {
+      if (window.electronAPI?.getSchedule) {
+        const slots = await window.electronAPI.getSchedule();
+        if (Array.isArray(slots)) {
+          setScheduleSlots(slots);
+        }
+      }
+    } catch {}
+  }
+
   useEffect(() => {
     loadHistory();
     checkRunningStatus();
     loadRagInsights();
+    loadScheduleSlots();
 
     if (window.electronAPI?.onAnalyticsStatusChange) {
       const unsub = window.electronAPI.onAnalyticsStatusChange((data) => {
@@ -117,6 +148,7 @@ export function AnalyticsPage() {
           setSelectedReport(data.report);
           setHistory((prev) => [data.report, ...prev.filter((r) => r.id !== data.report.id)]);
           loadRagInsights();
+          loadScheduleSlots();
           setError(null);
         } else if (!data.running && data.error) {
           setError(data.error);
@@ -136,6 +168,7 @@ export function AnalyticsPage() {
         setSelectedReport(res.report);
         setHistory((prev) => [res.report, ...prev.filter((r) => r.id !== res.report.id)]);
         loadRagInsights();
+        loadScheduleSlots();
         setViewMode("ACTIVE_AUDIT");
       } else if (res.error) {
         setError(res.error);
@@ -151,18 +184,41 @@ export function AnalyticsPage() {
     topic: string;
     suggestedFormat?: string;
     suggestedDay?: string;
+    suggestedTime?: string;
     reason?: string;
+    baseCopyPrompt?: string;
+    baseVisualPrompt?: string;
+    objective?: string;
   }) {
     try {
       setAddingSlotTopic(topic.topic);
       if (!window.electronAPI?.addTopicToSchedule) {
-        alert("Função não suportada.");
+        toast.warning("Função não suportada.");
         return;
       }
-      await window.electronAPI.addTopicToSchedule(topic);
-      alert(`Pauta "${topic.topic}" adicionada com sucesso ao Cronograma Editorial!`);
+      const res = await window.electronAPI.addTopicToSchedule(topic);
+
+      // Marca a pauta como adicionada para sumir imediatamente da lista de recomendações
+      const normalizedTopic = topic.topic.trim().toLowerCase();
+      setAddedTopics((prev) => {
+        const next = new Set(prev);
+        next.add(normalizedTopic);
+        try {
+          localStorage.setItem("analytics_added_topics", JSON.stringify(Array.from(next)));
+        } catch {}
+        return next;
+      });
+
+      // Recarrega os slots para sincronização
+      await loadScheduleSlots();
+
+      if (res?.isNextWeek) {
+        toast.info(res.message || `Pauta salva na memória para a Próxima Semana (${topic.suggestedDay || "Próxima Semana"}).`);
+      } else {
+        toast.success(res?.message || `Pauta "${topic.topic}" adicionada à Grade com diretrizes e prompts base salvos!`);
+      }
     } catch (err) {
-      alert(`Erro ao adicionar pauta: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+      toast.error(`Erro ao adicionar pauta: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     } finally {
       setAddingSlotTopic(null);
     }
@@ -183,6 +239,58 @@ export function AnalyticsPage() {
       });
     } finally {
       setSendingBriefing(false);
+    }
+  }
+
+  async function handleUpdateInsightStatus(id: string, newStatus: "HYPOTHESIS" | "VALIDATED" | "REFUTED") {
+    try {
+      if (!window.electronAPI?.updateLearningInsight) {
+        toast.warning("Função não suportada.");
+        return;
+      }
+      const res = await window.electronAPI.updateLearningInsight({
+        id,
+        status: newStatus,
+        confidenceScore: newStatus === "HYPOTHESIS" ? 0.40 : newStatus === "VALIDATED" ? 0.85 : 0.0,
+      });
+      if (res.success) {
+        toast.success(`Status da tese alterado para: ${newStatus === "HYPOTHESIS" ? "Hipótese (Amostragem Inicial)" : newStatus === "VALIDATED" ? "Validada" : "Refutada"}`);
+        await loadRagInsights();
+      }
+    } catch (err) {
+      toast.error(`Erro ao atualizar insight: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+    }
+  }
+
+  async function handleDeleteInsight(id: string) {
+    try {
+      if (!window.electronAPI?.deleteLearningInsight) {
+        toast.warning("Função não suportada.");
+        return;
+      }
+      const res = await window.electronAPI.deleteLearningInsight(id);
+      if (res.success) {
+        toast.success("Insight excluído da memória RAG.");
+        await loadRagInsights();
+      }
+    } catch (err) {
+      toast.error(`Erro ao excluir insight: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+    }
+  }
+
+  async function handleDevalidateAll() {
+    try {
+      if (!window.electronAPI?.devalidateAllInsights) {
+        toast.warning("Função não suportada.");
+        return;
+      }
+      const res = await window.electronAPI.devalidateAllInsights();
+      if (res.success) {
+        toast.success(`${res.count || 0} teses foram convertidas para Hipóteses preliminares.`);
+        await loadRagInsights();
+      }
+    } catch (err) {
+      toast.error(`Erro ao desvalidar teses: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     }
   }
 
@@ -1313,64 +1421,182 @@ export function AnalyticsPage() {
 
               {/* PAUTAS RECOMENDADAS */}
               <div>
-                <h4 style={{ fontSize: "13px", color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <IconLightbulb size={14} />
-                  <span>Pautas Recomendadas pelo Gestor de IA</span>
-                </h4>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "14px" }}>
-                  {(selectedReport.recommendedTopicsForNextCycle || []).map((t, idx) => {
-                    const topicObj = typeof t === "string" ? { topic: t, suggestedFormat: "CAROUSEL", suggestedDay: "Próxima Semana", reason: "" } : t;
-                    const isAdding = addingSlotTopic === topicObj.topic;
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                  <h4 style={{ fontSize: "13px", color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+                    <IconLightbulb size={14} color="#facc15" />
+                    <span>Pautas Recomendadas pelo Gestor de IA</span>
+                  </h4>
+                  {addedTopics.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddedTopics(new Set());
+                        try {
+                          localStorage.removeItem("analytics_added_topics");
+                        } catch {}
+                        toast.info("Histórico de pautas adicionadas redefinido.");
+                      }}
+                      style={{ background: "transparent", border: "none", color: "#71717a", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}
+                      title="Exibir novamente pautas que haviam sido adicionadas anteriormente"
+                    >
+                      Redefinir Filtro de Pautas Adicionadas
+                    </button>
+                  )}
+                </div>
 
+                {(() => {
+                  const rawList = selectedReport.recommendedTopicsForNextCycle || [];
+                  const visibleTopics = rawList
+                    .map((t) => (typeof t === "string" ? { topic: t, suggestedFormat: "CAROUSEL", suggestedDay: "Próxima Semana", reason: "" } : t))
+                    .filter((topicObj) => {
+                      const norm = topicObj.topic.trim().toLowerCase();
+                      if (addedTopics.has(norm)) return false;
+                      const inSchedule = scheduleSlots.some((s) => s.topic && s.topic.trim().toLowerCase() === norm);
+                      if (inSchedule) return false;
+                      return true;
+                    });
+
+                  if (visibleTopics.length === 0) {
                     return (
                       <div
-                        key={idx}
                         style={{
-                          background: "#09090b",
-                          border: "1px solid rgba(255, 255, 255, 0.08)",
+                          padding: "24px 20px",
+                          background: "rgba(16, 185, 129, 0.08)",
+                          border: "1px solid rgba(16, 185, 129, 0.25)",
                           borderRadius: "12px",
-                          padding: "16px",
+                          textAlign: "center",
                           display: "flex",
                           flexDirection: "column",
-                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "8px",
                         }}
                       >
-                        <div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                            <span style={{ fontSize: "10px", fontWeight: "700", color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.3)", padding: "2px 6px", borderRadius: "4px" }}>
-                              {topicObj.suggestedFormat}
-                            </span>
-                            <span style={{ fontSize: "11px", color: "#71717a", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                              <IconCalendar size={11} />
-                              {topicObj.suggestedDay}
-                            </span>
-                          </div>
-
-                          <strong style={{ fontSize: "14px", color: "#fafafa", display: "block", marginBottom: "6px", lineHeight: "1.4" }}>
-                            {topicObj.topic}
-                          </strong>
-
-                          {topicObj.reason && (
-                            <p style={{ fontSize: "12px", color: "#a1a1aa", margin: "0 0 14px", lineHeight: "1.4" }}>
-                              {topicObj.reason}
-                            </p>
-                          )}
+                        <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(16, 185, 129, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#34d399" }}>
+                          <IconCheck size={18} />
                         </div>
-
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => handleAddTopicToSchedule(topicObj)}
-                          disabled={isAdding}
-                          style={{ width: "100%", justifyContent: "center", fontSize: "11px", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                        >
-                          {isAdding ? <IconLoader size={12} /> : <IconPlus size={12} />}
-                          <span>{isAdding ? "Adicionando..." : "Adicionar à Grade"}</span>
-                        </button>
+                        <strong style={{ fontSize: "14px", color: "#f8fafc" }}>
+                          Todas as pautas recomendadas desta auditoria foram incorporadas à Grade!
+                        </strong>
+                        <p style={{ fontSize: "12px", color: "#a1a1aa", margin: 0, maxWidth: "440px" }}>
+                          As ideias do gestor foram salvas com o roteiro base e o direcionamento visual completo no Cronograma Editorial.
+                        </p>
                       </div>
                     );
-                  })}
-                </div>
+                  }
+
+                  return (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
+                      {visibleTopics.map((topicObj, idx) => {
+                        const isAdding = addingSlotTopic === topicObj.topic;
+
+                        return (
+                          <div
+                            key={idx}
+                            style={{
+                              background: "#09090b",
+                              border: "1px solid rgba(255, 255, 255, 0.08)",
+                              borderRadius: "12px",
+                              padding: "18px",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "6px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <span style={{ fontSize: "10px", fontWeight: "700", color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.3)", padding: "2px 8px", borderRadius: "4px" }}>
+                                    {topicObj.suggestedFormat || "CAROUSEL"}
+                                  </span>
+                                  {topicObj.objective && (
+                                    <span style={{ fontSize: "10px", fontWeight: "700", color: "#c084fc", background: "rgba(168, 85, 247, 0.12)", border: "1px solid rgba(168, 85, 247, 0.3)", padding: "2px 6px", borderRadius: "4px" }}>
+                                      {topicObj.objective}
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ fontSize: "11px", color: "#a1a1aa", display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: "500" }}>
+                                  <IconCalendar size={11} color="#38bdf8" />
+                                  <span>{topicObj.suggestedDay}</span>
+                                  {topicObj.suggestedTime && <span style={{ color: "#71717a" }}>às {topicObj.suggestedTime}</span>}
+                                </span>
+                              </div>
+
+                              <strong style={{ fontSize: "14px", color: "#fafafa", display: "block", marginBottom: "8px", lineHeight: "1.4" }}>
+                                {topicObj.topic}
+                              </strong>
+
+                              {topicObj.reason && (
+                                <p style={{ fontSize: "12px", color: "#a1a1aa", margin: "0 0 10px", lineHeight: "1.4" }}>
+                                  {topicObj.reason}
+                                </p>
+                              )}
+
+                              {/* DIRETRIZES & PROMPT BASE DE ENTRADA DO PIPELINE */}
+                              {(topicObj.baseCopyPrompt || topicObj.baseVisualPrompt) && (
+                                <div
+                                  style={{
+                                    background: "rgba(255, 255, 255, 0.02)",
+                                    border: "1px solid rgba(255, 255, 255, 0.06)",
+                                    borderRadius: "8px",
+                                    padding: "10px 12px",
+                                    fontSize: "11px",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "6px",
+                                  }}
+                                >
+                                  {topicObj.baseCopyPrompt && (
+                                    <div>
+                                      <strong style={{ color: "#38bdf8", display: "block", marginBottom: "2px" }}>
+                                        💡 Roteiro Base Sugerido:
+                                      </strong>
+                                      <span style={{ color: "#d4d4d8", lineHeight: "1.4", display: "block" }}>
+                                        {topicObj.baseCopyPrompt}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {topicObj.baseVisualPrompt && (
+                                    <div>
+                                      <strong style={{ color: "#c084fc", display: "block", marginBottom: "2px" }}>
+                                        🎨 Direção Visual da Capa:
+                                      </strong>
+                                      <span style={{ color: "#d4d4d8", lineHeight: "1.4", display: "block" }}>
+                                        {topicObj.baseVisualPrompt}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => handleAddTopicToSchedule(topicObj)}
+                              disabled={isAdding}
+                              style={{
+                                width: "100%",
+                                justifyContent: "center",
+                                fontSize: "12px",
+                                padding: "8px 14px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                borderColor: "rgba(56, 189, 248, 0.4)",
+                                color: "#38bdf8",
+                              }}
+                            >
+                              {isAdding ? <IconLoader size={13} className="spin" /> : <IconPlus size={13} />}
+                              <span>{isAdding ? "Adicionando à Grade..." : "Adicionar à Grade com Prompt Base"}</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -1406,10 +1632,37 @@ export function AnalyticsPage() {
                         gap: "14px",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-                        <span style={{ fontSize: "10px", background: "rgba(168, 85, 247, 0.15)", border: "1px solid rgba(168, 85, 247, 0.3)", color: "#c084fc", padding: "3px 8px", borderRadius: "4px", fontWeight: "700" }}>
-                          {post.postFormat}
-                        </span>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "10px", background: "rgba(168, 85, 247, 0.15)", border: "1px solid rgba(168, 85, 247, 0.3)", color: "#c084fc", padding: "3px 8px", borderRadius: "4px", fontWeight: "700" }}>
+                            {post.postFormat}
+                          </span>
+                          {(post.playsCount !== undefined && post.playsCount > 0) && (
+                            <span style={{ fontSize: "10px", background: "rgba(56, 189, 248, 0.15)", border: "1px solid rgba(56, 189, 248, 0.3)", color: "#38bdf8", padding: "3px 8px", borderRadius: "4px", fontWeight: "600" }}>
+                              {post.playsCount} visualizações
+                            </span>
+                          )}
+                          {(post.reachTotal !== undefined && post.reachTotal > 0) && (
+                            <span style={{ fontSize: "10px", background: "rgba(147, 51, 234, 0.15)", border: "1px solid rgba(147, 51, 234, 0.3)", color: "#c084fc", padding: "3px 8px", borderRadius: "4px", fontWeight: "600" }}>
+                              {post.reachTotal} espectadores únicos
+                            </span>
+                          )}
+                          {(post.avgWatchTime !== undefined && post.avgWatchTime > 0) && (
+                            <span style={{ fontSize: "10px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#34d399", padding: "3px 8px", borderRadius: "4px", fontWeight: "600" }}>
+                              Média: {post.avgWatchTime}s
+                            </span>
+                          )}
+                          {(post.sharesCount !== undefined && post.sharesCount > 0) && (
+                            <span style={{ fontSize: "10px", background: "rgba(236, 72, 153, 0.15)", border: "1px solid rgba(236, 72, 153, 0.3)", color: "#f472b6", padding: "3px 8px", borderRadius: "4px", fontWeight: "600" }}>
+                              {post.sharesCount} compartilhamentos
+                            </span>
+                          )}
+                          {(post.repostsCount !== undefined && post.repostsCount > 0) && (
+                            <span style={{ fontSize: "10px", background: "rgba(245, 158, 11, 0.15)", border: "1px solid rgba(245, 158, 11, 0.3)", color: "#fbbf24", padding: "3px 8px", borderRadius: "4px", fontWeight: "600" }}>
+                              {post.repostsCount} reposts/replays
+                            </span>
+                          )}
+                        </div>
 
                         <span style={{ fontSize: "12px", fontWeight: "700", color: post.individualScore >= 8 ? "#34d399" : "#fbbf24", background: "rgba(0,0,0,0.4)", padding: "2px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
                           Nota {post.individualScore.toFixed(1)}/10
@@ -1444,6 +1697,18 @@ export function AnalyticsPage() {
                           </span>
                           <span style={{ color: "#a1a1aa", lineHeight: "1.4" }}>{post.hookAnalysis}</span>
                         </div>
+
+                        {(post.watchTimeAnalysis || post.retentionEstimate) && (
+                          <div>
+                            <span style={{ color: "#c084fc", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
+                              <IconSparkles size={12} color="#c084fc" />
+                              Tempo de Retenção & Watch Time:
+                            </span>
+                            <span style={{ color: "#d4d4d8", lineHeight: "1.4" }}>
+                              {post.watchTimeAnalysis || post.retentionEstimate}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1461,78 +1726,184 @@ export function AnalyticsPage() {
           {/* ABA 3: MEMÓRIA RAG & AUTO-CORREÇÕES */}
           {activeTab === "RAG_MEMORY" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ background: "#111114", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "14px", padding: "20px" }}>
-                <div className="section-tag" style={{ color: "#fbbf24", display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                  <IconRefreshCw size={13} />
-                  <span>MEMÓRIA VETORIAL & AUTO-CORREÇÃO</span>
+              <div style={{ background: "#111114", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "14px", padding: "20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "14px" }}>
+                <div>
+                  <div className="section-tag" style={{ color: "#fbbf24", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <IconRefreshCw size={13} />
+                    <span>MEMÓRIA VETORIAL & AUTO-CORREÇÃO</span>
+                  </div>
+                  <h3 style={{ fontSize: "16px", color: "#fafafa", margin: "4px 0" }}>
+                    Cérebro de Aprendizado do Gestor de IA
+                  </h3>
+                  <p style={{ fontSize: "12px", color: "#71717a", margin: 0, maxWidth: "560px" }}>
+                    A IA acumula aprendizados vetorizados com Gemini text-embedding-004 e gravados no PostgreSQL. Você pode desvalidar, ajustar ou excluir qualquer tese manualmente.
+                  </p>
                 </div>
-                <h3 style={{ fontSize: "16px", color: "#fafafa", margin: "4px 0" }}>
-                  Cérebro de Aprendizado do Gestor de IA
-                </h3>
-                <p style={{ fontSize: "12px", color: "#71717a", margin: 0 }}>
-                  A IA acumula aprendizados vetorizados com Gemini text-embedding-004 e gravados no PostgreSQL. Premissas são validadas progressivamente conforme novos posts confirmam o padrão.
-                </p>
+
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleDevalidateAll}
+                    style={{ fontSize: "11px", padding: "6px 12px", color: "#fbbf24", borderColor: "rgba(245, 158, 11, 0.35)", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                    title="Converte todas as teses validadas em hipóteses com confiança reduzida (ideal para fases iniciais)"
+                  >
+                    <span>🧪 Desvalidar Tudo (Mudar para Hipótese)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={loadRagInsights}
+                    style={{ fontSize: "11px", padding: "6px 12px" }}
+                    title="Recarregar aprendizados do banco"
+                  >
+                    <IconRefreshCw size={12} />
+                    <span>Recarregar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* AVISO DE CALIBRAÇÃO PARA CONTAS INICIAIS */}
+              <div
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: "10px",
+                  background: "rgba(245, 158, 11, 0.08)",
+                  border: "1px solid rgba(245, 158, 11, 0.25)",
+                  color: "#fbbf24",
+                  fontSize: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <IconAlertTriangle size={16} color="#fbbf24" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Calibração para Amostragem Inicial:</strong> Com base reduzida de seguidores e poucas publicações, métricas percentuais de alcance sofrem distorção de amostragem. As teses devem permanecer como <strong>Hipóteses em Teste (35% a 50% de confiança)</strong> até que a conta acumule volume estatístico relevante.
+                </span>
               </div>
 
               {loadingRag && (
                 <div className="page-placeholder" style={{ padding: "30px" }}>
-                  <IconLoader size={24} />
+                  <IconLoader size={24} className="spin" />
                   <span>Carregando memória RAG...</span>
                 </div>
               )}
 
               {!loadingRag && ragInsights.length > 0 ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "14px" }}>
                   {ragInsights.map((item) => {
                     const isRefuted = item.status === "REFUTED";
                     const isValidated = item.status === "VALIDATED";
+                    const isHypothesis = item.status === "HYPOTHESIS";
 
                     return (
                       <div
                         key={item.id}
                         style={{
-                          background: isRefuted ? "rgba(239, 68, 68, 0.06)" : "#111114",
-                          border: `1px solid ${isRefuted ? "rgba(239, 68, 68, 0.3)" : isValidated ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.08)"}`,
+                          background: isRefuted ? "rgba(239, 68, 68, 0.04)" : "#111114",
+                          border: `1px solid ${isRefuted ? "rgba(239, 68, 68, 0.3)" : isValidated ? "rgba(16, 185, 129, 0.3)" : "rgba(56, 189, 248, 0.2)"}`,
                           borderRadius: "12px",
                           padding: "16px",
                           display: "flex",
                           flexDirection: "column",
-                          gap: "10px",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
                         }}
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span
-                            style={{
-                              fontSize: "10px",
-                              fontWeight: "700",
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              background: isRefuted ? "rgba(239, 68, 68, 0.15)" : isValidated ? "rgba(16, 185, 129, 0.15)" : "rgba(56, 189, 248, 0.15)",
-                              color: isRefuted ? "#f87171" : isValidated ? "#34d399" : "#38bdf8",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            {isRefuted ? "Hipótese Refutada (Corrigida)" : isValidated ? "Tese Validada" : `Hipótese (${item.evidencePostsCount || 1} posts)`}
-                          </span>
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                fontWeight: "700",
+                                padding: "3px 8px",
+                                borderRadius: "4px",
+                                background: isRefuted ? "rgba(239, 68, 68, 0.15)" : isValidated ? "rgba(16, 185, 129, 0.15)" : "rgba(56, 189, 248, 0.15)",
+                                color: isRefuted ? "#f87171" : isValidated ? "#34d399" : "#38bdf8",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {isRefuted ? "❌ Refutada (Corrigida)" : isValidated ? "✅ Tese Validada" : `🧪 Hipótese (${item.evidencePostsCount || 1} posts)`}
+                            </span>
 
-                          <span style={{ fontSize: "10px", color: "#71717a" }}>
-                            Confiança: {(item.confidenceScore * 100).toFixed(0)}%
-                          </span>
+                            <span style={{ fontSize: "11px", color: isHypothesis ? "#38bdf8" : "#71717a", fontWeight: "600" }}>
+                              Confiança: {(item.confidenceScore * 100).toFixed(0)}%
+                            </span>
+                          </div>
+
+                          <strong style={{ fontSize: "13px", color: isRefuted ? "#fca5a5" : "#fafafa", textDecoration: isRefuted ? "line-through" : "none", display: "block", marginBottom: "6px" }}>
+                            {item.title}
+                          </strong>
+
+                          <p style={{ fontSize: "12px", color: isRefuted ? "#f87171" : "#a1a1aa", margin: 0, lineHeight: "1.4" }}>
+                            {item.content}
+                          </p>
+
+                          {item.correctionReasoning && (
+                            <div style={{ background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.2)", borderRadius: "6px", padding: "8px", fontSize: "11px", color: "#fde68a", marginTop: "8px" }}>
+                              <strong>Motivo da Correção:</strong> {item.correctionReasoning}
+                            </div>
+                          )}
                         </div>
 
-                        <strong style={{ fontSize: "13px", color: isRefuted ? "#fca5a5" : "#fafafa", textDecoration: isRefuted ? "line-through" : "none" }}>
-                          {item.title}
-                        </strong>
+                        {/* CONTROLES MANUAIS DO INSIGHT */}
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center", borderTop: "1px solid rgba(255, 255, 255, 0.06)", paddingTop: "10px", flexWrap: "wrap" }}>
+                          {isValidated && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateInsightStatus(item.id, "HYPOTHESIS")}
+                              style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", color: "#38bdf8", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "600", cursor: "pointer" }}
+                              title="Transformar de volta em hipótese preliminar"
+                            >
+                              🧪 Desvalidar (Hipótese)
+                            </button>
+                          )}
 
-                        <p style={{ fontSize: "12px", color: isRefuted ? "#f87171" : "#a1a1aa", margin: 0, lineHeight: "1.4" }}>
-                          {item.content}
-                        </p>
+                          {isHypothesis && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateInsightStatus(item.id, "VALIDATED")}
+                              style={{ background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#34d399", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "600", cursor: "pointer" }}
+                              title="Validar manualmente esta tese"
+                            >
+                              ✅ Validar Tese
+                            </button>
+                          )}
 
-                        {item.correctionReasoning && (
-                          <div style={{ background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.2)", borderRadius: "6px", padding: "8px", fontSize: "11px", color: "#fde68a" }}>
-                            <strong>Motivo da Correção:</strong> {item.correctionReasoning}
-                          </div>
-                        )}
+                          {!isRefuted && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateInsightStatus(item.id, "REFUTED")}
+                              style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#f87171", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "600", cursor: "pointer" }}
+                              title="Marcar como premissa refutada/incorreta"
+                            >
+                              ❌ Refutar
+                            </button>
+                          )}
+
+                          {isRefuted && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateInsightStatus(item.id, "HYPOTHESIS")}
+                              style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", color: "#38bdf8", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "600", cursor: "pointer" }}
+                              title="Reativar como hipótese de teste"
+                            >
+                              🔄 Reativar Hipótese
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInsight(item.id)}
+                            style={{ background: "transparent", border: "1px solid rgba(255, 255, 255, 0.1)", color: "#71717a", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", cursor: "pointer", marginLeft: "auto" }}
+                            title="Excluir este insight permanentemente do PostgreSQL"
+                          >
+                            <IconTrash size={11} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}

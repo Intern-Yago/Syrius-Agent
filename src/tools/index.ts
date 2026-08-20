@@ -6,7 +6,7 @@ import {
   getInstagramProfile,
   getInstagramMedia,
   getInstagramAudience,
-} from "../services/instagram.js";
+} from "../integrations/instagram/client.js";
 
 export const toolRegistry: Record<string, any> = {
   get_brand_info: {

@@ -47,6 +47,22 @@ export async function ensureBucket(): Promise<void> {
   }
 }
 
+import fs from "node:fs";
+import path from "node:path";
+
+export async function saveImageLocally(
+  buffer: Buffer,
+  relativePath: string
+): Promise<string> {
+  const fullPath = path.resolve(process.cwd(), "output", "images", relativePath);
+  const dir = path.dirname(fullPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(fullPath, buffer);
+  return `images/${relativePath.replace(/\\/g, "/")}`;
+}
+
 export async function uploadImageBuffer(
   buffer: Buffer,
   objectKey: string,
@@ -68,20 +84,49 @@ export async function uploadImageBuffer(
 }
 
 export async function getImageUrl(
-  objectKey: string | null,
-  expiresInSeconds = 86400 // 24 horas para dar tempo de postar no Instagram
+  objectOrLocalPath: string | null,
+  expiresInSeconds = 86400
 ): Promise<string | null> {
-  if (!objectKey) return null;
+  if (!objectOrLocalPath) return null;
 
-  const client = getS3Client();
-  const command = new GetObjectCommand({
-    Bucket: env.STORAGE_BUCKET,
-    Key: objectKey,
-  });
+  if (objectOrLocalPath.startsWith("data:") || objectOrLocalPath.startsWith("http://") || objectOrLocalPath.startsWith("https://")) {
+    return objectOrLocalPath;
+  }
 
-  return getSignedUrl(client, command, {
-    expiresIn: expiresInSeconds,
-  });
+  // Verifica se existe no disco local (output/images/... ou caminho relativo)
+  const cleanPath = objectOrLocalPath.replace(/^images\//, "").replace(/^output\/images\//, "");
+  const localCandidates = [
+    path.resolve(process.cwd(), "output", "images", cleanPath),
+    path.resolve(process.cwd(), "output", "images", objectOrLocalPath),
+    path.resolve(process.cwd(), objectOrLocalPath),
+  ];
+
+  for (const cand of localCandidates) {
+    if (fs.existsSync(cand) && fs.statSync(cand).isFile()) {
+      try {
+        const fileBuffer = fs.readFileSync(cand);
+        const mime = cand.endsWith(".jpg") || cand.endsWith(".jpeg") ? "image/jpeg" : "image/png";
+        return `data:${mime};base64,${fileBuffer.toString("base64")}`;
+      } catch {
+        // fallback
+      }
+    }
+  }
+
+  // Fallback: se não estiver no disco local, busca URL assinada do Cloudflare R2
+  try {
+    const client = getS3Client();
+    const command = new GetObjectCommand({
+      Bucket: env.STORAGE_BUCKET,
+      Key: objectOrLocalPath,
+    });
+
+    return await getSignedUrl(client, command, {
+      expiresIn: expiresInSeconds,
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function imageExists(objectKey: string): Promise<boolean> {

@@ -13,11 +13,14 @@ import {
   IconChevronRight,
 } from "../components/common/Icons";
 
+import { useModal } from "../context/ModalContext";
+
 interface InteractionsPageProps {
   onNavigateToSchedule?: () => void;
 }
 
 export function InteractionsPage({ onNavigateToSchedule }: InteractionsPageProps) {
+  const { toast } = useModal();
   const [interactions, setInteractions] = useState<CommunityInteraction[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<"ALL" | "UNANSWERED" | "ANSWERED" | "CONVERTED_TO_POST">("ALL");
@@ -95,7 +98,7 @@ export function InteractionsPage({ onNavigateToSchedule }: InteractionsPageProps
   async function handleSendReply(id: string) {
     const text = replyDrafts[id];
     if (!text || !text.trim()) {
-      alert("Por favor, digite ou gere uma resposta antes de enviar.");
+      toast.warning("Por favor, digite ou gere uma resposta antes de enviar.");
       return;
     }
 
@@ -155,7 +158,7 @@ export function InteractionsPage({ onNavigateToSchedule }: InteractionsPageProps
   async function handleAddManualSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!manualAuthor.trim() || !manualContent.trim()) {
-      alert("Informe o @ do autor e a dúvida/comentário.");
+      toast.warning("Informe o @ do autor e a dúvida/comentário.");
       return;
     }
 
@@ -178,11 +181,10 @@ export function InteractionsPage({ onNavigateToSchedule }: InteractionsPageProps
         setManualContent("");
         setManualTopic("");
         setManualUrl("");
-        setNotification({ type: "success", message: "Interação adicionada com sucesso!" });
-        setTimeout(() => setNotification(null), 3000);
+        toast.success("Interação adicionada com sucesso!");
       }
     } catch (err) {
-      alert("Erro ao adicionar interação.");
+      toast.error("Erro ao adicionar interação.");
     }
   }
 

@@ -14,7 +14,6 @@ import sharp from "sharp";
 import {
   ensureBucket,
   uploadImageBuffer,
-  downloadImage,
   imageExists,
 } from "../core/storage.js";
 

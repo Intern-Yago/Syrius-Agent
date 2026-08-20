@@ -42,12 +42,14 @@ export const strategyStage: PipelineStageHandler = {
 
     const decision = await executeStructuredPrompt<StrategyDecisionData>(prompt);
 
-    if (!decision.topic || !decision.format) {
-      throw new Error("A IA não retornou um tópico ou formato válido.");
+    const { checkTopicDecay } = await import("../../services/topic-decay.js");
+    const decayCheck = await checkTopicDecay(decision.topic);
+    if (decayCheck.isSaturated) {
+      log(`Alerta Anti-Fadiga de Conteudo: ${decayCheck.warningMessage}`, "warning");
     }
 
     ctx.decision = decision;
 
-    log(`DECISÃO DO GESTOR:\n- Formato: ${decision.format}\n- Tema: ${decision.topic}\n- Objetivo: ${decision.objective}\n- Hook: ${decision.hook}`, "success");
+    log(`DECISAO DO GESTOR:\n- Formato: ${decision.format}\n- Tema: ${decision.topic}\n- Objetivo: ${decision.objective}\n- Hook: ${decision.hook}`, "success");
   },
 };

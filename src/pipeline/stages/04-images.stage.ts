@@ -34,16 +34,25 @@ export const imagesStage: PipelineStageHandler = {
 
     const imageBuffers = new Map<number, Buffer>();
 
-    const isStory = format === "STORY_PHOTO";
+    const isVertical = format === "STORY_PHOTO" || format === "STORIES" || format === "REEL_SCRIPT" || format === "REEL";
     const targetWidth = 1080;
-    const targetHeight = isStory ? 1920 : 1350;
+    const targetHeight = isVertical ? 1920 : 1350;
 
-    for (let i = 0; i < slides.length; i++) {
-      const slide = slides[i];
-      const progressText = `${i + 1}/${slides.length}`;
-      log(`Renderizando elemento ${slide.number} (${progressText}): "${slide.title}"...`);
+    // Para REEL_SCRIPT, geramos a Capa Oficial Vertical (9:16) no Slide 1 (Gancho/Capa),
+    // enquanto as cenas 2..N são o roteiro técnico com minutagem e teleprompter.
+    const isReel = format === "REEL_SCRIPT" || format === "REEL";
+    const slidesToRender = isReel ? slides.slice(0, 1) : slides;
 
-      const promptData = buildImagePrompt(slide, slides.length);
+    for (let i = 0; i < slidesToRender.length; i++) {
+      const slide = slidesToRender[i];
+      const progressText = `${i + 1}/${slidesToRender.length}`;
+      log(
+        isReel
+          ? `Renderizando Capa Oficial Vertical do Reel (9:16 - 1080x1920): "${slide.title}"...`
+          : `Renderizando elemento ${slide.number} (${progressText}): "${slide.title}"...`
+      );
+
+      const promptData = buildImagePrompt(slide, slides.length, format);
       const buffer = await generateCloudflareImage({
         prompt: promptData.prompt,
         width: targetWidth,
@@ -54,8 +63,12 @@ export const imagesStage: PipelineStageHandler = {
       log(`Arte ${slide.number} renderizada e ajustada no Sharp (${targetWidth}x${targetHeight}) com sucesso. (${progressText})`);
     }
 
+    if (isReel && slides.length > 1) {
+      log(`🎬 Roteiro de Reels: Capa 9:16 gerada no Slide 1. As cenas 2 a ${slides.length} foram estruturadas como teleprompter técnico.`, "success");
+    }
+
     ctx.imageBuffers = imageBuffers;
 
-    log(`Geração visual finalizada: ${imageBuffers.size}/${slides.length} arte(s) gerada(s).`, "success");
+    log(`Geração visual finalizada: ${imageBuffers.size} arte(s) renderizada(s).`, "success");
   },
 };

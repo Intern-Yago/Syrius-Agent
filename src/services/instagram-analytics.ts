@@ -18,7 +18,7 @@ export interface InstagramAnalytics {
       id: string;
       caption: string;
       mediaType: string;
-      timestamp: string;
+      timestamp?: string;
       permalink?: string;
     }>;
   };

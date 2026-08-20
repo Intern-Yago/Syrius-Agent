@@ -2,8 +2,9 @@ import { GoogleGenAI } from "@google/genai";
 
 import type { GeneratedPostContent } from "./content-generator";
 
-const TEXT_MODEL =
-  process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash";
+export function getReviewerModel(): string {
+  return process.env.GEMINI_TEXT_MODEL || "gemini-3.6-flash";
+}
 
 export type ReviewStatus =
   | "APPROVED"
@@ -252,8 +253,11 @@ Não inclua markdown.
 Não inclua explicações fora do JSON.
 `;
 
+  const modelToUse = getReviewerModel();
+  console.log(`🤖 Reviewer Modelo: ${modelToUse}`);
+
   const response = await ai.models.generateContent({
-    model: TEXT_MODEL,
+    model: modelToUse,
     contents: prompt,
     config: {
       responseMimeType: "application/json",

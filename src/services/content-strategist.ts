@@ -19,9 +19,9 @@ interface StrategyInput {
   recentFormats?: string[];
 }
 
-const TEXT_MODEL =
-  process.env.GEMINI_TEXT_MODEL ||
-  "gemini-2.5-flash";
+export function getStrategistModel(): string {
+  return process.env.GEMINI_TEXT_MODEL || "gemini-3.6-flash";
+}
 
 const MAX_OUTPUT_TOKENS = 4096;
 
@@ -461,8 +461,10 @@ async function requestStrategy(
     `🤖 Gerando decisão com Gemini... tentativa ${attempt}/${MAX_RETRIES + 1}`
   );
 
+  const modelToUse = getStrategistModel();
+
   console.log(
-    `🤖 Modelo do Strategist: ${TEXT_MODEL}`
+    `🤖 Modelo do Strategist: ${modelToUse}`
   );
 
   console.log(
@@ -473,7 +475,7 @@ async function requestStrategy(
     const response =
       await ai.models.generateContent({
         model:
-          TEXT_MODEL,
+          modelToUse,
 
         contents:
           prompt,

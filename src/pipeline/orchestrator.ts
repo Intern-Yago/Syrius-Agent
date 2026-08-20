@@ -4,6 +4,7 @@ import { contentStage } from "./stages/02-content.stage.js";
 import { databaseStage } from "./stages/03-database.stage.js";
 import { imagesStage } from "./stages/04-images.stage.js";
 import { storageStage } from "./stages/05-storage.stage.js";
+import { videoProductionStage } from "./stages/05b-video.stage.js";
 import { reviewStage } from "./stages/06-review.stage.js";
 import { finalizeStage } from "./stages/07-finalize.stage.js";
 import { prisma } from "../core/database.js";
@@ -14,6 +15,7 @@ export const PIPELINE_STAGES: PipelineStageHandler[] = [
   databaseStage,
   imagesStage,
   storageStage,
+  videoProductionStage,
   reviewStage,
   finalizeStage,
 ];
@@ -26,6 +28,8 @@ export interface RunPipelineOptions {
     objective: string;
     reasoning?: string;
     hook?: string;
+    baseCopyPrompt?: string;
+    baseVisualPrompt?: string;
   };
   onLog?: (message: string, type: "info" | "success" | "warning" | "error") => void;
 }
@@ -65,7 +69,10 @@ export async function runPipeline(options: RunPipelineOptions = {}): Promise<Run
       format: slot.format,
       objective: slot.objective,
       reasoning: slot.reasoning || "Slot planejado pelo cronograma editorial.",
-      hook: slot.hook || slot.topic,
+      hook: (slot as any).hook || slot.topic,
+      baseCopyPrompt: (slot as any).baseCopyPrompt,
+      baseVisualPrompt: (slot as any).baseVisualPrompt,
+      suggestedTime: (slot as any).timeSlot || (slot as any).suggestedTime,
     };
   }
 

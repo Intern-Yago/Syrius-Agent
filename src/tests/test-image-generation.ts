@@ -91,13 +91,15 @@ async function main() {
     return;
   }
 
-  for (const image of images) {
+  for (let i = 0; i < images.length; i++) {
+    const imgKey = images[i];
+    const slideNumber = post.slides[i]?.number ?? (i + 1);
     console.log(
-      `\n🖼️ Slide ${image.slideNumber}`
+      `\n🖼️ Slide ${slideNumber}`
     );
 
     console.log(
-      `Arquivo: ${image.imagePath}`
+      `Arquivo: ${imgKey}`
     );
   }
 
@@ -121,26 +123,27 @@ async function main() {
     "\n💾 Salvando caminhos das imagens no PostgreSQL...\n"
   );
 
-  for (const image of images) {
+  for (let i = 0; i < images.length; i++) {
+    const imgKey = images[i];
+    const slide = post.slides[i];
+    if (!slide) continue;
+
     await prisma.slide.update({
       where: {
-        postId_number: {
-          postId: post.id,
-          number: image.slideNumber,
-        },
+        id: slide.id,
       },
 
       data: {
-        imagePath: image.imagePath,
+        imagePath: imgKey,
       },
     });
 
     console.log(
-      `✅ Slide ${image.slideNumber} atualizado`
+      `✅ Slide ${slide.number} atualizado`
     );
 
     console.log(
-      `   ${image.imagePath}`
+      `   ${imgKey}`
     );
   }
 

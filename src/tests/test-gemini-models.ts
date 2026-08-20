@@ -21,6 +21,8 @@ async function testModels() {
   const ai = new GoogleGenAI({ apiKey });
 
   const models = [
+    "gemini-3.6-flash",
+    "gemini-3.1-pro-preview",
     "gemini-2.5-flash",
     "gemini-2.5-pro",
     "gemini-2.0-flash",
@@ -39,6 +41,13 @@ async function testModels() {
       console.log(`❌ Modelo "${m}" falhou: ${e.message}`);
     }
   }
+
+  console.log("\nTestando executeStructuredPrompt com o modelo configurado no sistema...");
+  const { executeStructuredPrompt } = await import("../core/gemini.js");
+  const result = await executeStructuredPrompt<{ status: string; modelo: string }>(
+    "Responda SOMENTE com o JSON: {\"status\": \"ok\", \"modelo\": \"gemini-3.6-flash\"}"
+  );
+  console.log("✅ executeStructuredPrompt respondeu com sucesso:", result);
 }
 
 testModels().catch((err) => {

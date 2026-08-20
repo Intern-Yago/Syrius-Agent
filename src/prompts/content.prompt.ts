@@ -7,18 +7,26 @@ export interface StrategyDecisionInput {
   suggestedSlot?: string;
   handle?: string;
   ragInsights?: string;
+  baseCopyPrompt?: string;
+  baseVisualPrompt?: string;
 }
 
 export function buildContentGeneratorPrompt(decision: StrategyDecisionInput): string {
   const format = decision.format?.toUpperCase() || "CAROUSEL";
   const handle = decision.handle || "@tech_creator";
   const ragSection = decision.ragInsights ? `\nMEMÓRIA RAG (DIRETRIZES & O QUE EVITAR):\n${decision.ragInsights}\n` : "";
+  const basePromptsSection = (decision.baseCopyPrompt || decision.baseVisualPrompt) ? `
+DIRETRIZES ESTRATÉGICAS BASE (SUGERIDAS PELO ANALYTICS / GESTOR IA):
+${decision.baseCopyPrompt ? `- ROTEIRO & DIRETRIZ BASE DE CONTEÚDO: "${decision.baseCopyPrompt}"` : ""}
+${decision.baseVisualPrompt ? `- DIRETRIZ VISUAL & ESTÉTICA BASE: "${decision.baseVisualPrompt}"` : ""}
+(Utilize estas diretrizes base como ponto de partida sólido, aprofundando os detalhes técnicos, aperfeiçoando o gancho e garantindo máxima densidade prática!)
+` : "";
 
-  if (format === "STORY_PHOTO") {
+  if (format === "STORY_PHOTO" || format === "STORY" || format === "STORIES") {
     return `
-Você é um estrategista de engajamento e criador de conteúdo sênior no Instagram (${handle}).
+Você é um estrategista sênior de engajamento e retenção no Instagram (${handle}).
 
-Crie um STORY VISUAL DE ALTO IMPACTO E ENGAJAMENTO (EXATAMENTE 1 SLIDE VERTICAL 1080x1920) sobre "${decision.topic}".
+Crie um STORY VERTICAL DE ALTO ENGAJAMENTO (1080x1920 - Proporção 9:16) sobre "${decision.topic}".
 
 DECISÃO DO ESTRATEGISTA:
 - Tema: ${decision.topic}
@@ -26,12 +34,17 @@ DECISÃO DO ESTRATEGISTA:
 - Hook: ${decision.hook}
 - Raciocínio: ${decision.reasoning}
 ${ragSection}
+${basePromptsSection}
 
-ESTRUTURA DO STORY FOTO (1 SLIDE ÚNICO):
-1. O Story tem EXATAMENTE 1 SLIDE (formato vertical 9:16 - 1080x1920).
-2. O conteúdo deve ser altamente interativo: Caixa de Perguntas temática, Enquete técnica de código ("Qual saída deste código?"), Bastidores/Setup ou Quiz rápido.
-3. Texto curto, visual limpo, com espaço central reservado para a caixinha de pergunta ou enquete interativa.
-4. Direção visual clara para gerar uma arte vertical escura com tipografia de alta legibilidade.
+DIRETRIZES DE FORMATO DO STORY (BAIXÍSSIMA FRICÇÃO & MÁXIMA INTERAÇÃO):
+1. O Story deve focar em interação instantânea de 1 toque ou consumo rápido de código:
+   * **Quiz Técnico de Código (1 clique):** Ex: "Qual a saída deste código em TypeScript/Node?" com opções [A], [B], [C] claramente visíveis na arte para o usuário votar.
+   * **Enquete Técnica Binária:** Ex: "Você usa Monólito Modular ou Microsserviços em 2026?" com pergunta provocativa no topo e espaço para sticker de enquete [Sim/Não] ou [Opção A / Opção B].
+   * **Bastidores & Terminal Dev:** Print estético de código, erro de compilação ou dica de terminal rápida.
+   * **Pílula Rápida de Dev:** Dica em 1 tela objetiva com snippet de código limpo.
+   * **Ponte de Conteúdo:** Conexão chamando a audiência para aprofundar no post do Feed/Reel do dia.
+   * **Caixa de Perguntas Contextualizada:** Apenas se o tema exigir debate aberto profundo.
+2. Layout vertical 9:16 (1080x1920) escuro, com tipografia legível e espaço bem distribuído para stickers de interação.
 
 FORMATO OBRIGATÓRIO (JSON):
 {
@@ -39,14 +52,14 @@ FORMATO OBRIGATÓRIO (JSON):
   "format": "STORY_PHOTO",
   "objective": "${decision.objective}",
   "hook": "${decision.hook}",
-  "caption": "texto do story / instrução para a audiência",
+  "caption": "texto de apoio e instrução para sticker",
   "hashtags": ["#dev", "#tecnologia", "#programacao"],
   "slides": [
     {
       "number": 1,
-      "title": "Título Chamativo do Story",
-      "text": "Pergunta central ou tema da enquete para engajar a audiência",
-      "visualDirection": "Dark minimalist 9:16 vertical story background (1080x1920) with clean dev aesthetic, code typography and central interactive focus area"
+      "title": "Título Chamativo ou Pergunta do Quiz",
+      "text": "Código ou conteúdo do desafio com opções de resposta claras",
+      "visualDirection": "Dark minimalist 9:16 vertical background (1080x1920), crisp syntax highlighted code card, professional dev aesthetic with dedicated bottom area for interactive sticker"
     }
   ]
 }
@@ -65,12 +78,14 @@ DECISÃO DO ESTRATEGISTA:
 - Hook: ${decision.hook}
 - Raciocínio: ${decision.reasoning}
 ${ragSection}
+${basePromptsSection}
 
 ESTRUTURA DO POST SOLO:
 1. O post tem exatamente 1 slide/arte visual.
 2. A arte deve ser limpa, direta e marcante (ex: terminal com código, comparativo 'certo vs errado', diagrama em bloco ou checklist técnico).
 3. A LEGENDA (caption) deve ser aprofundada, explicando o conceito com clareza e convidando ao debate/comentário nos últimos parágrafos.
 4. Hashtags técnicas específicas (3 a 5).
+5. PROIBIDO emojis no texto gerado, legendas, títulos ou slides.
 
 FORMATO OBRIGATÓRIO (JSON):
 {
@@ -94,9 +109,9 @@ FORMATO OBRIGATÓRIO (JSON):
 
   if (format === "REEL_SCRIPT") {
     return `
-Você é um roteirista técnico especializado em vídeos curtos e dinâmicos para Reels/TikTok (${handle}).
+Você é um roteirista técnico sênior e estrategista de viralidade para Instagram Reels e TikTok (${handle}).
 
-Crie um ROTEIRO COMPLETO DE REELS (vídeo vertical de 30 a 50 segundos) sobre "${decision.topic}".
+Crie um ROTEIRO DE REELS DE ALTO IMPACTO (vídeo vertical de 30 a 50 segundos) com LEGENDA EDITORIAL DENSA sobre "${decision.topic}".
 
 DECISÃO DO ESTRATEGISTA:
 - Tema: ${decision.topic}
@@ -104,14 +119,28 @@ DECISÃO DO ESTRATEGISTA:
 - Hook de abertura: ${decision.hook}
 - Raciocínio: ${decision.reasoning}
 ${ragSection}
+${basePromptsSection}
 
 ESTRUTURA OBRIGATÓRIA DO ROTEIRO (CENA A CENA):
-- Cena 1 (0-4s): Gancho falado de alto impacto visual e verbal.
-- Cena 2 (4-15s): O problema real ou a armadilha comum que programadores cometem.
-- Cena 3 (15-35s): A solução técnica prática, o comando ou o código demonstrado.
-- Cena 4 (35-45s): Conclusão e CTA direto (ex: "Salva para não esquecer e me segue para mais dicas de dev").
+- Cena 1 (0-4s): Gancho falado magnético (primeiras palavras decisivas para reter o scroll nos 3 primeiros segundos).
+- Cena 2 (4-15s): O problema real, a dor do desenvolvedor ou a armadilha comum que quebra em produção.
+- Cena 3 (15-35s): A solução técnica prática, o comando ou o código demonstrado na tela do VS Code.
+- Cena 4 (35-45s): Conclusão com moral técnica e CTA direto.
 
-Para compatibilidade estrutural, mapeie as 4 cenas nos slides (cada slide representa uma cena do vídeo com narração falada e direção visual).
+DIRETRIZES DE LOCUÇÃO HUMANA (VOZ NATURAL E EXPRESSIVA):
+1. O campo "text" será lido diretamente pela IA de voz neural. Escreva EXATAMENTE como um desenvolvedor sênior conversa amigavelmente com outro.
+2. PROIBIDO termos mecânicos como "P-O-V", "C-T-A" ou "Hook". Substitua por frases naturais como "Sabe quando você...", "Se liga nisso aqui...", "Olha o que acontece se você fizer isso...".
+3. Use pontuação para respiração: inclua reticências (...) para pausas naturais e ritmo envolvente.
+4. Mantenha energia alta, sem enrolação e focado na prática.
+
+DIRETRIZES DE LEGENDA DO REELS (CAPTION DE ALTA RETENÇÃO E SALVAMENTOS):
+A legenda do Reels NÃO deve ser genérica! O algoritmo do Instagram valoriza Reels com legendas completas que fazem o usuário pausar o vídeo para ler:
+1. Linha 1: Gancho magnético provocativo.
+2. Parágrafo 1: O contexto do problema e por que a maioria erra nisso.
+3. Bloco de Código / Passo a Passo: Coloque os comandos ou código exato na legenda para que o usuário copie facilmente.
+4. Pro-Tip de Engenharia: Uma dica bônus exclusiva de bastidores.
+5. CTA forte: "Salve para consultar no seu próximo deploy | Compartilhe com quem programa com você | Siga ${handle} para dominar engenharia de software na prática".
+6. IMPORTANTE: NÃO use emojis no texto gerado nem na legenda. Mantenha estilo limpo e profissional.
 
 FORMATO OBRIGATÓRIO (JSON):
 {
@@ -119,32 +148,32 @@ FORMATO OBRIGATÓRIO (JSON):
   "format": "REEL_SCRIPT",
   "objective": "${decision.objective}",
   "hook": "${decision.hook}",
-  "caption": "legenda do Reels explicando o contexto do vídeo sem hashtags",
-  "hashtags": ["#reelsdev", "#programacao", "#tecnologia"],
+  "caption": "Gancho da legenda em 1 linha\\n\\nContexto do problema explicado com clareza técnica...\\n\\nComo aplicar:\\n1. Primeiro passo ou comando\\n2. Segundo passo ou configuração\\n\\nPro-Tip de Engenharia:\\nInsight sênior de produção.\\n\\nSalve este Reel para não esquecer na hora de codar e siga ${handle}!",
+  "hashtags": ["#programacao", "#desenvolvimento", "#dev", "#softwareengineer", "#tecnologia"],
   "slides": [
     {
       "number": 1,
       "title": "CENA 1 [0-4s]: GANCHO",
-      "text": "Narração falada exata da abertura",
-      "visualDirection": "O que aparece na tela (ex: terminal piscando, desenvolvedor apontando pro código, texto na tela)"
+      "text": "Narração falada da abertura provocativa",
+      "visualDirection": "VS Code dark minimalista com erro no terminal ou código em destaque"
     },
     {
       "number": 2,
       "title": "CENA 2 [4-15s]: O PROBLEMA",
-      "text": "Narração falada explicando a dor/problema",
-      "visualDirection": "Direção de câmera e elementos visuais da tela"
+      "text": "Narração falada explicando a dor real do dev",
+      "visualDirection": "Digitação do teste ou cenário problemático no editor de código"
     },
     {
       "number": 3,
       "title": "CENA 3 [15-35s]: A SOLUÇÃO",
-      "text": "Narração falada mostrando a técnica/código",
-      "visualDirection": "Gravação de tela com o código ou terminal executando"
+      "text": "Narração falada demonstrando a refatoração e boas práticas",
+      "visualDirection": "Refatoração limpa sendo digitada e testes passando em verde no terminal"
     },
     {
       "number": 4,
       "title": "CENA 4 [35-45s]: CTA FINAL",
-      "text": "Narração de encerramento e chamada para ação",
-      "visualDirection": "Card final com logotipo ${handle} e chamada para seguir"
+      "text": "Narração de fechamento convidando a salvar e seguir",
+      "visualDirection": "Terminal com build bem-sucedido e branding oficial ${handle}"
     }
   ]
 }
@@ -163,6 +192,7 @@ DECISÃO DO ESTRATEGISTA:
 - Hook: ${decision.hook}
 - Raciocínio: ${decision.reasoning}
 ${ragSection}
+${basePromptsSection}
 
 DIRETRIZES DE ESTRUTURA DO CARROSSEL:
 - Slide 1: Hook direto e instigante. Apresenta o problema ou benefício real.
@@ -176,6 +206,7 @@ REGRAS:
 4. Legenda (caption) complementar que contextualiza o assunto.
 5. NÃO coloque hashtags na legenda nem nos slides.
 6. Hashtags separadas (3 a 6 hashtags técnicas).
+7. PROIBIDO emojis no texto gerado, legendas, títulos ou slides. Mantenha tom técnico e minimalista.
 
 FORMATO OBRIGATÓRIO (JSON):
 {

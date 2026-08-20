@@ -39,42 +39,37 @@ export const finalizeStage: PipelineStageHandler = {
       data: { status: "READY" },
     });
 
-    // Atualiza o slot correspondente no Cronograma Editorial para "READY" e vincula o postId
+    // Atualiza o slot correspondente no Cronograma Editorial no PostgreSQL
     try {
-      const fs = await import("node:fs/promises");
-      const path = await import("node:path");
-      const { fileURLToPath } = await import("node:url");
-      const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      const scheduleFilePath = path.resolve(currentDir, "..", "..", "..", "output", "editorial-schedule.json");
+      let matchedSlot = null;
+      if (ctx.slotId) {
+        matchedSlot = await prisma.editorialScheduleSlot.findUnique({
+          where: { id: ctx.slotId },
+        });
+      }
 
-      const fileContent = await fs.readFile(scheduleFilePath, "utf-8");
-      const slots = JSON.parse(fileContent);
+      if (!matchedSlot && finalizedPost.topic) {
+        const allSlots = await prisma.editorialScheduleSlot.findMany();
+        matchedSlot = allSlots.find(
+          (s) =>
+            s.topic.trim().toLowerCase() === finalizedPost.topic.trim().toLowerCase() ||
+            finalizedPost.topic.toLowerCase().includes(s.topic.toLowerCase()) ||
+            s.topic.toLowerCase().includes(finalizedPost.topic.toLowerCase())
+        );
+      }
 
-      if (Array.isArray(slots)) {
-        let updated = false;
-        for (const slot of slots) {
-          const matchById = ctx.slotId && slot.id === ctx.slotId;
-          const matchByTopic = slot.topic && (
-            slot.topic.trim().toLowerCase() === finalizedPost.topic.trim().toLowerCase() ||
-            finalizedPost.topic.toLowerCase().includes(slot.topic.toLowerCase()) ||
-            slot.topic.toLowerCase().includes(finalizedPost.topic.toLowerCase())
-          );
-
-          if (matchById || matchByTopic) {
-            slot.status = "READY";
-            slot.postId = finalizedPost.id;
-            updated = true;
-            break;
-          }
-        }
-
-        if (updated) {
-          await fs.writeFile(scheduleFilePath, JSON.stringify(slots, null, 2), "utf-8");
-          log(`📅 Cronograma Editorial atualizado: Slot marcado como "Pronto & Agendado" e vinculado ao post ${finalizedPost.id}!`, "success");
-        }
+      if (matchedSlot) {
+        await prisma.editorialScheduleSlot.update({
+          where: { id: matchedSlot.id },
+          data: {
+            status: "READY",
+            postId: finalizedPost.id,
+          },
+        });
+        log(`📅 Cronograma no PostgreSQL atualizado: Slot marcado como "Pronto & Agendado" e vinculado ao post ${finalizedPost.id}!`, "success");
       }
     } catch (schedErr) {
-      console.warn("⚠️ Não foi possível sincronizar o status no editorial-schedule.json:", schedErr);
+      console.warn("⚠️ Não foi possível sincronizar o status no editorialScheduleSlot:", schedErr);
     }
 
     log(`PUBLICACÃO PRONTA PARA AGENDAMENTO:\n- ID: ${finalizedPost.id}\n- Formato: [${finalizedPost.format}]\n- Tema: ${finalizedPost.topic}\n- Status: ${finalizedPost.status}\n- Elementos: ${post.slides.length}`, "success");

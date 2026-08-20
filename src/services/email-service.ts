@@ -353,3 +353,137 @@ export async function sendExecutiveBriefingEmail(report: AnalyticsReport): Promi
     message: `Briefing enviado com sucesso para ${recipient}!`,
   };
 }
+
+/**
+ * 3. Envia Alerta de Post em Atraso por E-mail
+ */
+export async function sendOverduePostAlertEmail(slot: {
+  topic: string;
+  format: string;
+  dayOfWeek: string;
+  timeSlot: string;
+  editorialPillar?: string;
+  status: string;
+}): Promise<{ success: boolean; message: string }> {
+  const settings = await getSettings();
+
+  if (!settings.emailNotificationsEnabled && !settings.notificationEmail) {
+    return {
+      success: false,
+      message: "Envio de e-mail desativado nas configurações.",
+    };
+  }
+
+  const recipient = settings.notificationEmail;
+  if (!recipient) {
+    return {
+      success: false,
+      message: "Nenhum e-mail de destino cadastrado.",
+    };
+  }
+
+  const transporter = await createTransporter();
+  if (!transporter) {
+    console.warn("[email] Servidor SMTP não configurado. Pulando envio de alerta de atraso.");
+    return {
+      success: false,
+      message: "SMTP não configurado.",
+    };
+  }
+
+  const bannerPath = getBannerPath();
+  const attachments = bannerPath
+    ? [
+        {
+          filename: "banner.png",
+          path: bannerPath,
+          cid: "agent-banner@socialagent",
+        },
+      ]
+    : [];
+
+  const bannerHtml = bannerPath
+    ? `
+      <div style="margin-bottom: 24px; text-align: center; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.1);">
+        <img src="cid:agent-banner@socialagent" alt="Social Media Agent" style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 12px;" />
+      </div>
+    `
+    : "";
+
+  const statusDescription =
+    slot.status === "READY"
+      ? "Pronto para Publicação (Aguardando Disparo)"
+      : "Planejado na Grade (Pendente de Produção)";
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #09090b; color: #f4f4f5; margin: 0; padding: 24px; }
+        .card { max-width: 600px; margin: 0 auto; background-color: #111114; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 16px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .badge { display: inline-block; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 16px; }
+        h1 { font-size: 20px; color: #fafafa; margin: 0 0 10px; }
+        p { font-size: 13px; color: #d4d4d8; line-height: 1.6; margin: 0 0 16px; }
+        .slot-box { background: #09090b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .meta-row { font-size: 12px; color: #a1a1aa; margin-bottom: 8px; }
+        .meta-row strong { color: #f4f4f5; }
+        .footer { font-size: 11px; color: #71717a; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px; margin-top: 24px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        ${bannerHtml}
+        <span class="badge">⚠️ Alerta de Cronograma • Publicação em Atraso</span>
+        <h1>Post Não Publicado no Horário Programado</h1>
+        <p>O horário programado para o post da grade editorial foi atingido ou ultrapassado, mas a publicação ainda não consta como realizada no perfil <strong>@${settings.instagramHandle.replace("@", "")}</strong>.</p>
+        
+        <div class="slot-box">
+          <div class="meta-row">
+            <span>📅 Horário Programado:</span> <strong>${slot.dayOfWeek} às ${slot.timeSlot}</strong>
+          </div>
+          ${
+            slot.editorialPillar
+              ? `<div class="meta-row"><span>🏷️ Pilar Editorial:</span> <strong>${slot.editorialPillar}</strong></div>`
+              : ""
+          }
+          <div class="meta-row">
+            <span>📐 Formato:</span> <strong>${slot.format}</strong>
+          </div>
+          <div class="meta-row">
+            <span>📌 Status Atual:</span> <strong style="color: ${slot.status === "READY" ? "#38bdf8" : "#fbbf24"};">${statusDescription}</strong>
+          </div>
+          <div style="margin-top: 12px; font-size: 14px; font-weight: 700; color: #fafafa;">
+            "${slot.topic}"
+          </div>
+        </div>
+
+        <p style="font-size: 12px; color: #a1a1aa;">
+          Para manter o algoritmo do Instagram aquecido e garantir a cadência da sua audiência, abra o <strong>Syrius Agent</strong> e realize a publicação ou aprove o conteúdo.
+        </p>
+
+        <div class="footer">
+          Social Media Agent • Antigravity AI Engine
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const fromAddress = settings.smtpConfig?.from || settings.smtpConfig?.user || `"Social Media Agent" <noreply@socialagent.ai>`;
+
+  await transporter.sendMail({
+    from: fromAddress,
+    to: recipient,
+    subject: `⚠️ Alerta de Atraso: Post não publicado (${slot.dayOfWeek} às ${slot.timeSlot}) - ${slot.topic.slice(0, 50)}`,
+    html,
+    attachments,
+  });
+
+  console.log(`[email] Alerta de post em atraso enviado com sucesso para ${recipient}!`);
+  return {
+    success: true,
+    message: `Alerta de atraso enviado para ${recipient}!`,
+  };
+}

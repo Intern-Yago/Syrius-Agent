@@ -15,17 +15,36 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openImage: (imagePath) => ipcRenderer.invoke("posts:open-image", imagePath),
   downloadImage: (payload) => ipcRenderer.invoke("posts:download-image", payload),
   downloadAllPostImages: (postId) => ipcRenderer.invoke("posts:download-all", postId),
-  publishPost: (postId) => ipcRenderer.invoke("posts:publish", postId),
+  regenerateImage: (payload) => ipcRenderer.invoke("posts:regenerate-image", payload),
+  regenerateVideo: (payload) => ipcRenderer.invoke("posts:regenerate-video", payload),
+  updateSlideText: (payload) => ipcRenderer.invoke("posts:update-slide-text", payload),
+  setPostStatus: (postId, status) => ipcRenderer.invoke("posts:set-status", postId, status),
+  publishPost: (postId, options) => ipcRenderer.invoke("posts:publish", postId, options),
+  getActivePublishings: () => ipcRenderer.invoke("posts:get-active-publishings"),
+  onPublishProgress: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on("posts:publish-progress", listener);
+    return () => ipcRenderer.removeListener("posts:publish-progress", listener);
+  },
+  getActiveRegenerations: () => ipcRenderer.invoke("posts:get-active-regenerations"),
+  onRegenerateProgress: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on("posts:regenerate-progress", listener);
+    return () => ipcRenderer.removeListener("posts:regenerate-progress", listener);
+  },
 
   // Cronograma Editorial
-  getSchedule: () => ipcRenderer.invoke("schedule:get"),
-  saveScheduleSlot: (slot) => ipcRenderer.invoke("schedule:save-slot", slot),
-  saveScheduleAll: (slots) => ipcRenderer.invoke("schedule:save-all", slots),
-  deleteScheduleSlot: (slotId) => ipcRenderer.invoke("schedule:delete-slot", slotId),
-  generateScheduleAI: () => ipcRenderer.invoke("schedule:generate-ai"),
+  getSchedule: (weekOffset) => ipcRenderer.invoke("schedule:get", weekOffset),
+  saveScheduleSlot: (slot, weekOffset) => ipcRenderer.invoke("schedule:save-slot", slot, weekOffset),
+  saveScheduleAll: (slots, weekOffset) => ipcRenderer.invoke("schedule:save-all", slots, weekOffset),
+  deleteScheduleSlot: (slotId, weekOffset) => ipcRenderer.invoke("schedule:delete-slot", slotId, weekOffset),
+  generateScheduleAI: (payload) => ipcRenderer.invoke("schedule:generate-ai", payload),
+  advanceWeek: () => ipcRenderer.invoke("schedule:advance-week"),
   getAutoplay: () => ipcRenderer.invoke("schedule:get-autoplay"),
   setAutoplay: (active) => ipcRenderer.invoke("schedule:set-autoplay", active),
   addTopicToSchedule: (payload) => ipcRenderer.invoke("schedule:add-topic", payload),
+  getPendingRecommendations: () => ipcRenderer.invoke("schedule:get-pending-recommendations"),
+  clearPendingRecommendations: () => ipcRenderer.invoke("schedule:clear-pending-recommendations"),
 
   // Configurações, Perfil Dinâmico e E-mail
   getSettings: () => ipcRenderer.invoke("settings:get"),
@@ -38,6 +57,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // RAG Vetorial & Memória de Aprendizado
   getLearningInsights: () => ipcRenderer.invoke("rag:get-insights"),
   searchLearningInsights: (query, limit) => ipcRenderer.invoke("rag:search-insights", query, limit),
+  updateLearningInsight: (payload) => ipcRenderer.invoke("rag:update-insight-status", payload),
+  deleteLearningInsight: (id) => ipcRenderer.invoke("rag:delete-insight", id),
+  devalidateAllInsights: () => ipcRenderer.invoke("rag:devalidate-all"),
 
   // Analytics & Inteligência com IA
   getAnalyticsHistory: () => ipcRenderer.invoke("analytics:list"),
@@ -81,4 +103,43 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("schedule:publish-alert", listener);
     return () => ipcRenderer.removeListener("schedule:publish-alert", listener);
   },
+
+  // Abertura de links externos seguros no navegador padrão
+  openExternal: (url) => ipcRenderer.invoke("app:open-external", url),
+
+  // Clonagem de Voz e Áudio & Hardware
+  cloneVoiceElevenLabs: (payload) => ipcRenderer.invoke("voice:clone-elevenlabs", payload),
+  saveLocalVoiceSample: (payload) => ipcRenderer.invoke("voice:save-sample-local", payload),
+  getSavedVoiceSample: () => ipcRenderer.invoke("voice:get-saved-sample"),
+  getHardwareInfo: () => ipcRenderer.invoke("system:get-hardware-info"),
+  testVoiceTTS: (payload) => ipcRenderer.invoke("voice:test-tts", payload),
+  cancelVoiceTTS: () => ipcRenderer.invoke("voice:cancel-tts"),
+  getLastSynthesizedAudio: () => ipcRenderer.invoke("voice:get-last-synthesis"),
+  getTrainedModelStatus: () => ipcRenderer.invoke("voice:get-trained-model-status"),
+  trainVoiceModel: (payload) => ipcRenderer.invoke("voice:train-model", payload),
+  onVoiceTrainProgress: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on("voice:train-progress", handler);
+    return () => ipcRenderer.removeListener("voice:train-progress", handler);
+  },
+  listElevenLabsVoices: (apiKey) => ipcRenderer.invoke("voice:list-elevenlabs-voices", apiKey),
+  getTrendingTopics: () => ipcRenderer.invoke("trending:get-all"),
+  refreshTrendingTopics: () => ipcRenderer.invoke("trending:refresh"),
+  ignoreTrendingTopic: (topicId) => ipcRenderer.invoke("trending:ignore", topicId),
+  inspectGitHubRepo: (urlOrSlug) => ipcRenderer.invoke("github:inspect-repo", urlOrSlug),
+  deleteExperiment: (id) => ipcRenderer.invoke("experiments:delete", id),
+
+  // Controle de Janela Customizada (Frameless)
+  minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
+  maximizeWindow: () => ipcRenderer.invoke("window:toggle-maximize"),
+  closeWindow: () => ipcRenderer.invoke("window:close"),
+  isWindowMaximized: () => ipcRenderer.invoke("window:is-maximized"),
+  onWindowMaximizedChange: (callback) => {
+    const listener = (_event, isMax) => callback(isMax);
+    ipcRenderer.on("window:maximized-change", listener);
+    return () => ipcRenderer.removeListener("window:maximized-change", listener);
+  },
+
+  // Notificações Nativas do Sistema Operacional (Windows / Tray)
+  sendNativeNotification: (payload) => ipcRenderer.invoke("notification:send", payload),
 });

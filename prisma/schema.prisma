@@ -36,6 +36,9 @@ model Post {
   scheduledAt DateTime?
   publishedAt DateTime?
 
+  instagramMediaId String?
+  instagramUrl     String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -145,13 +148,19 @@ model PostAnalyticsAudit {
   commentsCount Int @default(0)
   savesCount    Int @default(0)
   sharesCount   Int @default(0)
+  repostsCount  Int @default(0)
   reachTotal    Int @default(0)
   impressions   Int @default(0)
+  playsCount    Int @default(0)
+  avgWatchTime  Float?
+  totalWatchTime Float?
+  trafficSources Json?
 
   whyItWorked       String
   whatHurtIt        String
   hookAnalysis      String
   retentionEstimate String?
+  watchTimeAnalysis String?
   individualScore   Float   @default(7.0)
 
   createdAt DateTime @default(now())
@@ -211,4 +220,98 @@ model LearningInsightEmbedding {
   @@index([type])
   @@index([status])
   @@index([confidenceScore])
+}
+
+model EditorialScheduleSlot {
+  id                    String    @id @default(cuid())
+  dayOfWeek             String    // "Segunda-feira", "Terça-feira", etc.
+  timeSlot              String    // "18:30", "12:00", etc.
+  editorialPillar       String?
+  format                String    // "CAROUSEL", "SINGLE_IMAGE", "REEL_SCRIPT", "STORY_PHOTO"
+  topic                 String
+  objective             String    // "AUTHORITY", "VIRALITY", "EDUCATION", "ENGAGEMENT", "REACH"
+  reasoning             String
+  baseCopyPrompt        String?
+  baseVisualPrompt      String?
+  weekOffset            Int       @default(0) // 0 = Semana Atual, 1 = Proxima Semana
+  status                String    @default("PLANNED") // "PLANNED", "READY", "SCHEDULED", "PUBLISHED"
+  postId                String?
+  pinned                Boolean   @default(false)
+  isCustom              Boolean   @default(false)
+  isStorySlot           Boolean   @default(false)
+  interactiveStoryType  String?   // "QUIZ", "POLL", "DEV_BEHIND_THE_SCENES", "QUICK_PILL", "QUESTION_BOX", "FEED_BRIDGE"
+  lastOverdueNotifiedAt DateTime?
+  instagramUrl          String?
+  orderIndex            Int       @default(0)
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([weekOffset])
+  @@index([dayOfWeek])
+  @@index([status])
+  @@index([postId])
+}
+
+model PendingRecommendedTopic {
+  id               String   @id @default(cuid())
+  topic            String
+  suggestedFormat  String   @default("CAROUSEL")
+  suggestedDay     String
+  suggestedTime    String   @default("18:30")
+  reason           String?
+  baseCopyPrompt   String?
+  baseVisualPrompt String?
+  objective        String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([suggestedDay])
+  @@index([createdAt])
+}
+
+model ContentExperiment {
+  id                   String    @id @default(cuid())
+  originalPostId       String?
+  topic                String
+  editorialPillar      String?
+  format               String
+  targetVariable       String    // "HOOK", "BODY_DENSITY", "CTA_SAVES", "VISUAL_DESIGN"
+  hypothesis           String
+  previousResult       String?
+  plannedPromptDiff    String?
+  recommendedRecycleAt DateTime
+  status               String    @default("PLANNED") // "PLANNED", "READY", "TESTED", "ARCHIVED"
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status])
+  @@index([recommendedRecycleAt])
+}
+
+model TrendingTopic {
+  id               String    @id @default(cuid())
+  title            String
+  category         String    // "DevOps & Cloud", "Backend & Arquitetura", "Frontend & UI", "Inteligência Artificial", "Segurança & Performance", "Carreira Dev"
+  summary          String
+  whyTrending      String
+  suggestedAngle   String
+  suggestedFormat  String    // "CAROUSEL", "REEL_SCRIPT", "SINGLE_IMAGE", "STORY_PHOTO"
+  hookIdea         String
+  baseCopyPrompt   String?
+  baseVisualPrompt String?
+  sourceLinks      String[]  @default([])
+  relevanceScore   Int       @default(90) // 0 a 100
+  status           String    @default("ACTIVE") // "ACTIVE", "IGNORED", "GENERATED"
+  generatedPostId  String?
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status])
+  @@index([category])
+  @@index([expiresAt])
+  @@index([relevanceScore])
 }

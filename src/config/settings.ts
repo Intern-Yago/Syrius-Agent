@@ -26,6 +26,21 @@ export interface SmtpConfig {
   from?: string;
 }
 
+export interface VoiceCloningConfig {
+  provider: "elevenlabs" | "local" | "edge_tts" | "disabled";
+  elevenLabsApiKey?: string;
+  elevenLabsVoiceId?: string;
+  voiceName?: string;
+  stability?: number; // 0.0 to 1.0
+  similarityBoost?: number; // 0.0 to 1.0
+  localSampleAudioPath?: string;
+  lastCalibratedAt?: string;
+  devicePreference?: "auto" | "cuda" | "cpu";
+  nfeSteps?: number; // default 12 (range 6 to 32)
+  trainedModelPath?: string;
+  isModelTrained?: boolean;
+}
+
 export interface AppSettings {
   instagramHandle: string;
   accountName: string;
@@ -38,6 +53,15 @@ export interface AppSettings {
   notificationEmail?: string;
   emailNotificationsEnabled?: boolean;
   smtpConfig?: SmtpConfig;
+  voiceConfig?: VoiceCloningConfig;
+  trendingTopicsCount?: number;
+  trendingRefreshIntervalDays?: number;
+  lastTrendingRefreshedAt?: string;
+  nightlyScheduleEnabled?: boolean;
+  nightlyScheduleDay?: string; // "Domingo", "Sábado", etc.
+  nightlyScheduleTime?: string; // "22:00"
+  nightlyAutoProduceQueue?: boolean;
+  lastNightlyRunAt?: string;
 }
 
 const defaultSettings: AppSettings = {
@@ -54,7 +78,7 @@ const defaultSettings: AppSettings = {
     dayOfMonth: 1,
   },
   autoPublish: false,
-  defaultGeminiModel: "gemini-3.5-flash",
+  defaultGeminiModel: "gemini-3.6-flash",
   notificationEmail: "yago.commercial@gmail.com",
   emailNotificationsEnabled: true,
   smtpConfig: {
@@ -65,11 +89,40 @@ const defaultSettings: AppSettings = {
     pass: "",
     from: "",
   },
+  voiceConfig: {
+    provider: "elevenlabs",
+    voiceName: "Minha Voz (Syrius Tech)",
+    stability: 0.5,
+    similarityBoost: 0.75,
+  },
+  trendingTopicsCount: 10,
+  trendingRefreshIntervalDays: 1,
+  nightlyScheduleEnabled: true,
+  nightlyScheduleDay: "Domingo",
+  nightlyScheduleTime: "22:00",
+  nightlyAutoProduceQueue: false,
 };
 
 const settingsFilePath = path.resolve(process.cwd(), "output", "settings.json");
 
 let cachedSettings: AppSettings | null = null;
+
+async function syncEnvFileModel(modelName: string): Promise<void> {
+  try {
+    const envPath = path.resolve(process.cwd(), ".env");
+    let content = await fs.readFile(envPath, "utf-8").catch(() => "");
+    if (content) {
+      if (content.includes("GEMINI_TEXT_MODEL=")) {
+        content = content.replace(/GEMINI_TEXT_MODEL=.*/g, `GEMINI_TEXT_MODEL=${modelName}`);
+      } else {
+        content += `\nGEMINI_TEXT_MODEL=${modelName}\n`;
+      }
+      await fs.writeFile(envPath, content, "utf-8");
+    }
+  } catch (err) {
+    console.warn("[settings] Não foi possível sincronizar o modelo no arquivo .env:", err);
+  }
+}
 
 export async function getSettings(): Promise<AppSettings> {
   if (cachedSettings) {
@@ -105,8 +158,22 @@ export async function getSettings(): Promise<AppSettings> {
     }
   }
 
+  if (settings.defaultGeminiModel) {
+    process.env.GEMINI_TEXT_MODEL = settings.defaultGeminiModel;
+  }
+
   cachedSettings = settings;
   return settings;
+}
+
+export async function getEffectiveGeminiModel(): Promise<string> {
+  try {
+    const settings = await getSettings();
+    if (settings?.defaultGeminiModel) {
+      return settings.defaultGeminiModel;
+    }
+  } catch {}
+  return process.env.GEMINI_TEXT_MODEL || "gemini-3.6-flash";
 }
 
 export async function saveSettings(newSettings: Partial<AppSettings>): Promise<AppSettings> {
@@ -115,6 +182,11 @@ export async function saveSettings(newSettings: Partial<AppSettings>): Promise<A
     ...current,
     ...newSettings,
   };
+
+  if (updated.defaultGeminiModel) {
+    process.env.GEMINI_TEXT_MODEL = updated.defaultGeminiModel;
+    await syncEnvFileModel(updated.defaultGeminiModel);
+  }
 
   cachedSettings = updated;
   await fs.mkdir(path.dirname(settingsFilePath), { recursive: true });

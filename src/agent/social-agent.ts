@@ -47,11 +47,13 @@ type FunctionResult = {
 
 export class SocialAgent {
   private ai: GoogleGenAI;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, model?: string) {
     this.ai = new GoogleGenAI({
       apiKey,
     });
+    this.model = model || process.env.GEMINI_TEXT_MODEL || "gemini-3.6-flash";
   }
 
   private async executeInteraction(
@@ -162,7 +164,7 @@ export class SocialAgent {
         await this.ai.interactions.create(
           {
             model:
-              "gemini-3.6-flash",
+              this.model,
 
             previous_interaction_id:
               interaction.id,
@@ -191,7 +193,7 @@ export class SocialAgent {
       await this.ai.interactions.create(
         {
           model:
-            "gemini-3.6-flash",
+            this.model,
 
           input: `
 Você é o estrategista de redes sociais do Yago.
@@ -247,7 +249,7 @@ Não invente informações.
       await this.ai.interactions.create(
         {
           model:
-            "gemini-3.6-flash",
+            this.model,
 
           input: `
 Você é o estrategista de redes sociais do Yago.
@@ -319,7 +321,7 @@ Entregue somente a estratégia.
       await this.ai.interactions.create(
         {
           model:
-            "gemini-3.6-flash",
+            this.model,
 
           input: `
 Você é o criador de conteúdo do Instagram do Yago.
@@ -473,7 +475,7 @@ Use exatamente:
       await this.ai.interactions.create(
         {
           model:
-            "gemini-3.6-flash",
+            this.model,
 
           input: `
 Você é o editor-chefe do Instagram do Yago.
@@ -586,7 +588,7 @@ Retorne SOMENTE JSON válido:
       await this.ai.interactions.create(
         {
           model:
-            "gemini-3.6-flash",
+            this.model,
 
           input: `
 Você é o editor responsável por corrigir

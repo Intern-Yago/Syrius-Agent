@@ -9,6 +9,7 @@ import {
   IconFlask,
   IconSparkles,
 } from "../common/Icons";
+import { useModal } from "../../context/ModalContext";
 
 interface EditSlotModalProps {
   slot: Partial<ScheduleSlot> | null;
@@ -85,7 +86,7 @@ export function EditSlotModal({ slot, onClose, onSave }: EditSlotModalProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!topic.trim()) {
-      alert("Por favor, informe o tema da publicação.");
+      toast.warning("Por favor, informe o tema da publicação.");
       return;
     }
 

@@ -68,7 +68,7 @@ function getEnv(): AppEnv {
   return {
     DATABASE_URL: DATABASE_URL || "postgresql://social_media:social_media_dev@localhost:5431/social_media?schema=public",
     GEMINI_API_KEY,
-    GEMINI_TEXT_MODEL: process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash",
+    GEMINI_TEXT_MODEL: process.env.GEMINI_TEXT_MODEL || "gemini-3.6-flash",
     STORAGE_ENDPOINT,
     STORAGE_ACCESS_KEY,
     STORAGE_SECRET_KEY,
@@ -84,4 +84,12 @@ function getEnv(): AppEnv {
   };
 }
 
-export const env = getEnv();
+export const env = new Proxy(getEnv(), {
+  get(target, prop: keyof AppEnv) {
+    if (prop === "GEMINI_TEXT_MODEL") {
+      return process.env.GEMINI_TEXT_MODEL || target.GEMINI_TEXT_MODEL || "gemini-3.6-flash";
+    }
+    return target[prop];
+  },
+});
+

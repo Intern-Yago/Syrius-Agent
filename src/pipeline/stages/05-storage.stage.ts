@@ -1,20 +1,20 @@
 import { PipelineContext, PipelineStageHandler } from "../types.js";
 import { prisma } from "../../core/database.js";
-import { uploadImageBuffer } from "../../core/storage.js";
+import { saveImageLocally } from "../../core/storage.js";
 
 export const storageStage: PipelineStageHandler = {
   id: "storage",
-  name: "Armazenamento MinIO",
+  name: "Armazenamento Local",
   async execute(ctx: PipelineContext, log): Promise<void> {
     if (!ctx.postId) {
-      throw new Error("ID da publicação não encontrado para vincular as imagens no storage.");
+      throw new Error("ID da publicação não encontrado para vincular as imagens.");
     }
 
     if (!ctx.imageBuffers || ctx.imageBuffers.size === 0) {
-      throw new Error("Nenhum buffer de imagem disponível para upload.");
+      throw new Error("Nenhum buffer de imagem disponível.");
     }
 
-    log(`Iniciando upload de ${ctx.imageBuffers.size} imagens no MinIO Object Storage...`);
+    log(`Salvando ${ctx.imageBuffers.size} arte(s) localmente no disco...`);
 
     const post = await prisma.post.findUnique({
       where: { id: ctx.postId },
@@ -28,20 +28,21 @@ export const storageStage: PipelineStageHandler = {
     for (const slide of post.slides) {
       const buffer = ctx.imageBuffers.get(slide.number);
       if (!buffer) {
-        throw new Error(`Buffer da imagem do slide ${slide.number} não encontrado.`);
+        // Se for cena de roteiro de Reel sem imagem dedicada, pula
+        continue;
       }
 
-      const objectKey = `posts/${post.id}/slide-${slide.number}.png`;
-      await uploadImageBuffer(buffer, objectKey, "image/png");
+      const relativeKey = `${post.id}/slide-${slide.number}.png`;
+      const localPath = await saveImageLocally(buffer, relativeKey);
 
       await prisma.slide.update({
         where: { id: slide.id },
-        data: { imagePath: objectKey },
+        data: { imagePath: localPath },
       });
 
-      log(`Slide ${slide.number} salvo no MinIO: "${objectKey}".`);
+      log(`Slide ${slide.number} salvo localmente: "${localPath}".`);
     }
 
-    log(`Upload concluído com sucesso. Todos os caminhos de imagens foram salvos no PostgreSQL.`, "success");
+    log(`Armazenamento local finalizado com sucesso. (Upload para o R2 ocorrerá apenas na publicação)`, "success");
   },
 };

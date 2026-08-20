@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { AppSettings, AnalyticsScheduleConfig } from "../types";
+import React, { useState, useEffect, useRef } from "react";
+import { AppSettings, AnalyticsScheduleConfig, VoiceCloningConfig } from "../types";
+import { useActivities } from "../context/ActivitiesContext";
+import { useModal } from "../context/ModalContext";
 import {
   IconSettings,
   IconCheck,
@@ -16,7 +18,22 @@ import {
   IconTag,
   IconMail,
   IconSend,
+  IconMic,
+  IconVolume2,
+  IconCpu,
+  IconPlay,
+  IconStop,
+  IconRefreshCw,
+  IconTrash,
+  IconAlertTriangle,
+  IconUpload,
+  IconTrendingUp,
 } from "../components/common/Icons";
+
+type SettingsTab = "profile" | "voice" | "trending" | "analytics" | "models" | "email";
+
+const MIN_RECORDING_SECONDS = 45; // 45s mínimo para permitir salvar
+const TARGET_TRAINING_SECONDS = 180; // 3 minutos (meta de treinamento neural)
 
 const INTERVAL_OPTIONS = [
   { value: 1, label: "1 Hora", desc: "Tempo real / Alta frequência" },
@@ -37,14 +54,33 @@ const ALL_WEEKDAYS = [
 ];
 
 const PRESET_GEMINI_MODELS = [
-  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", desc: "Equilíbrio ideal entre velocidade e qualidade" },
-  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", desc: "Raciocínio complexo e máxima profundidade técnica" },
-  { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", desc: "Ultrarrápido e estável" },
-  { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", desc: "Janela de contexto gigante e precisão" },
-  { id: "gemini-2.0-flash-exp", name: "Gemini 2.0 Flash (Exp)", desc: "Nova geração experimental Google DeepMind" },
+  { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", desc: "Equilíbrio ideal entre velocidade, precisão e estabilidade" },
+  { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro (Preview)", desc: "Raciocínio complexo e máxima profundidade técnica" },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", desc: "Versão rápida anterior" },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", desc: "Raciocínio profundo anterior" },
+  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", desc: "Geração rápida multimodal" },
 ];
 
+const VOICE_READING_SCRIPT = `Fala pessoal, sejam muito bem-vindos! Se você é desenvolvedor de software ou apaixonado por tecnologia, este conteúdo foi preparado especialmente para você.
+
+Hoje nós vamos falar sobre arquitetura limpa, escalabilidade e boas práticas de engenharia no mundo real. Quando começamos a programar, nosso primeiro objetivo é fazer o código funcionar. No entanto, à medida que os sistemas crescem e passam a atender milhares de usuários simultâneos, detalhes como concorrência, consumo de memória RAM, latência de rede e isolamento de microsserviços tornam-se cruciais.
+
+Imagine um cenário onde sua aplicação processa pagamentos e transações críticas em tempo real. Não basta apenas colocar blocos try/catch genéricos em volta das funções. É essencial projetar fluxos resilientes com filas assíncronas no RabbitMQ ou Kafka, caching inteligente com Redis e bancos de dados otimizados para alto volume de leitura e escrita.
+
+Além disso, a evolução da inteligência artificial e dos agentes autônomos está transformando a criação de pipelines e a automação de processos. A chave para se destacar na engenharia de software moderna é aliar consistência, aprendizado contínuo e a capacidade de resolver problemas complexos com soluções simples e sustentáveis.
+
+Se esse tipo de raciocínio técnico faz sentido para você, lembre-se de interagir, salvar este conteúdo para consultar depois e compartilhar com a sua equipe. Um forte abraço e até o próximo vídeo!`;
+
 export function SettingsPage() {
+  const { activities, registerOrUpdateActivity, stopActivity } = useActivities();
+  const { toast } = useModal();
+
+  // Tarefa de voz ativa persistente compartilhada com a página de Atividades
+  const activeVoiceTask = activities.find(
+    (a) => a.type === "voice_synthesis" && (a.status === "running" || a.status === "paused")
+  );
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,42 +88,96 @@ export function SettingsPage() {
   const [generatingBio, setGeneratingBio] = useState(false);
   const [generatedBios, setGeneratedBios] = useState<string[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [generatingHighlights, setGeneratingHighlights] = useState(false);
-  const [highlights, setHighlights] = useState<any[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [newModelInput, setNewModelInput] = useState("");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
   const [testEmailFeedback, setTestEmailFeedback] = useState<{ success?: boolean; message?: string } | null>(null);
 
-  async function handleSendTestEmail() {
+  // Estados do Gravador de Voz & Voice Studio
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [recordedAudioBase64, setRecordedAudioBase64] = useState<string | null>(null);
+  const [cloningVoice, setCloningVoice] = useState(false);
+  const [testingTTS, setTestingTTS] = useState(false);
+  const [ttsProgress, setTtsProgress] = useState(0);
+  const [ttsProgressStage, setTtsProgressStage] = useState("");
+  const [testTtsText, setTestTtsText] = useState("Fala devs! No vídeo de hoje vamos entender porque você deve parar de usar try/catch para tudo no JavaScript.");
+  const [synthesizedAudioUrl, setSynthesizedAudioUrl] = useState<string | null>(null);
+  const [voiceFeedback, setVoiceFeedback] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [existingVoices, setExistingVoices] = useState<{ voice_id: string; name: string }[]>([]);
+  const [loadingVoices, setLoadingVoices] = useState(false);
+
+  const isSynthesizing = testingTTS || !!activeVoiceTask;
+  const effectiveProgress = activeVoiceTask ? activeVoiceTask.progress : ttsProgress;
+  const effectiveStage = activeVoiceTask ? activeVoiceTask.statusMessage : ttsProgressStage;
+
+  // Amostra de Voz Salva & Telemetria de Hardware
+  const [savedVoiceSample, setSavedVoiceSample] = useState<{
+    exists: boolean;
+    audioBase64?: string;
+    samplePath?: string;
+    modifiedAt?: string;
+    sizeKb?: number;
+  } | null>(null);
+  const [showNewRecording, setShowNewRecording] = useState(false);
+  const [hardwareInfo, setHardwareInfo] = useState<any>(null);
+  const [loadingHardware, setLoadingHardware] = useState(false);
+  const [trainedModelInfo, setTrainedModelInfo] = useState<{
+    trained: boolean;
+    modelPath?: string;
+    sizeMb?: number;
+    trainedAt?: string;
+    epochs?: number;
+    finalLoss?: number;
+    totalSeconds?: number;
+  } | null>(null);
+  const [isTrainingModel, setIsTrainingModel] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState(0);
+  const [trainingStage, setTrainingStage] = useState("");
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerIntervalRef = useRef<any>(null);
+  const ttsProgressIntervalRef = useRef<any>(null);
+
+  async function loadVoiceAndHardware() {
     try {
-      setSendingTestEmail(true);
-      setTestEmailFeedback(null);
-      if (!window.electronAPI?.sendTestEmail) {
-        throw new Error("API de e-mail não disponível.");
+      const sample = await window.electronAPI.getSavedVoiceSample?.();
+      if (sample) setSavedVoiceSample(sample);
+    } catch {}
+
+    try {
+      const modelStatus = await window.electronAPI.getTrainedModelStatus?.();
+      if (modelStatus) setTrainedModelInfo(modelStatus);
+    } catch {}
+
+    try {
+      const last = await window.electronAPI.getLastSynthesizedAudio?.();
+      if (last?.exists && last.audioBase64) {
+        setSynthesizedAudioUrl(last.audioBase64);
       }
-      // Salva configurações atuais primeiro para garantir que o backend tenha os dados mais recentes
-      if (settings) {
-        await window.electronAPI.saveSettings(settings);
-      }
-      const res = await window.electronAPI.sendTestEmail(settings?.notificationEmail);
-      setTestEmailFeedback(res);
-    } catch (err) {
-      setTestEmailFeedback({
-        success: false,
-        message: err instanceof Error ? err.message : "Erro desconhecido ao enviar e-mail.",
-      });
-    } finally {
-      setSendingTestEmail(false);
+    } catch {}
+
+    try {
+      setLoadingHardware(true);
+      const hw = await window.electronAPI.getHardwareInfo?.();
+      if (hw) setHardwareInfo(hw);
+    } catch {} finally {
+      setLoadingHardware(false);
     }
   }
+
+  useEffect(() => {
+    loadVoiceAndHardware();
+  }, []);
 
   const [customModels, setCustomModels] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("social_agent_custom_models");
-      return saved ? JSON.parse(saved) : ["gemini-3.5-flash"];
+      return saved ? JSON.parse(saved) : ["gemini-3.6-flash"];
     } catch {
-      return ["gemini-3.5-flash"];
+      return ["gemini-3.6-flash"];
     }
   });
 
@@ -96,6 +186,21 @@ export function SettingsPage() {
       localStorage.setItem("social_agent_custom_models", JSON.stringify(customModels));
     } catch {}
   }, [customModels]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        const data = await window.electronAPI.getSettings?.();
+        if (data) setSettings(data);
+      } catch (err) {
+        console.error("Erro ao carregar configurações:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
   const currentSchedule: AnalyticsScheduleConfig = settings?.analyticsSchedule || {
     mode: "WEEKDAYS",
@@ -118,20 +223,22 @@ export function SettingsPage() {
     });
   }
 
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const data = await window.electronAPI.getSettings();
-        setSettings(data);
-      } catch (err) {
-        console.error("Erro ao carregar configurações:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+  function updateVoiceConfig(partial: Partial<VoiceCloningConfig>) {
+    if (!settings) return;
+    const current = settings.voiceConfig || {
+      provider: "elevenlabs",
+      voiceName: "Voz Syrius Tech",
+      stability: 0.5,
+      similarityBoost: 0.75,
+    };
+    setSettings({
+      ...settings,
+      voiceConfig: {
+        ...current,
+        ...partial,
+      },
+    });
+  }
 
   function handleAddCustomModel(modelName: string) {
     const trimmed = modelName.trim();
@@ -144,21 +251,22 @@ export function SettingsPage() {
       setSettings({ ...settings, defaultGeminiModel: trimmed });
     }
     setNewModelInput("");
+    setSuccessMessage(`Modelo "${trimmed}" adicionado e selecionado!`);
+    setTimeout(() => setSuccessMessage(null), 3000);
   }
 
   function handleRemoveCustomModel(modelName: string, e: React.MouseEvent) {
     e.stopPropagation();
     setCustomModels((prev) => prev.filter((m) => m !== modelName));
     if (settings && settings.defaultGeminiModel === modelName) {
-      setSettings({ ...settings, defaultGeminiModel: "gemini-2.5-flash" });
+      setSettings({ ...settings, defaultGeminiModel: "gemini-3.6-flash" });
     }
   }
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSave(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     if (!settings || saving) return;
 
-    // Se o modelo digitado for customizado e não estiver na lista de cards, adiciona automaticamente
     if (settings.defaultGeminiModel) {
       const isPreset = PRESET_GEMINI_MODELS.some((m) => m.id === settings.defaultGeminiModel);
       if (!isPreset && !customModels.includes(settings.defaultGeminiModel)) {
@@ -169,22 +277,607 @@ export function SettingsPage() {
     try {
       setSaving(true);
       setSuccessMessage(null);
-      const saved = await window.electronAPI.saveSettings(settings);
-      setSettings(saved);
+      const saved = await window.electronAPI.saveSettings?.(settings);
+      if (saved) setSettings(saved);
       setSuccessMessage("Configurações salvas com sucesso!");
+      toast.success("Configurações salvas com sucesso!");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
-      alert(`Erro ao salvar configurações: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+      toast.error(`Erro ao salvar configurações: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     } finally {
       setSaving(false);
+    }
+  }
+
+function encodeWAV(audioBuffer: AudioBuffer): ArrayBuffer {
+  const numChannels = 1;
+  const sampleRate = audioBuffer.sampleRate;
+  const format = 1; // PCM
+  const bitDepth = 16;
+  const channelData = audioBuffer.getChannelData(0);
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const wavBuffer = new ArrayBuffer(44 + channelData.length * bytesPerSample);
+  const view = new DataView(wavBuffer);
+
+  function writeString(view: DataView, offset: number, string: string) {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
+  writeString(view, 0, "RIFF");
+  view.setUint32(4, 36 + channelData.length * bytesPerSample, true);
+  writeString(view, 8, "WAVE");
+  writeString(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(view, 36, "data");
+  view.setUint32(40, channelData.length * bytesPerSample, true);
+
+  let offset = 44;
+  for (let i = 0; i < channelData.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, channelData[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return wavBuffer;
+}
+
+  // --- GRAVADOR DE MICROFONE ---
+  async function startRecording() {
+    try {
+      setVoiceFeedback(null);
+      setRecordedAudioUrl(null);
+      setRecordedAudioBase64(null);
+      setRecordingSeconds(0);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const url = URL.createObjectURL(audioBlob);
+        setRecordedAudioUrl(url);
+
+        try {
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          const audioCtx = new AudioContextClass();
+          const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+          const wavArrayBuffer = encodeWAV(audioBuffer);
+
+          let binary = "";
+          const bytes = new Uint8Array(wavArrayBuffer);
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const wavBase64 = window.btoa(binary);
+          setRecordedAudioBase64(wavBase64);
+        } catch {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64String = (reader.result as string).split(",")[1];
+            setRecordedAudioBase64(base64String);
+          };
+          reader.readAsDataURL(audioBlob);
+        }
+
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start(250);
+      setIsRecording(true);
+
+      timerIntervalRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      setVoiceFeedback({
+        success: false,
+        message: "Permissão de microfone negada ou microfone não detectado.",
+      });
+    }
+  }
+
+  function stopRecording() {
+    if (recordingSeconds < MIN_RECORDING_SECONDS) {
+      toast.warning(`Grave pelo menos ${MIN_RECORDING_SECONDS} segundos para que a IA capture seu timbre e cadência com clareza.`);
+      return;
+    }
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    }
+  }
+
+  async function handleSendToElevenLabs() {
+    const apiKey = settings?.voiceConfig?.elevenLabsApiKey;
+    if (!apiKey) {
+      setVoiceFeedback({
+        success: false,
+        message: "Insira a sua API Key da ElevenLabs antes de calibrar a voz.",
+      });
+      return;
+    }
+    if (!recordedAudioBase64) {
+      setVoiceFeedback({
+        success: false,
+        message: "Grave uma amostra de áudio pelo microfone antes de enviar.",
+      });
+      return;
+    }
+
+    try {
+      setCloningVoice(true);
+      setVoiceFeedback(null);
+      const res = await window.electronAPI.cloneVoiceElevenLabs?.({
+        apiKey,
+        voiceName: settings?.voiceConfig?.voiceName || "Minha Voz (Syrius Tech)",
+        audioBase64: recordedAudioBase64,
+        mimeType: "audio/webm",
+      });
+
+      if (res?.success && res.voiceId) {
+        updateVoiceConfig({
+          provider: "elevenlabs",
+          elevenLabsVoiceId: res.voiceId,
+          lastCalibratedAt: new Date().toISOString(),
+        });
+        setVoiceFeedback({
+          success: true,
+          message: `Voz clonada com sucesso na ElevenLabs! Voice ID: ${res.voiceId}`,
+        });
+        handleListVoices(apiKey);
+      } else {
+        setVoiceFeedback({
+          success: false,
+          message: res?.error || "Erro ao calibrar voz na ElevenLabs.",
+        });
+      }
+    } catch (err) {
+      setVoiceFeedback({
+        success: false,
+        message: err instanceof Error ? err.message : "Erro na comunicação.",
+      });
+    } finally {
+      setCloningVoice(false);
+    }
+  }
+
+  async function handleImportAudioFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = URL.createObjectURL(file);
+      setRecordedAudioUrl(url);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = (reader.result as string).split(",")[1];
+        setRecordedAudioBase64(base64String);
+        setVoiceFeedback({
+          success: true,
+          message: `Arquivo "${file.name}" importado com sucesso! Clique em "Calibrar na ElevenLabs" ou "Salvar Amostra".`,
+        });
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setVoiceFeedback({
+        success: false,
+        message: "Erro ao ler o arquivo de áudio selecionado.",
+      });
+    }
+  }
+
+  async function handleSaveLocalSample() {
+    if (!recordedAudioBase64) {
+      setVoiceFeedback({
+        success: false,
+        message: "Grave uma amostra de áudio pelo microfone antes de salvar.",
+      });
+      return;
+    }
+
+    try {
+      setCloningVoice(true);
+      setVoiceFeedback(null);
+      const res = await window.electronAPI.saveLocalVoiceSample?.({
+        audioBase64: recordedAudioBase64,
+        mimeType: "audio/webm",
+      });
+
+      if (res?.success) {
+        updateVoiceConfig({
+          provider: "local",
+          localSampleAudioPath: "voice-lab/amostra.wav",
+          lastCalibratedAt: new Date().toISOString(),
+        });
+        setVoiceFeedback({
+          success: true,
+          message: `Amostra de voz salva com sucesso em "voice-lab/amostra.wav" para síntese local (XTTS/F5-TTS)!`,
+        });
+        setShowNewRecording(false);
+        loadVoiceAndHardware();
+      } else {
+        setVoiceFeedback({
+          success: false,
+          message: res?.error || "Erro ao salvar amostra local.",
+        });
+      }
+    } catch (err) {
+      setVoiceFeedback({
+        success: false,
+        message: err instanceof Error ? err.message : "Erro ao salvar amostra local.",
+      });
+    } finally {
+      setCloningVoice(false);
+    }
+  }
+
+  async function handleTrainVoiceModel() {
+    const activityId = `voice-train-${Date.now()}`;
+    const startTime = Date.now();
+
+    registerOrUpdateActivity({
+      id: activityId,
+      type: "voice_training",
+      title: "Treinamento Neural de Voz (Fine-Tuning)",
+      subtitle: "Lapidando modelo neural personalizado com amostra de voz na RTX 2060",
+      targetPage: "settings",
+      status: "running",
+      statusMessage: "Iniciando pipeline de calibração neural na GPU...",
+      progress: 5,
+      startedAt: startTime,
+      canStop: true,
+    });
+
+    try {
+      setIsTrainingModel(true);
+      setTrainingProgress(5);
+      setTrainingStage("Iniciando pipeline de treinamento neural da sua voz na GPU...");
+      setVoiceFeedback(null);
+
+      const unsubscribe = window.electronAPI?.onVoiceTrainProgress?.((data) => {
+        setTrainingProgress(data.progress);
+        setTrainingStage(data.stage);
+
+        registerOrUpdateActivity({
+          id: activityId,
+          type: "voice_training",
+          title: "Treinamento Neural de Voz (Fine-Tuning)",
+          subtitle: "Lapidando modelo neural personalizado com amostra de voz na RTX 2060",
+          targetPage: "settings",
+          status: "running",
+          statusMessage: data.stage,
+          progress: data.progress,
+          startedAt: startTime,
+          canStop: true,
+        });
+      });
+
+      const res = await window.electronAPI?.trainVoiceModel?.({ epochs: 12 });
+      if (unsubscribe) unsubscribe();
+
+      if (res?.success) {
+        setVoiceFeedback({
+          success: true,
+          message: "Modelo neural da sua voz treinado com sucesso! Ficará gravado permanentemente em disco (nunca desaprende após reiniciar o app).",
+        });
+
+        registerOrUpdateActivity({
+          id: activityId,
+          type: "voice_training",
+          title: "Treinamento Neural de Voz (Fine-Tuning)",
+          subtitle: "Modelo neural salvo em voice-lab/models/minha_voz_calibrada.pth",
+          targetPage: "settings",
+          status: "completed",
+          statusMessage: "Treinamento concluído com sucesso!",
+          progress: 100,
+          startedAt: startTime,
+          canStop: false,
+        });
+
+        const status = await window.electronAPI?.getTrainedModelStatus?.();
+        if (status) setTrainedModelInfo(status);
+        loadVoiceAndHardware();
+      } else {
+        const errText = res?.error || "Erro durante o treinamento neural da sua voz.";
+        setVoiceFeedback({
+          success: false,
+          message: errText,
+        });
+
+        registerOrUpdateActivity({
+          id: activityId,
+          type: "voice_training",
+          title: "Treinamento Neural de Voz (Fine-Tuning)",
+          subtitle: "Falha no treinamento neural",
+          targetPage: "settings",
+          status: "error",
+          statusMessage: errText,
+          progress: 0,
+          startedAt: startTime,
+          errorLog: errText,
+          canRetry: true,
+        });
+      }
+    } catch (err) {
+      const errText = err instanceof Error ? err.message : "Erro ao treinar modelo neural.";
+      setVoiceFeedback({
+        success: false,
+        message: errText,
+      });
+
+      registerOrUpdateActivity({
+        id: activityId,
+        type: "voice_training",
+        title: "Treinamento Neural de Voz (Fine-Tuning)",
+        subtitle: "Falha no treinamento neural",
+        targetPage: "settings",
+        status: "error",
+        statusMessage: errText,
+        progress: 0,
+        startedAt: startTime,
+        errorLog: errText,
+        canRetry: true,
+      });
+    } finally {
+      setIsTrainingModel(false);
+    }
+  }
+
+  async function handleCancelTTS() {
+    try {
+      if (ttsProgressIntervalRef.current) {
+        clearInterval(ttsProgressIntervalRef.current);
+        ttsProgressIntervalRef.current = null;
+      }
+      setTestingTTS(false);
+      setTtsProgress(0);
+      setTtsProgressStage("");
+
+      if (activeVoiceTask) {
+        stopActivity(activeVoiceTask.id);
+      }
+      if (window.electronAPI?.cancelVoiceTTS) {
+        await window.electronAPI.cancelVoiceTTS();
+      }
+
+      setVoiceFeedback({
+        success: false,
+        message: "Síntese de voz interrompida com sucesso.",
+      });
+    } catch (err) {
+      console.error("Erro ao cancelar TTS:", err);
+    }
+  }
+
+  async function handleTestVoiceTTS() {
+    const provider = settings?.voiceConfig?.provider || "elevenlabs";
+    const apiKey = settings?.voiceConfig?.elevenLabsApiKey;
+    const voiceId = settings?.voiceConfig?.elevenLabsVoiceId;
+
+    if (provider === "elevenlabs" && !apiKey) {
+      setVoiceFeedback({
+        success: false,
+        message: "Insira a sua API Key da ElevenLabs antes de testar ou selecione o modo Edge-TTS (Gratuito).",
+      });
+      return;
+    }
+
+    if (ttsProgressIntervalRef.current) {
+      clearInterval(ttsProgressIntervalRef.current);
+      ttsProgressIntervalRef.current = null;
+    }
+
+    const activityId = `voice-tts-${Date.now()}`;
+    const startTime = Date.now();
+    const estimatedDuration = provider === "local" ? 22000 : provider === "edge_tts" ? 1800 : 2500;
+
+    registerOrUpdateActivity({
+      id: activityId,
+      type: "voice_synthesis",
+      title: "Síntese de Voz (Voice Studio)",
+      subtitle: testTtsText.length > 55 ? `${testTtsText.slice(0, 55)}...` : testTtsText,
+      targetPage: "settings",
+      status: "running",
+      statusMessage: "Iniciando síntese de locução em áudio...",
+      progress: 5,
+      startedAt: startTime,
+      canStop: true,
+      meta: { provider, text: testTtsText },
+    });
+
+    try {
+      setTestingTTS(true);
+      setVoiceFeedback(null);
+      setSynthesizedAudioUrl(null);
+      setTtsProgress(5);
+      setTtsProgressStage(
+        provider === "local"
+          ? "Carregando modelo neural e amostra de voz..."
+          : provider === "edge_tts"
+          ? "Conectando ao serviço neural Edge-TTS pt-BR..."
+          : "Sintetizando voz na API ElevenLabs..."
+      );
+
+      ttsProgressIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const ratio = Math.min(0.92, elapsed / estimatedDuration);
+        const percent = Math.round(5 + ratio * 87);
+        setTtsProgress(percent);
+
+        let stage = "Sintetizando áudio...";
+        if (provider === "local") {
+          if (percent < 25) {
+            stage = "Analisando timbre e harmônicos da amostra...";
+          } else if (percent < 75) {
+            stage = `Calculando difusão acústica com a sua voz (${percent}%)...`;
+          } else if (percent < 90) {
+            stage = "Reconstruindo áudio HD no vocoder neural...";
+          } else {
+            stage = "Finalizando e codificando arquivo de áudio...";
+          }
+        } else if (provider === "edge_tts") {
+          stage = "Processando locução neural pt-BR (Edge-TTS)...";
+        } else {
+          stage = "Sintetizando voz na nuvem ElevenLabs...";
+        }
+        setTtsProgressStage(stage);
+
+        registerOrUpdateActivity({
+          id: activityId,
+          type: "voice_synthesis",
+          title: "Síntese de Voz (Voice Studio)",
+          subtitle: testTtsText.length > 55 ? `${testTtsText.slice(0, 55)}...` : testTtsText,
+          targetPage: "settings",
+          status: "running",
+          statusMessage: stage,
+          progress: percent,
+          startedAt: startTime,
+          canStop: true,
+          meta: { provider, text: testTtsText },
+        });
+      }, 150);
+
+      const res = await window.electronAPI.testVoiceTTS?.({
+        apiKey,
+        voiceId,
+        text: testTtsText,
+        provider,
+      });
+
+      if (ttsProgressIntervalRef.current) {
+        clearInterval(ttsProgressIntervalRef.current);
+        ttsProgressIntervalRef.current = null;
+      }
+      setTtsProgress(100);
+      setTtsProgressStage("Síntese concluída com sucesso!");
+
+      if (res?.success && res.audioBase64) {
+        setSynthesizedAudioUrl(res.audioBase64);
+        setVoiceFeedback({
+          success: true,
+          message: provider === "edge_tts"
+            ? "Áudio sintetizado com sucesso via Edge-TTS (Voz Neural pt-BR)! Ouça no player."
+            : provider === "local"
+            ? "Áudio sintetizado com sucesso com a sua voz clonada localmente! Ouça no player."
+            : "Áudio sintetizado com sucesso com a sua voz via ElevenLabs! Ouça no player.",
+        });
+
+        registerOrUpdateActivity({
+          id: activityId,
+          type: "voice_synthesis",
+          title: "Síntese de Voz (Voice Studio)",
+          subtitle: testTtsText.length > 55 ? `${testTtsText.slice(0, 55)}...` : testTtsText,
+          targetPage: "settings",
+          status: "completed",
+          statusMessage: `Locução gerada com sucesso (${((Date.now() - startTime) / 1000).toFixed(1)}s)!`,
+          progress: 100,
+          startedAt: startTime,
+          meta: { provider, text: testTtsText, audioBase64: res.audioBase64 },
+        });
+      } else if (res?.cancelled) {
+        setVoiceFeedback({
+          success: false,
+          message: "Síntese interrompida.",
+        });
+      } else {
+        const errorMsg = res?.error || "Erro ao sintetizar áudio de teste.";
+        setVoiceFeedback({
+          success: false,
+          message: errorMsg,
+        });
+
+        registerOrUpdateActivity({
+          id: activityId,
+          type: "voice_synthesis",
+          title: "Síntese de Voz (Voice Studio)",
+          subtitle: testTtsText.length > 55 ? `${testTtsText.slice(0, 55)}...` : testTtsText,
+          targetPage: "settings",
+          status: "error",
+          statusMessage: errorMsg,
+          progress: 0,
+          startedAt: startTime,
+          errorLog: errorMsg,
+          canRetry: true,
+          meta: { provider, text: testTtsText },
+        });
+      }
+    } catch (err) {
+      if (ttsProgressIntervalRef.current) {
+        clearInterval(ttsProgressIntervalRef.current);
+        ttsProgressIntervalRef.current = null;
+      }
+      const errorMsg = err instanceof Error ? err.message : "Erro no teste de áudio.";
+      if (errorMsg !== "CANCELLED_BY_USER") {
+        setVoiceFeedback({
+          success: false,
+          message: errorMsg,
+        });
+
+        registerOrUpdateActivity({
+          id: activityId,
+          type: "voice_synthesis",
+          title: "Síntese de Voz (Voice Studio)",
+          subtitle: testTtsText.length > 55 ? `${testTtsText.slice(0, 55)}...` : testTtsText,
+          targetPage: "settings",
+          status: "error",
+          statusMessage: errorMsg,
+          progress: 0,
+          startedAt: startTime,
+          errorLog: errorMsg,
+          canRetry: true,
+          meta: { provider, text: testTtsText },
+        });
+      }
+    } finally {
+      if (ttsProgressIntervalRef.current) {
+        clearInterval(ttsProgressIntervalRef.current);
+        ttsProgressIntervalRef.current = null;
+      }
+      setTimeout(() => {
+        setTestingTTS(false);
+      }, 400);
+    }
+  }
+
+  async function handleListVoices(customKey?: string) {
+    const apiKey = customKey || settings?.voiceConfig?.elevenLabsApiKey;
+    if (!apiKey) return;
+    try {
+      setLoadingVoices(true);
+      const res = await window.electronAPI.listElevenLabsVoices?.(apiKey);
+      if (res?.success && res.voices) {
+        setExistingVoices(res.voices);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingVoices(false);
     }
   }
 
   async function handleSyncProfile() {
     try {
       setSyncingProfile(true);
-      const res = await window.electronAPI.getProfile();
-      if (res.success && res.profile) {
+      const res = await window.electronAPI.getProfile?.();
+      if (res?.success && res.profile) {
         setSettings((current) => {
           if (!current) return current;
           return {
@@ -195,12 +888,13 @@ export function SettingsPage() {
           };
         });
         setSuccessMessage(`Perfil @${res.profile.username} sincronizado com sucesso da Meta API!`);
+        toast.success(`Perfil @${res.profile.username} sincronizado com sucesso da Meta API!`);
         setTimeout(() => setSuccessMessage(null), 3500);
       } else {
-        alert(`Erro ao sincronizar perfil: ${res.error || "Não foi possível consultar a Meta API"}`);
+        toast.error(`Erro ao sincronizar perfil: ${res?.error || "Não foi possível consultar a Meta API"}`);
       }
     } catch (err) {
-      alert(`Erro ao sincronizar: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+      toast.error(`Erro ao sincronizar: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     } finally {
       setSyncingProfile(false);
     }
@@ -210,105 +904,101 @@ export function SettingsPage() {
     if (!settings) return;
     try {
       setGeneratingBio(true);
-      const res = await window.electronAPI.generateBio({
+      const res = await window.electronAPI.generateBio?.({
         niche: settings.niche,
         positioning: settings.positioning,
         accountName: settings.accountName,
       });
 
-      if (res.success && res.bios) {
+      if (res?.success && res.bios) {
         setGeneratedBios(res.bios);
+        toast.success("Sugestões de Biografia geradas com sucesso!");
       } else {
-        alert(`Erro ao gerar bio: ${res.error || "Falha na geração"}`);
+        toast.error(`Erro ao gerar bio: ${res?.error || "Falha na geração"}`);
       }
     } catch (err) {
-      alert(`Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+      toast.error(`Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     } finally {
       setGeneratingBio(false);
     }
   }
 
-  function handleCopyBio(text: string, index: number) {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2500);
-  }
-
-  function handleApplyBio(text: string) {
-    if (!settings) return;
-    setSettings({ ...settings, positioning: text });
-    setSuccessMessage("Bio aplicada ao campo de Posicionamento!");
-    setTimeout(() => setSuccessMessage(null), 3000);
-  }
-
-  async function handleGenerateHighlights() {
-    if (!settings) return;
+  async function handleSendTestEmail() {
     try {
-      setGeneratingHighlights(true);
-      const res = await window.electronAPI.generateHighlights({
-        niche: settings.niche,
-        positioning: settings.positioning,
-        accountName: settings.accountName,
-      });
-      if (res.success && res.highlights) {
-        setHighlights(res.highlights);
-      } else {
-        alert(`Erro ao gerar destaques: ${res.error || "Falha desconhecida"}`);
+      setSendingTestEmail(true);
+      setTestEmailFeedback(null);
+      if (settings) {
+        await window.electronAPI.saveSettings?.(settings);
       }
+      const res = await window.electronAPI.sendTestEmail?.(settings?.notificationEmail || "");
+      setTestEmailFeedback(res);
     } catch (err) {
-      alert(`Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+      setTestEmailFeedback({
+        success: false,
+        message: err instanceof Error ? err.message : "Erro ao enviar e-mail de teste.",
+      });
     } finally {
-      setGeneratingHighlights(false);
+      setSendingTestEmail(false);
     }
   }
 
   if (loading || !settings) {
     return (
-      <div className="page-placeholder">
-        <div className="placeholder-icon">
-          <IconLoader size={28} />
-        </div>
-        <h2>Carregando configurações...</h2>
-        <p>Lendo parâmetros do sistema e credenciais do Instagram.</p>
+      <div className="empty-state">
+        <IconLoader className="spin" size={32} />
+        <p>Carregando configurações...</p>
       </div>
     );
   }
 
-  return (
-    <div className="settings-page" style={{ padding: "32px", maxWidth: "900px", margin: "0 auto" }}>
-      <div className="page-header" style={{ marginBottom: "28px" }}>
-        <div>
-          <span className="eyebrow">CONFIGURAÇÕES DO AGENTE</span>
-          <h2>Preferências do Sistema & Perfil</h2>
-          <p>Defina o intervalo do worker de métricas, perfil do Instagram e comportamento do pipeline.</p>
-        </div>
+  const currentProvider = settings.voiceConfig?.provider || "elevenlabs";
 
+  return (
+    <div className="settings-page">
+      {/* HEADER PRINCIPAL */}
+      <div className="page-header">
+        <div>
+          <span className="eyebrow">PREFERÊNCIAS & MARCA</span>
+          <h2>Configurações do Sistema</h2>
+          <p>Personalize os pilares editoriais da sua marca, clonagem de voz, automações e modelos de IA.</p>
+        </div>
         <button
           type="button"
-          className="btn-modal-cancel"
-          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-          onClick={handleSyncProfile}
-          disabled={syncingProfile}
+          className="primary-button"
+          onClick={() => handleSave()}
+          disabled={saving}
+          style={{ minWidth: "160px" }}
         >
-          {syncingProfile ? <IconLoader size={12} /> : <IconRotateCcw size={12} />}
-          <span>Sincronizar com Meta API</span>
+          {saving ? (
+            <>
+              <IconLoader className="spin" size={14} />
+              <span>Salvando...</span>
+            </>
+          ) : (
+            <>
+              <IconCheck size={14} />
+              <span>Salvar Alterações</span>
+            </>
+          )}
         </button>
       </div>
 
+      {/* TOAST DE FEEDBACK */}
       {successMessage && (
         <div
           style={{
-            padding: "12px 18px",
-            marginBottom: "24px",
-            borderRadius: "10px",
             background: "rgba(16, 185, 129, 0.15)",
             border: "1px solid rgba(16, 185, 129, 0.3)",
             color: "#34d399",
+            padding: "12px 18px",
+            borderRadius: "10px",
             fontSize: "13px",
             fontWeight: "600",
+            marginBottom: "20px",
             display: "flex",
             alignItems: "center",
             gap: "8px",
+            boxShadow: "0 4px 14px rgba(16, 185, 129, 0.2)",
           }}
         >
           <IconCheck size={16} />
@@ -316,620 +1006,1493 @@ export function SettingsPage() {
         </div>
       )}
 
-      <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-        {/* SEÇÃO 1: FREQUÊNCIA E AGENDAMENTO DO WORKER DE ANALYTICS */}
-        <div
-          style={{
-            background: "#111114",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "14px",
-            padding: "24px",
-          }}
+      {/* BARRA DE NAVEGAÇÃO EM ABAS (PILLS) */}
+      <div className="settings-tabs-bar">
+        <button
+          type="button"
+          onClick={() => setActiveTab("profile")}
+          className={`settings-tab-btn ${activeTab === "profile" ? "active-cyan" : ""}`}
         >
-          <div style={{ marginBottom: "18px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-              <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#fafafa", margin: 0 }}>
-                Frequência & Agendamento do Worker de Analytics
-              </h3>
-              <span style={{ fontSize: "11px", color: "#38bdf8", fontWeight: "700" }}>
-                Modo: {currentSchedule.mode === "WEEKDAYS" ? "Dias da Semana" : currentSchedule.mode === "INTERVAL_HOURS" ? "Intervalo de Horas" : currentSchedule.mode === "WEEKLY" ? "1x por Semana" : currentSchedule.mode === "MONTHLY" ? "1x por Mês" : "Apenas Manual"}
-              </span>
-            </div>
-            <p style={{ fontSize: "12px", color: "#71717a", margin: 0 }}>
-              Escolha exatamente quando o coletor em background deve buscar insights de audiência, alcance, engajamento e novos seguidores.
-            </p>
-          </div>
+          <IconSettings size={15} />
+          <span>Perfil & Marca</span>
+        </button>
 
-          {/* ABAS DE SELEÇÃO DE MODO */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px", marginBottom: "20px" }}>
-            {[
-              { id: "WEEKDAYS", label: "Dias da Semana", icon: <IconCalendar size={14} />, desc: "Dias e hora fixa" },
-              { id: "INTERVAL_HOURS", label: "Por Intervalo", icon: <IconClock size={14} />, desc: "A cada X horas" },
-              { id: "WEEKLY", label: "1x por Semana", icon: <IconCalendar size={14} />, desc: "Dia semanal" },
-              { id: "MONTHLY", label: "1x por Mês", icon: <IconMoon size={14} />, desc: "Dia do mês" },
-              { id: "MANUAL", label: "Apenas Manual", icon: <IconHand size={14} />, desc: "Sob demanda" },
-            ].map((tab) => {
-              const isActive = currentSchedule.mode === tab.id;
-              return (
-                <button
-                  type="button"
-                  key={tab.id}
-                  className={`format-card-btn ${isActive ? "active" : ""}`}
-                  onClick={() => updateSchedule({ mode: tab.id as any })}
-                  style={{ padding: "10px 12px" }}
-                >
-                  <strong style={{ fontSize: "12px", color: isActive ? "#38bdf8" : "#fafafa", display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
-                    {tab.icon}
-                    <span>{tab.label}</span>
-                  </strong>
-                  <span style={{ fontSize: "10px", color: "#71717a" }}>{tab.desc}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* PAINEL CONFIGURÁVEL POR MODO */}
-          <div style={{ background: "#09090b", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "16px" }}>
-            {/* MODO 1: DIAS DA SEMANA */}
-            {currentSchedule.mode === "WEEKDAYS" && (
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa" }}>
-                    1. Selecione os dias da semana para a análise automática:
-                  </label>
-                  {/* Presets rápidos */}
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <button
-                      type="button"
-                      onClick={() => updateSchedule({ selectedDays: ["Segunda-feira", "Quarta-feira", "Sexta-feira"] })}
-                      style={{ fontSize: "10px", padding: "3px 8px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#a1a1aa", cursor: "pointer" }}
-                    >
-                      Seg, Qua, Sex
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateSchedule({ selectedDays: ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"] })}
-                      style={{ fontSize: "10px", padding: "3px 8px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#a1a1aa", cursor: "pointer" }}
-                    >
-                      Dias Úteis (Seg-Sex)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateSchedule({ selectedDays: ["Sábado", "Domingo"] })}
-                      style={{ fontSize: "10px", padding: "3px 8px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#a1a1aa", cursor: "pointer" }}
-                    >
-                      Fim de Semana
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
-                  {ALL_WEEKDAYS.map((day) => {
-                    const isSelected = (currentSchedule.selectedDays || []).includes(day.id);
-                    return (
-                      <button
-                        type="button"
-                        key={day.id}
-                        onClick={() => {
-                          const currentDays = currentSchedule.selectedDays || [];
-                          const nextDays = isSelected
-                            ? currentDays.filter((d) => d !== day.id)
-                            : [...currentDays, day.id];
-                          updateSchedule({ selectedDays: nextDays.length > 0 ? nextDays : [day.id] });
-                        }}
-                        style={{
-                          padding: "8px 14px",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                          fontWeight: "700",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                          background: isSelected ? "rgba(56, 189, 248, 0.15)" : "rgba(255, 255, 255, 0.03)",
-                          border: `1px solid ${isSelected ? "#38bdf8" : "rgba(255, 255, 255, 0.1)"}`,
-                          color: isSelected ? "#38bdf8" : "#a1a1aa",
-                        }}
-                      >
-                        {day.short} • {day.id}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa", display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                    <IconClock size={14} />
-                    Horário da Análise:
-                  </label>
-                  <input
-                    type="time"
-                    className="form-input"
-                    value={currentSchedule.timeSlot || "20:00"}
-                    onChange={(e) => updateSchedule({ timeSlot: e.target.value })}
-                    style={{ width: "130px", padding: "6px 10px" }}
-                  />
-                  <span style={{ fontSize: "11px", color: "#71717a" }}>
-                    (Horário local em que o relatório de métricas será gerado)
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* MODO 2: INTERVALO DE HORAS */}
-            {currentSchedule.mode === "INTERVAL_HOURS" && (
-              <div>
-                <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa", display: "block", marginBottom: "10px" }}>
-                  Selecione o intervalo de repetição:
-                </label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
-                  {INTERVAL_OPTIONS.map((opt) => {
-                    const isActive = (currentSchedule.intervalHours || settings.analyticsIntervalHours) === opt.value;
-                    return (
-                      <button
-                        type="button"
-                        key={opt.value}
-                        className={`format-card-btn ${isActive ? "active" : ""}`}
-                        onClick={() => {
-                          updateSchedule({ intervalHours: opt.value });
-                          setSettings({ ...settings, analyticsIntervalHours: opt.value });
-                        }}
-                        style={{ padding: "12px" }}
-                      >
-                        <strong style={{ fontSize: "12px", color: isActive ? "#38bdf8" : "#fafafa", display: "block", marginBottom: "2px" }}>
-                          {opt.label}
-                        </strong>
-                        <span style={{ fontSize: "10px", color: "#71717a" }}>{opt.desc}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* MODO 3: 1X POR SEMANA */}
-            {currentSchedule.mode === "WEEKLY" && (
-              <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa" }}>
-                    Toda:
-                  </label>
-                  <select
-                    className="form-select"
-                    value={currentSchedule.selectedDays?.[0] || "Domingo"}
-                    onChange={(e) => updateSchedule({ selectedDays: [e.target.value] })}
-                    style={{ width: "160px" }}
-                  >
-                    {ALL_WEEKDAYS.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.id}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa" }}>
-                    às:
-                  </label>
-                  <input
-                    type="time"
-                    className="form-input"
-                    value={currentSchedule.timeSlot || "22:00"}
-                    onChange={(e) => updateSchedule({ timeSlot: e.target.value })}
-                    style={{ width: "130px", padding: "6px 10px" }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* MODO 4: 1X POR MÊS */}
-            {currentSchedule.mode === "MONTHLY" && (
-              <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa" }}>
-                    Todo dia:
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={31}
-                    className="form-input"
-                    value={currentSchedule.dayOfMonth || 1}
-                    onChange={(e) => updateSchedule({ dayOfMonth: Math.max(1, Math.min(31, parseInt(e.target.value) || 1)) })}
-                    style={{ width: "80px", padding: "6px 10px" }}
-                  />
-                  <span style={{ fontSize: "12px", color: "#a1a1aa" }}>do mês</span>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa" }}>
-                    às:
-                  </label>
-                  <input
-                    type="time"
-                    className="form-input"
-                    value={currentSchedule.timeSlot || "23:00"}
-                    onChange={(e) => updateSchedule({ timeSlot: e.target.value })}
-                    style={{ width: "130px", padding: "6px 10px" }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* MODO 5: APENAS MANUAL */}
-            {currentSchedule.mode === "MANUAL" && (
-              <div style={{ color: "#a1a1aa", fontSize: "12px", lineHeight: "1.5" }}>
-                <strong style={{ color: "#fafafa", display: "block", marginBottom: "4px" }}>
-                  Auditoria em Background Desativada
-                </strong>
-                O coletor não rodará sozinho. Você pode disparar a análise e gerar relatórios a qualquer momento clicando no botão <strong>"Executar Auditoria Agora"</strong> na aba <em>Analytics & IA</em>.
-              </div>
-            )}
-
-            {/* RESUMO DO AGENDAMENTO ATIVO */}
-            {currentSchedule.mode !== "MANUAL" && (
-              <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#38bdf8" }}>
-                <IconCheck size={13} color="#38bdf8" />
-                <span>
-                  <strong>Configuração Ativa:</strong>{" "}
-                  {currentSchedule.mode === "WEEKDAYS"
-                    ? `Auditoria toda ${(currentSchedule.selectedDays || []).join(", ")} às ${currentSchedule.timeSlot || "20:00"}.`
-                    : currentSchedule.mode === "INTERVAL_HOURS"
-                    ? `Auditoria a cada ${currentSchedule.intervalHours || 24} horas.`
-                    : currentSchedule.mode === "WEEKLY"
-                    ? `Auditoria semanal todo(a) ${currentSchedule.selectedDays?.[0] || "Domingo"} às ${currentSchedule.timeSlot || "22:00"}.`
-                    : `Auditoria mensal todo dia ${currentSchedule.dayOfMonth || 1} às ${currentSchedule.timeSlot || "23:00"}.`}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* SEÇÃO 2: IDENTIDADE DO PERFIL INSTAGRAM */}
-        <div
-          style={{
-            background: "#111114",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "14px",
-            padding: "24px",
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("voice");
+            if (settings.voiceConfig?.elevenLabsApiKey && existingVoices.length === 0) {
+              handleListVoices();
+            }
           }}
+          className={`settings-tab-btn ${activeTab === "voice" ? "active-purple" : ""}`}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-            <div>
-              <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#fafafa", marginBottom: "4px" }}>
-                Informações do Perfil & Marca
-              </h3>
-              <p style={{ fontSize: "12px", color: "#71717a", margin: 0 }}>
-                Dados utilizados pelos agentes de IA para criar conteúdo com tom de voz e branding alinhados à sua conta.
-              </p>
+          <IconMic size={15} />
+          <span>Clonagem de Voz & Reels</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("analytics")}
+          className={`settings-tab-btn ${activeTab === "analytics" ? "active-cyan" : ""}`}
+        >
+          <IconCalendar size={15} />
+          <span>Agendamento de Análise</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("models")}
+          className={`settings-tab-btn ${activeTab === "models" ? "active-cyan" : ""}`}
+        >
+          <IconCpu size={15} />
+          <span>Modelos de IA & Motor</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("email")}
+          className={`settings-tab-btn ${activeTab === "email" ? "active-cyan" : ""}`}
+        >
+          <IconMail size={15} />
+          <span>Notificações & SMTP</span>
+        </button>
+      </div>
+
+      {/* ======================================================== */}
+      {/* ABA 1: PERFIL & IDENTIDADE DE MARCA                      */}
+      {/* ======================================================== */}
+      {activeTab === "profile" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <h3>Identidade do Instagram</h3>
+                <p>Dados de identificação e posicionamento público do seu perfil oficial.</p>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleSyncProfile}
+                disabled={syncingProfile}
+                style={{ fontSize: "12px", padding: "7px 14px" }}
+              >
+                {syncingProfile ? <IconLoader className="spin" size={13} /> : <IconRotateCcw size={13} />}
+                <span>Sincronizar com Instagram</span>
+              </button>
             </div>
 
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={handleGenerateBio}
-              disabled={generatingBio}
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-            >
-              {generatingBio ? <IconLoader size={12} /> : <IconSparkles size={12} />}
-              <span>{generatingBio ? "Gerando Opções..." : "Gerar Sugestões de Bio com IA"}</span>
-            </button>
-          </div>
-
-          {/* SUGESTÕES DE BIO GERADAS */}
-          {generatedBios.length > 0 && (
-            <div
-              style={{
-                background: "rgba(56, 189, 248, 0.05)",
-                border: "1px solid rgba(56, 189, 248, 0.2)",
-                borderRadius: "12px",
-                padding: "16px",
-                marginBottom: "20px",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <span style={{ fontSize: "11px", fontWeight: "700", color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Sugestões de Biografia para o Instagram (Copie e Cole no seu Perfil)
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setGeneratedBios([])}
-                  style={{ background: "transparent", border: "none", color: "#71717a", cursor: "pointer", fontSize: "14px" }}
-                >
-                  ✕
-                </button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+              <div className="settings-form-group">
+                <label>Instagram Handle</label>
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={settings.instagramHandle}
+                  onChange={(e) => setSettings({ ...settings, instagramHandle: e.target.value })}
+                  placeholder="@syrius_tech"
+                />
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {generatedBios.map((bioText, idx) => (
+              <div className="settings-form-group">
+                <label>Nome de Exibição</label>
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={settings.accountName}
+                  onChange={(e) => setSettings({ ...settings, accountName: e.target.value })}
+                  placeholder="Syrius Tech"
+                />
+              </div>
+            </div>
+
+            <div className="settings-form-group">
+              <label>Nicho / Especialidade Técnica</label>
+              <input
+                type="text"
+                className="settings-input"
+                value={settings.niche}
+                onChange={(e) => setSettings({ ...settings, niche: e.target.value })}
+                placeholder="Engenharia de Software, Backend, Cloud & Arquitetura"
+              />
+            </div>
+
+            <div className="settings-form-group" style={{ marginBottom: 0 }}>
+              <label>Biografia / Posicionamento Atual</label>
+              <textarea
+                className="settings-textarea"
+                rows={4}
+                value={settings.positioning}
+                onChange={(e) => setSettings({ ...settings, positioning: e.target.value })}
+                placeholder="Descreva o foco e a proposta de valor do perfil..."
+              />
+            </div>
+          </div>
+
+          {/* GERADOR DE BIOGRAFIAS COM IA */}
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <h3>Gerador de Biografia de Alta Autoridade (IA)</h3>
+                <p>Gera propostas concisas sem clichês de autoajuda para seu perfil.</p>
+              </div>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleGenerateBio}
+                disabled={generatingBio}
+                style={{ fontSize: "12px", padding: "7px 14px", background: "linear-gradient(135deg, #0ea5e9, #2563eb)" }}
+              >
+                {generatingBio ? <IconLoader className="spin" size={13} /> : <IconSparkles size={13} />}
+                <span>Gerar 3 Ideias</span>
+              </button>
+            </div>
+
+            {generatedBios.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" }}>
+                {generatedBios.map((bio, idx) => (
                   <div
                     key={idx}
                     style={{
-                      background: "#09090b",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
-                      borderRadius: "8px",
-                      padding: "12px 14px",
+                      background: "var(--bg-surface)",
+                      border: "1px solid var(--border-card)",
+                      borderRadius: "10px",
+                      padding: "14px",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "flex-start",
-                      gap: "12px",
+                      gap: "14px",
                     }}
                   >
                     <pre
                       style={{
-                        margin: 0,
-                        fontSize: "12px",
-                        color: "#e4e4e7",
-                        whiteSpace: "pre-wrap",
                         fontFamily: "inherit",
-                        lineHeight: "1.5",
-                        flex: 1,
+                        fontSize: "12px",
+                        color: "var(--text-primary)",
+                        whiteSpace: "pre-wrap",
+                        margin: 0,
+                        lineHeight: "1.6",
                       }}
                     >
-                      {bioText}
+                      {bio}
                     </pre>
-
-                    <div style={{ display: "flex", gap: "6px" }}>
+                    <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
                       <button
                         type="button"
-                        className="secondary-button"
-                        onClick={() => handleCopyBio(bioText, idx)}
+                        className="btn-secondary"
+                        onClick={() => {
+                          navigator.clipboard.writeText(bio);
+                          setCopiedIndex(idx);
+                          setTimeout(() => setCopiedIndex(null), 2000);
+                        }}
                         style={{ padding: "6px 10px", fontSize: "11px" }}
                       >
-                        {copiedIndex === idx ? (
-                          <>
-                            <IconCheck size={12} color="#34d399" />
-                            <span style={{ color: "#34d399" }}>Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <IconCopy size={12} />
-                            <span>Copiar</span>
-                          </>
-                        )}
+                        {copiedIndex === idx ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                        <span>{copiedIndex === idx ? "Copiado!" : "Copiar"}</span>
                       </button>
-
                       <button
                         type="button"
-                        className="btn-slot-edit"
-                        onClick={() => handleApplyBio(bioText)}
-                        style={{ width: "auto", padding: "6px 10px", fontSize: "11px" }}
-                        title="Usar esta bio no campo de Posicionamento"
+                        className="btn-primary"
+                        onClick={() => {
+                          setSettings({ ...settings, positioning: bio });
+                          setSuccessMessage("Bio aplicada ao Posicionamento!");
+                          setTimeout(() => setSuccessMessage(null), 2500);
+                        }}
+                        style={{ padding: "6px 12px", fontSize: "11px" }}
                       >
-                        Usar
+                        <span>Aplicar</span>
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* ABA 2: CLONAGEM DE VOZ & REELS (VOICE STUDIO)            */}
+      {/* ======================================================== */}
+      {activeTab === "voice" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* BANNER INFORMATIVO */}
+          <div className="voice-banner">
+            <div>
+              <strong style={{ fontSize: "15px", color: "#fafafa", display: "block", marginBottom: "4px" }}>
+                Voice Studio: Locução e Clonagem de Voz para Reels
+              </strong>
+              <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0 }}>
+                Clone a sua voz nativamente em português brasileiro (F5-TTS pt-BR) ou use a nuvem ElevenLabs / Edge-TTS.
+              </p>
+            </div>
+          </div>
+
+          {/* FEEDBACK DE VOZ */}
+          {voiceFeedback && (
+            <div
+              style={{
+                background: voiceFeedback.success ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                border: `1px solid ${voiceFeedback.success ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                color: voiceFeedback.success ? "#34d399" : "#f87171",
+                padding: "14px 18px",
+                borderRadius: "10px",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              {voiceFeedback.success ? <IconCheck size={16} /> : <IconX size={16} />}
+              <span>{voiceFeedback.message}</span>
             </div>
           )}
 
-          <div className="form-grid-2" style={{ marginBottom: "16px" }}>
-            <div className="form-field">
-              <label className="form-label">
-                <span>Handle do Instagram</span>
-              </label>
-              <input
-                type="text"
-                className="form-input"
-                value={settings.instagramHandle}
-                onChange={(e) => setSettings({ ...settings, instagramHandle: e.target.value })}
-                placeholder="Ex: @meu_perfil_tech"
-                required
-              />
+          {/* CONFIGURAÇÃO DA ENGINE DE VOZ */}
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <h3 style={{ margin: 0 }}>Provedor de Voz & Opções</h3>
+                <p style={{ margin: "2px 0 0" }}>Escolha entre clonagem personalizada da sua voz (Local / ElevenLabs) ou voz neural nativa gratuita (Edge-TTS).</p>
+              </div>
             </div>
 
-            <div className="form-field">
-              <label className="form-label">
-                <span>Nome de Exibição da Conta</span>
-              </label>
-              <input
-                type="text"
-                className="form-input"
-                value={settings.accountName}
-                onChange={(e) => setSettings({ ...settings, accountName: e.target.value })}
-                placeholder="Ex: Dev Tech Creator"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-field" style={{ marginBottom: "16px" }}>
-            <label className="form-label">
-              <span>Nicho / Tópicos de Foco</span>
-            </label>
-            <input
-              type="text"
-              className="form-input"
-              value={settings.niche}
-              onChange={(e) => setSettings({ ...settings, niche: e.target.value })}
-              placeholder="Ex: Engenharia de Software, Backend, Docker, DevOps e IA"
-              required
-            />
-          </div>
-
-          <div className="form-field">
-            <label className="form-label">
-              <span>Posicionamento & Biografia da Conta</span>
-            </label>
-            <textarea
-              className="form-textarea"
-              rows={3}
-              value={settings.positioning}
-              onChange={(e) => setSettings({ ...settings, positioning: e.target.value })}
-              placeholder="Ex: Desenvolvedor Full Stack compartilhando tutoriais práticos de arquitetura e computação em nuvem."
-            />
-          </div>
-        </div>
-
-        {/* SEÇÃO 3: DESTAQUES ESTRATÉGICOS (HIGHLIGHTS) */}
-        <div
-          style={{
-            background: "#111114",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "14px",
-            padding: "24px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-            <div>
-              <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#fafafa", marginBottom: "4px" }}>
-                Estratégia de Destaques (Instagram Highlights)
-              </h3>
-              <p style={{ fontSize: "12px", color: "#71717a", margin: 0 }}>
-                Estruture os 4 pilares permanentes do seu perfil para converter visitantes em seguidores fiéis.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={handleGenerateHighlights}
-              disabled={generatingHighlights}
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-            >
-              {generatingHighlights ? <IconLoader size={12} /> : <IconSparkles size={12} />}
-              <span>{generatingHighlights ? "Planejando..." : "Planejar 4 Destaques com IA"}</span>
-            </button>
-          </div>
-
-          {highlights.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginTop: "12px" }}>
-              {highlights.map((hl, i) => (
-                <div
-                  key={i}
-                  style={{
-                    background: "#09090b",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    borderRadius: "10px",
-                    padding: "14px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                  }}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+              <div className="settings-form-group">
+                <label>Provedor de Síntese</label>
+                <select
+                  className="settings-input"
+                  value={currentProvider}
+                  onChange={(e) => updateVoiceConfig({ provider: e.target.value as any })}
                 >
-                  <div>
+                  <option value="local">Modelo Local Brasileiro (F5-TTS pt-BR)</option>
+                  <option value="elevenlabs">ElevenLabs (Clonagem Instantânea por API)</option>
+                  <option value="edge_tts">Edge-TTS (Voz Neural pt-BR 100% Gratuita)</option>
+                  <option value="disabled">Desativado (Sem locução em áudio)</option>
+                </select>
+              </div>
+
+              <div className="settings-form-group">
+                <label>Identificação da Voz</label>
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={settings.voiceConfig?.voiceName || (currentProvider === "edge_tts" ? "Antônio (pt-BR Neural)" : "Minha Voz (Syrius Tech)")}
+                  onChange={(e) => updateVoiceConfig({ voiceName: e.target.value })}
+                  placeholder="Minha Voz (Syrius Tech)"
+                />
+              </div>
+            </div>
+
+            {/* SE ELEVENLABS: MOSTRA CREDENCIAIS E LISTA */}
+            {currentProvider === "elevenlabs" && (
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "12px" }}>
+                  <div className="settings-form-group">
+                    <label>ElevenLabs API Key</label>
+                    <input
+                      type="password"
+                      className="settings-input"
+                      value={settings.voiceConfig?.elevenLabsApiKey || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateVoiceConfig({ elevenLabsApiKey: val });
+                        if (val.length > 20) {
+                          handleListVoices(val);
+                        }
+                      }}
+                      placeholder="xi-api-key..."
+                    />
+                  </div>
+
+                  <div className="settings-form-group">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                      <strong style={{ fontSize: "13px", color: "#38bdf8" }}>{hl.title}</strong>
-                      <span style={{ fontSize: "9px", background: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", padding: "2px 6px", borderRadius: "4px", fontWeight: "700" }}>
-                        {hl.category}
+                      <label style={{ margin: 0 }}>Voz da Conta (Voice ID)</label>
+                      <button
+                        type="button"
+                        onClick={() => handleListVoices()}
+                        disabled={loadingVoices}
+                        style={{ background: "none", border: "none", color: "#38bdf8", fontSize: "11px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                      >
+                        <IconRefreshCw size={11} className={loadingVoices ? "spin" : ""} />
+                        <span>{loadingVoices ? "Carregando..." : "Atualizar Vozes da Conta"}</span>
+                      </button>
+                    </div>
+                    {existingVoices.length > 0 ? (
+                      <select
+                        className="settings-input"
+                        value={settings.voiceConfig?.elevenLabsVoiceId || ""}
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          const found = existingVoices.find((v) => v.voice_id === selectedId);
+                          updateVoiceConfig({
+                            elevenLabsVoiceId: selectedId,
+                            voiceName: found ? found.name : settings.voiceConfig?.voiceName,
+                          });
+                        }}
+                      >
+                        <option value="">Selecione uma voz autorizada da sua conta...</option>
+                        {existingVoices.map((v) => (
+                          <option key={v.voice_id} value={v.voice_id}>
+                            {v.name} ({v.voice_id.slice(0, 8)}...)
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        className="settings-input"
+                        value={settings.voiceConfig?.elevenLabsVoiceId || ""}
+                        onChange={(e) => updateVoiceConfig({ elevenLabsVoiceId: e.target.value })}
+                        placeholder="Clique em 'Atualizar Vozes da Conta' ou cole o Voice ID"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "16px", background: "rgba(56, 189, 248, 0.05)", border: "1px solid rgba(56, 189, 248, 0.15)", borderRadius: "6px", padding: "8px 12px" }}>
+                  💡 <strong>Dica ElevenLabs Free Tier:</strong> Contas gratuitas da ElevenLabs só podem gerar áudio usando as <em>vozes padrão nativas da sua conta</em> (clique em <strong>Atualizar Vozes da Conta</strong> acima para listar). Para clonar sua própria voz gratuitamente e sem limites, escolha <strong>Edge-TTS</strong> ou <strong>Modelo Local</strong> no seletor de provedor.
+                </div>
+              </div>
+            )}
+
+            {/* SE MODELO LOCAL: SELETOR DE DISPOSITIVO (AUTO / GPU / CPU) E SLIDER NFE COM PRÓS E CONTRAS */}
+            {currentProvider === "local" && (() => {
+              const currentNFE = settings.voiceConfig?.nfeSteps || 12;
+              const currentDevice = settings.voiceConfig?.devicePreference || "auto";
+
+              function getNfeAnalysis(nfe: number) {
+                if (nfe <= 8) {
+                  return {
+                    tier: "Rápido / Modo Econômico",
+                    color: "#34d399",
+                    fidelity: "90% (Voz clara e direta)",
+                    timeEstimate: "~8-14s no CPU / ~0.8s na GPU",
+                    cpuUsage: "60-70% (Carga leve)",
+                    gpuUsage: "25-35%",
+                    pros: [
+                      "Processamento ultra veloz ideal para testes e iterações rápidas",
+                      "Menor aquecimento da máquina e baixo consumo de memória RAM",
+                      "Excelente para computadores rodando múltiplas tarefas ao mesmo tempo",
+                    ],
+                    cons: [
+                      "Pode suavizar pequenas nuances de respiração e pausas sutis",
+                      "Voz ligeiramente mais direta em termos de entonação",
+                    ],
+                  };
+                }
+                if (nfe <= 16) {
+                  return {
+                    tier: "Equilibrado (Padrão Recomendado)",
+                    color: "#38bdf8",
+                    fidelity: "98% (Excelente naturalidade e timbre)",
+                    timeEstimate: "~15-28s no CPU / ~1.5s na GPU",
+                    cpuUsage: "75-85% (Carga balanceada)",
+                    gpuUsage: "45-55%",
+                    pros: [
+                      "Padrão ouro: equilíbrio perfeito entre naturalidade, pausas e velocidade",
+                      "Timbre e cadência praticamente idênticos à sua amostra original gravada",
+                      "Recomendado para a maioria dos Reels técnicos",
+                    ],
+                    cons: [
+                      "Leva alguns segundos adicionais de processamento em relação ao modo rápido",
+                    ],
+                  };
+                }
+                return {
+                  tier: "Ultra Fidelidade / Studio Master",
+                  color: "#c084fc",
+                  fidelity: "99.8% (Qualidade Máxima de Estúdio)",
+                  timeEstimate: "~45-90s no CPU / ~3-5s na GPU",
+                  cpuUsage: "95%+ (Carga intensa)",
+                  gpuUsage: "75-85%",
+                  pros: [
+                    "Máxima resolução acústica, riqueza harmônica e micro-detalhes de fala",
+                    "Ideal para narrações institucionais ou vídeos de alta relevância comercial",
+                  ],
+                  cons: [
+                    "Tempo de processamento elevado na CPU (pode levar mais de 1 minuto)",
+                    "Maior consumo térmico e de memória durante a geração",
+                  ],
+                };
+              }
+
+              const analysis = getNfeAnalysis(currentNFE);
+
+              return (
+                <div style={{ marginTop: "16px", padding: "16px", background: "var(--bg-surface)", borderRadius: "10px", border: "1px solid var(--border-card)" }}>
+                  {/* SELEÇÃO DO DISPOSITIVO DE COMPUTAÇÃO */}
+                  <div style={{ marginBottom: "18px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "8px" }}>
+                      Dispositivo de Processamento (Hardware Dispatcher)
+                    </label>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px" }}>
+                      {[
+                        {
+                          id: "auto",
+                          title: "⚡ Automático (Recomendado)",
+                          desc: "Usa GPU se houver VRAM livre, senão faz fallback seguro para CPU",
+                          badge: "Inteligente",
+                          badgeColor: "#38bdf8",
+                        },
+                        {
+                          id: "cuda",
+                          title: "🎮 Forçar GPU (NVIDIA / CUDA)",
+                          desc: "Aceleração máxima por placa de vídeo (~1-2s)",
+                          badge: "Ultra Rápido",
+                          badgeColor: "#34d399",
+                        },
+                        {
+                          id: "cpu",
+                          title: "🛡️ Forçar CPU (AMD Ryzen 5)",
+                          desc: "Processamento por processador (baixo uso de VRAM)",
+                          badge: "Econômico",
+                          badgeColor: "#fbbf24",
+                        },
+                      ].map((item) => (
+                        <div
+                          key={item.id}
+                          onClick={() => updateVoiceConfig({ devicePreference: item.id as any })}
+                          style={{
+                            padding: "12px 14px",
+                            borderRadius: "8px",
+                            background: currentDevice === item.id ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.03)",
+                            border: currentDevice === item.id ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.08)",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                            <span style={{ fontSize: "12px", fontWeight: "700", color: currentDevice === item.id ? "#38bdf8" : "var(--text-primary)" }}>
+                              {item.title}
+                            </span>
+                            <span style={{ fontSize: "10px", color: item.badgeColor, background: `${item.badgeColor}20`, padding: "2px 6px", borderRadius: "4px", fontWeight: "700" }}>
+                              {item.badge}
+                            </span>
+                          </div>
+                          <p style={{ margin: 0, fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.3 }}>
+                            {item.desc}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SLIDER DE NFE (PASSOS DE DIFUSÃO ACÚSTICA) */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <div>
+                        <label style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
+                          Passos de Amostragem Acústica (NFE)
+                        </label>
+                        <span style={{ fontSize: "11px", color: "var(--text-secondary)", marginLeft: "8px" }}>
+                          (Número de ciclos de lapidação da voz)
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: "800",
+                          fontFamily: "monospace",
+                          color: analysis.color,
+                          background: `${analysis.color}18`,
+                          border: `1px solid ${analysis.color}40`,
+                          padding: "3px 10px",
+                          borderRadius: "6px",
+                        }}
+                      >
+                        NFE = {currentNFE} ({analysis.tier})
                       </span>
                     </div>
 
-                    <p style={{ fontSize: "11px", color: "#a1a1aa", margin: "0 0 10px 0", lineHeight: "1.4" }}>
-                      {hl.purpose}
-                    </p>
+                    <input
+                      type="range"
+                      min={6}
+                      max={32}
+                      step={2}
+                      value={currentNFE}
+                      onChange={(e) => updateVoiceConfig({ nfeSteps: parseInt(e.target.value, 10) })}
+                      style={{
+                        width: "100%",
+                        height: "6px",
+                        borderRadius: "3px",
+                        accentColor: analysis.color,
+                        cursor: "pointer",
+                        marginBottom: "12px",
+                      }}
+                    />
 
-                    <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.06)", paddingTop: "8px" }}>
-                      <span style={{ fontSize: "10px", color: "#71717a", textTransform: "uppercase", fontWeight: "700", display: "block", marginBottom: "4px" }}>
-                        Ideias de Stories:
-                      </span>
-                      <ul style={{ margin: 0, paddingLeft: "14px", display: "flex", flexDirection: "column", gap: "3px" }}>
-                        {hl.storyIdeas?.map((idea: string, idx: number) => (
-                          <li key={idx} style={{ fontSize: "11px", color: "#d4d4d8", lineHeight: "1.3" }}>
-                            {idea}
-                          </li>
-                        ))}
-                      </ul>
+                    {/* MÉTRICAS DE ESTIMATIVA DO NFE */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "8px", marginBottom: "12px" }}>
+                      <div style={{ padding: "8px 10px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "6px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                        <span style={{ fontSize: "10px", color: "var(--text-muted)", display: "block" }}>Fidelidade do Timbre</span>
+                        <strong style={{ fontSize: "11px", color: analysis.color }}>{analysis.fidelity}</strong>
+                      </div>
+                      <div style={{ padding: "8px 10px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "6px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                        <span style={{ fontSize: "10px", color: "var(--text-muted)", display: "block" }}>Tempo de Síntese</span>
+                        <strong style={{ fontSize: "11px", color: "var(--text-primary)" }}>{analysis.timeEstimate}</strong>
+                      </div>
+                      <div style={{ padding: "8px 10px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "6px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                        <span style={{ fontSize: "10px", color: "var(--text-muted)", display: "block" }}>Uso Médio CPU / GPU</span>
+                        <strong style={{ fontSize: "11px", color: "var(--text-primary)" }}>{analysis.cpuUsage}</strong>
+                      </div>
+                    </div>
+
+                    {/* VANTAGENS E DESVANTAGENS DINÂMICAS */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div style={{ padding: "10px 12px", background: "rgba(16, 185, 129, 0.06)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "8px" }}>
+                        <strong style={{ fontSize: "11px", color: "#34d399", display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px" }}>
+                          <IconCheck size={13} />
+                          <span>Vantagens deste ajuste:</span>
+                        </strong>
+                        <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "11px", color: "#d1fae5", lineHeight: 1.4 }}>
+                          {analysis.pros.map((p, i) => (
+                            <li key={i}>{p}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div style={{ padding: "10px 12px", background: "rgba(239, 68, 68, 0.06)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "8px" }}>
+                        <strong style={{ fontSize: "11px", color: "#f87171", display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px" }}>
+                          <IconAlertTriangle size={13} />
+                          <span>Pontos de atenção:</span>
+                        </strong>
+                        <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "11px", color: "#fee2e2", lineHeight: 1.4 }}>
+                          {analysis.cons.map((c, i) => (
+                            <li key={i}>{c}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* SEÇÃO 4: MODELOS & AUTOMAÇÃO */}
-        <div
-          style={{
-            background: "#111114",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "14px",
-            padding: "24px",
-          }}
-        >
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#fafafa", marginBottom: "4px" }}>
-              Modelo de IA & Comportamento de Publicação
-            </h3>
-            <p style={{ fontSize: "12px", color: "#71717a", margin: 0 }}>
-              Ajuste o modelo de linguagem e as regras de publicação automática.
-            </p>
+              );
+            })()}
           </div>
 
-          <div className="form-field" style={{ marginBottom: "20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <label className="form-label" style={{ margin: 0 }}>
-                <span>Modelo Gemini de Redação & Estratégia</span>
-              </label>
-              <span style={{ fontSize: "11px", color: "#a1a1aa" }}>
-                Você pode escolher um modelo pré-definido ou digitar um customizado
-              </span>
-            </div>
+          {/* AMOSTRA DE VOZ GRAVADA ATUAL (PLAYER DE AUDIÇÃO) */}
+          {savedVoiceSample?.exists && savedVoiceSample.audioBase64 && currentProvider !== "edge_tts" && (
+            <div
+              className="settings-card"
+              style={{
+                background: "linear-gradient(135deg, rgba(192, 132, 252, 0.08) 0%, rgba(99, 102, 241, 0.04) 100%)",
+                borderColor: "rgba(192, 132, 252, 0.35)",
+                padding: "18px 20px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(192, 132, 252, 0.2)", color: "#c084fc", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <IconMic size={16} />
+                  </span>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "var(--text-primary)" }}>
+                      Amostra de Voz Calibrada Atual
+                    </h4>
+                    <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-secondary)" }}>
+                      Arquivo: <code style={{ color: "#c084fc", background: "rgba(192, 132, 252, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>{savedVoiceSample.samplePath || "voice-lab/amostra.wav"}</code> ({savedVoiceSample.sizeKb || 0} KB)
+                    </p>
+                  </div>
+                </div>
 
-            {/* PRESETS RÁPIDOS */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "8px", marginBottom: "12px" }}>
-              {PRESET_GEMINI_MODELS.map((m) => {
-                const isSelected = settings.defaultGeminiModel === m.id;
-                return (
+                <span
+                  style={{
+                    fontSize: "11px",
+                    background: "rgba(16, 185, 129, 0.15)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    color: "#34d399",
+                    padding: "5px 10px",
+                    borderRadius: "6px",
+                    fontWeight: "700",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                >
+                  <IconCheck size={12} />
+                  <span>Voz Pronta para Síntese</span>
+                </span>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
+                <audio controls src={savedVoiceSample.audioBase64} style={{ height: "36px", flex: 1, minWidth: "220px" }} />
+                <button
+                  type="button"
+                  onClick={() => setShowNewRecording((prev) => !prev)}
+                  className="btn-secondary"
+                  style={{ padding: "8px 14px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <IconRefreshCw size={13} />
+                  <span>{showNewRecording ? "Ocultar Gravador" : "Gravar Nova Amostra (Substituir)"}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* CARD DE TREINAMENTO NEURAL DEDICADO NA GPU (FINE-TUNING DA SUA VOZ) */}
+          {currentProvider === "local" && savedVoiceSample?.exists && (
+            <div
+              className="settings-card"
+              style={{
+                borderColor: trainedModelInfo?.trained ? "rgba(16, 185, 129, 0.4)" : "rgba(139, 92, 246, 0.4)",
+                background: trainedModelInfo?.trained
+                  ? "linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 78, 59, 0.08) 100%)"
+                  : "linear-gradient(135deg, rgba(139, 92, 246, 0.06) 0%, rgba(99, 102, 241, 0.04) 100%)",
+              }}
+            >
+              <div className="settings-card-header">
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "8px",
+                      background: trainedModelInfo?.trained ? "rgba(16, 185, 129, 0.2)" : "rgba(139, 92, 246, 0.2)",
+                      color: trainedModelInfo?.trained ? "#34d399" : "#a78bfa",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <IconCpu size={16} />
+                  </span>
+                  <div>
+                    <h3 style={{ margin: 0 }}>Estúdio de Treinamento Neural da Sua Voz (Fine-Tuning na GPU)</h3>
+                    <p style={{ margin: "2px 0 0" }}>
+                      Treina um modelo neural dedicado com a física das suas cordas vocais e salva permanentemente no seu PC.
+                    </p>
+                  </div>
+                </div>
+
+                <span
+                  style={{
+                    fontSize: "11px",
+                    background: trainedModelInfo?.trained ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                    border: `1px solid ${trainedModelInfo?.trained ? "rgba(16, 185, 129, 0.35)" : "rgba(245, 158, 11, 0.35)"}`,
+                    color: trainedModelInfo?.trained ? "#34d399" : "#fbbf24",
+                    padding: "5px 10px",
+                    borderRadius: "6px",
+                    fontWeight: "700",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                >
+                  {trainedModelInfo?.trained ? (
+                    <>
+                      <IconCheck size={12} />
+                      <span>Modelo Neural Dedicado Ativo</span>
+                    </>
+                  ) : (
+                    <>
+                      <IconAlertTriangle size={12} />
+                      <span>Modelo Ainda Não Treinado</span>
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {/* DETALHES DO MODELO SE JÁ TREINADO */}
+              {trainedModelInfo?.trained && (
+                <div
+                  style={{
+                    marginBottom: "14px",
+                    padding: "12px 14px",
+                    background: "rgba(0, 0, 0, 0.3)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: "8px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                    gap: "10px",
+                    fontSize: "12px",
+                  }}
+                >
+                  <div>
+                    <span style={{ color: "var(--text-secondary)", display: "block" }}>Arquivo de Pesos:</span>
+                    <strong style={{ color: "#38bdf8" }}>{trainedModelInfo.modelPath}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-secondary)", display: "block" }}>Tamanho do Modelo:</span>
+                    <strong style={{ color: "#34d399" }}>{trainedModelInfo.sizeMb} MB</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-secondary)", display: "block" }}>Épocas / Perda (Loss):</span>
+                    <strong style={{ color: "var(--text-primary)" }}>{trainedModelInfo.epochs} épocas (Loss: {trainedModelInfo.finalLoss})</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-secondary)", display: "block" }}>Último Treino:</span>
+                    <strong style={{ color: "var(--text-primary)" }}>{trainedModelInfo.trainedAt?.slice(0, 16).replace("T", " ")}</strong>
+                  </div>
+                </div>
+              )}
+
+              {/* NOTA DE PERSISTÊNCIA PERMANENTE */}
+              <div
+                style={{
+                  padding: "10px 14px",
+                  background: "rgba(56, 189, 248, 0.08)",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  color: "#93c5fd",
+                  marginBottom: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <IconSparkles size={15} color="#38bdf8" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Persistência Permanente:</strong> Este modelo fica gravado no seu disco rígido. Ao fechar ou reiniciar o computador/aplicativo, <strong>a IA nunca desaprende sua voz</strong> e carrega seus pesos neurais em menos de 1 segundo.
+                </span>
+              </div>
+
+              {/* PROGRESSO DO TREINAMENTO SE EM ANDAMENTO */}
+              {isTrainingModel && (
+                <div style={{ marginBottom: "14px", padding: "14px 16px", background: "rgba(0, 0, 0, 0.5)", borderRadius: "8px", border: "1px solid rgba(139, 92, 246, 0.4)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "12px", color: "#c084fc", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <IconLoader className="spin" size={14} />
+                      <span>{trainingStage || "Processando treinamento neural na GPU..."}</span>
+                    </span>
+                    <span style={{ fontSize: "12px", fontWeight: "700", color: "#34d399" }}>
+                      {trainingProgress}%
+                    </span>
+                  </div>
+
+                  <div style={{ width: "100%", height: "8px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "4px", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${trainingProgress}%`,
+                        height: "100%",
+                        background: "linear-gradient(90deg, #8b5cf6, #c084fc, #38bdf8)",
+                        transition: "width 0.4s ease",
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* BOTÃO DE INICIAR / RE-TREINAR */}
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={handleTrainVoiceModel}
+                  disabled={isTrainingModel}
+                  className="primary-button"
+                  style={{
+                    background: trainedModelInfo?.trained
+                      ? "linear-gradient(135deg, #10b981, #059669)"
+                      : "linear-gradient(135deg, #8b5cf6, #6366f1)",
+                    color: "#fff",
+                    padding: "10px 18px",
+                    fontWeight: "700",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  {isTrainingModel ? (
+                    <>
+                      <IconLoader className="spin" size={15} />
+                      <span>Treinando Modelo na RTX 2060 ({trainingProgress}%)...</span>
+                    </>
+                  ) : trainedModelInfo?.trained ? (
+                    <>
+                      <IconRefreshCw size={15} />
+                      <span>Re-treinar Modelo com Esta Amostra</span>
+                    </>
+                  ) : (
+                    <>
+                      <IconCpu size={15} />
+                      <span>🚀 Iniciar Treinamento Neural da Minha Voz (RTX 2060)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* GRAVADOR DE MICROFONE INTEGRADO & CALIBRAÇÃO (Exibido se não tiver amostra OU se o usuário clicar em Substituir) */}
+          {currentProvider !== "edge_tts" && currentProvider !== "disabled" && (!savedVoiceSample?.exists || showNewRecording) ? (
+            <div className="settings-card" style={{ borderColor: "rgba(192, 132, 252, 0.35)" }}>
+              <div className="settings-card-header">
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "8px",
+                      background: "rgba(192, 132, 252, 0.2)",
+                      color: "#c084fc",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <IconMic size={16} />
+                  </span>
+                  <div>
+                    <h3 style={{ margin: 0 }}>Gravador de Voz & Amostra de Treinamento (3 Minutos)</h3>
+                    <p style={{ margin: "2px 0 0" }}>Grave a leitura contínua do roteiro completo para alimentar o treinamento neural.</p>
+                  </div>
+                </div>
+                {isRecording && (
+                  <div className="recording-pulse">
+                    <span className="recording-dot" />
+                    <span>GRAVANDO: {String(Math.floor(recordingSeconds / 60)).padStart(2, "0")}:{String(recordingSeconds % 60).padStart(2, "0")}</span>
+                  </div>
+                )}
+              </div>
+
+              <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "10px" }}>
+                Leia o roteiro completo abaixo em tom firme e natural bem próximo ao microfone:
+              </p>
+
+              {/* ROTEIRO DE LEITURA (TELEPROMPTER) */}
+              <div className="teleprompter-box" style={{ maxHeight: "220px", overflowY: "auto", lineHeight: "1.6" }}>
+                "{VOICE_READING_SCRIPT}"
+              </div>
+
+              {/* BARRA DE PROGRESSO DO TEMPO DE TREINAMENTO (META 3 MINUTOS) */}
+              {isRecording && (
+                <div style={{ marginBottom: "18px", padding: "12px 14px", background: "var(--bg-surface)", borderRadius: "8px", border: "1px solid var(--border-card)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", fontSize: "12px", fontWeight: "700" }}>
+                    <span style={{ color: recordingSeconds >= MIN_RECORDING_SECONDS ? "#34d399" : "#f59e0b" }}>
+                      {recordingSeconds >= TARGET_TRAINING_SECONDS
+                        ? `Meta ideal de 3 minutos atingida (${recordingSeconds}s gravados)! Perfeito para treino de alta fidelidade.`
+                        : recordingSeconds >= MIN_RECORDING_SECONDS
+                        ? `Mínimo de 45s atingido (${recordingSeconds}s gravados)! Continue lendo até os 3 minutos para máxima precisão.`
+                        : `Gravando: ${recordingSeconds}s / ${MIN_RECORDING_SECONDS}s (Faltam ${MIN_RECORDING_SECONDS - recordingSeconds}s para desbloquear)`}
+                    </span>
+                    <span style={{ fontFamily: "monospace", color: "var(--text-primary)" }}>
+                      {String(Math.floor(recordingSeconds / 60)).padStart(2, "0")}:{String(recordingSeconds % 60).padStart(2, "0")} / 03:00
+                    </span>
+                  </div>
+                  <div style={{ width: "100%", height: "8px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "4px", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${Math.min(100, (recordingSeconds / TARGET_TRAINING_SECONDS) * 100)}%`,
+                        height: "100%",
+                        background: recordingSeconds >= TARGET_TRAINING_SECONDS
+                          ? "linear-gradient(90deg, #10b981, #34d399)"
+                          : recordingSeconds >= MIN_RECORDING_SECONDS
+                          ? "linear-gradient(90deg, #38bdf8, #818cf8)"
+                          : "linear-gradient(90deg, #ef4444, #f59e0b)",
+                        transition: "width 0.25s linear",
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* CONTROLES DO GRAVADOR */}
+              <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                {!isRecording ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      className="btn-record"
+                    >
+                      <IconMic size={15} />
+                      <span>{recordedAudioUrl ? "Gravar Novamente (Novo Áudio)" : "Iniciar Gravação de 3 Minutos"}</span>
+                    </button>
+
+                    <label
+                      className="btn-secondary"
+                      style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", margin: 0, padding: "10px 16px" }}
+                      title="Importar um arquivo de áudio gravado previamente"
+                    >
+                      <IconUpload size={15} />
+                      <span>Importar Arquivo (.wav / .mp3)</span>
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        style={{ display: "none" }}
+                        onChange={handleImportAudioFile}
+                      />
+                    </label>
+                  </>
+                ) : (
                   <button
                     type="button"
-                    key={m.id}
-                    className={`format-card-btn ${isSelected ? "active" : ""}`}
-                    onClick={() => setSettings({ ...settings, defaultGeminiModel: m.id })}
-                    style={{ padding: "10px" }}
+                    onClick={stopRecording}
+                    disabled={recordingSeconds < MIN_RECORDING_SECONDS}
+                    className={recordingSeconds >= MIN_RECORDING_SECONDS ? "btn-stop-record" : "btn-secondary"}
+                    style={{
+                      opacity: recordingSeconds < MIN_RECORDING_SECONDS ? 0.6 : 1,
+                      cursor: recordingSeconds < MIN_RECORDING_SECONDS ? "not-allowed" : "pointer",
+                    }}
+                    title={recordingSeconds < MIN_RECORDING_SECONDS ? `Aguarde completar ${MIN_RECORDING_SECONDS} segundos` : "Finalizar gravação"}
                   >
-                    <strong style={{ fontSize: "12px", color: isSelected ? "#38bdf8" : "#fafafa", display: "block", marginBottom: "2px" }}>
-                      {m.name}
-                    </strong>
-                    <span style={{ fontSize: "10px", color: "#71717a" }}>{m.desc}</span>
+                    <IconStop size={15} />
+                    <span>
+                      {recordingSeconds < MIN_RECORDING_SECONDS
+                        ? `Gravando (${MIN_RECORDING_SECONDS - recordingSeconds}s restantes)...`
+                        : "Finalizar Gravação"}
+                    </span>
+                  </button>
+                )}
+
+                {/* AMOSTRA GRAVADA E BOTÕES DE ENVIO */}
+                {recordedAudioUrl && !isRecording && (
+                  <>
+                    <audio controls src={recordedAudioUrl} style={{ height: "38px" }} />
+
+                    {/* BOTAO PARA SALVAR AMOSTRA LOCAL */}
+                    <button
+                      type="button"
+                      onClick={handleSaveLocalSample}
+                      disabled={cloningVoice}
+                      className="primary-button"
+                      style={{ background: "linear-gradient(135deg, #8b5cf6, #6366f1)", color: "#fff", padding: "10px 18px" }}
+                    >
+                      {cloningVoice ? (
+                        <>
+                          <IconLoader className="spin" size={14} />
+                          <span>Salvando Amostra...</span>
+                        </>
+                      ) : (
+                        <>
+                          <IconSparkles size={14} />
+                          <span>Salvar Amostra de Treinamento</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* BOTAO PARA ELEVENLABS */}
+                    {settings.voiceConfig?.elevenLabsApiKey && (
+                      <button
+                        type="button"
+                        onClick={handleSendToElevenLabs}
+                        disabled={cloningVoice}
+                        className="primary-button"
+                        style={{ background: "#0ea5e9", color: "#fff", padding: "10px 18px" }}
+                      >
+                        {cloningVoice ? (
+                          <>
+                            <IconLoader className="spin" size={14} />
+                            <span>Enviando para ElevenLabs...</span>
+                          </>
+                        ) : (
+                          <>
+                            <IconSend size={14} />
+                            <span>Calibrar na ElevenLabs</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ) : currentProvider === "edge_tts" ? (
+            <div className="settings-card" style={{ background: "rgba(56, 189, 248, 0.05)", borderColor: "rgba(56, 189, 248, 0.25)", padding: "16px 20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <span
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "10px",
+                    background: "rgba(56, 189, 248, 0.2)",
+                    color: "#38bdf8",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <IconCheck size={18} />
+                </span>
+                <div>
+                  <h4 style={{ margin: 0, color: "var(--text-primary)", fontSize: "14px", fontWeight: "700" }}>
+                    Modo Edge-TTS Neural Gratuito Ativo
+                  </h4>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                    Utiliza as vozes neurais brasileiras em alta definição da Microsoft. <strong>Não é necessário gravar sua voz nem configurar chaves de API</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* TESTADOR DE SÍNTESE DA VOZ (TTS PLAYBACK) */}
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    background: "rgba(56, 189, 248, 0.15)",
+                    color: "#38bdf8",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <IconVolume2 size={16} />
+                </span>
+                <div>
+                  <h3 style={{ margin: 0 }}>Testar Locução em Áudio</h3>
+                  <p style={{ margin: "2px 0 0" }}>Gere um áudio instantâneo com a engine selecionada para ouvir a pronúncia e ritmo.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-form-group">
+              <label>Frase para teste de locução:</label>
+              <textarea
+                className="settings-textarea"
+                rows={2}
+                value={testTtsText}
+                onChange={(e) => setTestTtsText(e.target.value)}
+              />
+            </div>
+
+            {/* BARRA DE PROGRESSO COM PORCENTAGEM DURANTE SÍNTESE */}
+            {isSynthesizing && (
+              <div style={{ marginBottom: "16px", padding: "14px 16px", background: "var(--bg-surface)", borderRadius: "10px", border: "1px solid rgba(56, 189, 248, 0.35)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", fontSize: "12px", fontWeight: "700" }}>
+                  <span style={{ color: "#38bdf8", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <IconLoader className="spin" size={14} />
+                    <span>{effectiveStage || "Sintetizando locução em áudio..."}</span>
+                  </span>
+                  <span style={{ fontFamily: "monospace", color: "#38bdf8", fontSize: "14px", fontWeight: "800" }}>
+                    {Math.round(effectiveProgress)}%
+                  </span>
+                </div>
+                <div style={{ width: "100%", height: "8px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "4px", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      width: `${Math.min(100, Math.max(5, effectiveProgress))}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg, #38bdf8, #818cf8, #c084fc)",
+                      transition: "width 0.2s ease-out",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleTestVoiceTTS}
+                disabled={isSynthesizing}
+                style={{ padding: "9px 18px", fontSize: "13px" }}
+              >
+                {isSynthesizing ? (
+                  <>
+                    <IconLoader className="spin" size={14} />
+                    <span>Sintetizando ({Math.round(effectiveProgress)}%)...</span>
+                  </>
+                ) : (
+                  <>
+                    <IconPlay size={14} />
+                    <span>Sintetizar e Ouvir Áudio</span>
+                  </>
+                )}
+              </button>
+
+              {/* BOTAO PARA PARAR / CANCELAR SINTESE */}
+              {isSynthesizing && (
+                <button
+                  type="button"
+                  onClick={handleCancelTTS}
+                  style={{
+                    padding: "9px 16px",
+                    fontSize: "12px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "rgba(239, 68, 68, 0.15)",
+                    border: "1px solid rgba(239, 68, 68, 0.4)",
+                    color: "#f87171",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontWeight: "700",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Interromper e liberar memória imediatamente"
+                >
+                  <IconStop size={14} />
+                  <span>Interromper Síntese</span>
+                </button>
+              )}
+
+              {/* CARD DO RESULTADO DO ÁUDIO SINTETIZADO */}
+              {synthesizedAudioUrl && !isSynthesizing && (
+                <div
+                  style={{
+                    width: "100%",
+                    marginTop: "16px",
+                    padding: "14px 18px",
+                    background: "linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%)",
+                    border: "1px solid rgba(56, 189, 248, 0.3)",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ width: "26px", height: "26px", borderRadius: "6px", background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <IconVolume2 size={14} />
+                      </span>
+                      <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+                        Áudio Sintetizado Pronto
+                      </strong>
+                    </div>
+
+                    <span style={{ fontSize: "11px", background: "rgba(16, 185, 129, 0.15)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "2px 8px", borderRadius: "4px", fontWeight: "700" }}>
+                      ✅ Disponível para reprodução
+                    </span>
+                  </div>
+
+                  <audio controls autoPlay src={synthesizedAudioUrl} style={{ width: "100%", height: "38px" }} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* ABA 3: AGENDAMENTO DE ANÁLISE DE AUDITORIA               */}
+      {/* ======================================================== */}
+      {activeTab === "analytics" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <h3>Modo de Agendamento da Análise de Métricas</h3>
+                <p>Escolha como o motor de auditoria deve coletar métricas e alimentar a Memória RAG do seu perfil.</p>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px", marginBottom: "20px" }}>
+              {[
+                { id: "INTERVAL_HOURS", label: "Intervalo de Horas", desc: "A cada N horas continuamente", icon: IconClock },
+                { id: "WEEKDAYS", label: "Dias da Semana", desc: "Seg, Qua, Sex nos horários de pico", icon: IconCalendar },
+                { id: "WEEKLY", label: "Semanal", desc: "1x por semana no domingo à noite", icon: IconMoon },
+                { id: "MONTHLY", label: "Mensal", desc: "1x ao mês no dia especificado", icon: IconTag },
+                { id: "MANUAL", label: "Apenas Manual", desc: "Sem disparo automático em segundo plano", icon: IconHand },
+              ].map((m) => {
+                const Icon = m.icon;
+                const isSelected = currentSchedule.mode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => updateSchedule({ mode: m.id as any })}
+                    style={{
+                      background: isSelected ? "rgba(56, 189, 248, 0.15)" : "var(--bg-surface)",
+                      border: isSelected ? "1px solid #38bdf8" : "1px solid var(--border-card)",
+                      borderRadius: "10px",
+                      padding: "14px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "5px",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", color: isSelected ? "#38bdf8" : "var(--text-primary)", fontWeight: "700", fontSize: "13px" }}>
+                      <Icon size={15} />
+                      <span>{m.label}</span>
+                    </div>
+                    <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{m.desc}</span>
                   </button>
                 );
               })}
             </div>
 
-            {/* CARDS DE MODELOS SALVOS / PERSONALIZADOS */}
+            {/* SE INTERVAL_HOURS */}
+            {currentSchedule.mode === "INTERVAL_HOURS" && (
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {INTERVAL_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => updateSchedule({ intervalHours: opt.value })}
+                    style={{
+                      background: currentSchedule.intervalHours === opt.value ? "rgba(56, 189, 248, 0.2)" : "var(--bg-surface)",
+                      border: currentSchedule.intervalHours === opt.value ? "1px solid #38bdf8" : "1px solid var(--border-card)",
+                      color: currentSchedule.intervalHours === opt.value ? "#38bdf8" : "var(--text-primary)",
+                      padding: "9px 16px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* SE WEEKDAYS */}
+            {currentSchedule.mode === "WEEKDAYS" && (
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "8px", fontWeight: "600" }}>
+                  Selecione os dias da semana para auditoria:
+                </label>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
+                  {ALL_WEEKDAYS.map((day) => {
+                    const isChecked = currentSchedule.selectedDays?.includes(day.id);
+                    return (
+                      <button
+                        key={day.id}
+                        type="button"
+                        onClick={() => {
+                          const currentDays = currentSchedule.selectedDays || [];
+                          const nextDays = isChecked
+                            ? currentDays.filter((d) => d !== day.id)
+                            : [...currentDays, day.id];
+                          updateSchedule({ selectedDays: nextDays });
+                        }}
+                        style={{
+                          background: isChecked ? "rgba(56, 189, 248, 0.2)" : "var(--bg-surface)",
+                          border: isChecked ? "1px solid #38bdf8" : "1px solid var(--border-card)",
+                          color: isChecked ? "#38bdf8" : "var(--text-primary)",
+                          padding: "8px 14px",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {day.short}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ maxWidth: "220px" }}>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px", fontWeight: "600" }}>
+                    Horário de Execução
+                  </label>
+                  <input
+                    type="time"
+                    className="settings-input"
+                    value={currentSchedule.timeSlot || "20:00"}
+                    onChange={(e) => updateSchedule({ timeSlot: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* CARD: RADAR DE TEMAS EM ALTA (TRENDING TOPICS) */}
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    RADAR DE INTELIGÊNCIA EDITORIAL
+                  </span>
+                </div>
+                <h3>Varredura Automática de Temas em Alta (Tendências)</h3>
+                <p>Configure a periodicidade com que a IA vasculha o ecossistema tech e renova as tendências que alimentam o cronograma e geração.</p>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "8px" }}>
+              <div className="settings-form-group">
+                <label>Frequência de Atualização das Tendências</label>
+                <select
+                  className="settings-input"
+                  value={settings.trendingRefreshIntervalDays ?? 1}
+                  onChange={(e) => setSettings({ ...settings, trendingRefreshIntervalDays: Number(e.target.value) })}
+                >
+                  <option value={1}>Todo dia (A cada 24 horas) — Padrão</option>
+                  <option value={2}>A cada 2 dias (48 horas)</option>
+                  <option value={3}>A cada 3 dias (72 horas)</option>
+                  <option value={7}>Semanalmente (A cada 7 dias)</option>
+                </select>
+                <small style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "4px", display: "block" }}>
+                  A IA renova as pautas em alta no banco de dados automaticamente conforme este intervalo e as injeta no cronograma semanal.
+                </small>
+              </div>
+
+              <div className="settings-form-group">
+                <label>Quantidade de Tendências Monitoradas no Radar</label>
+                <select
+                  className="settings-input"
+                  value={settings.trendingTopicsCount ?? 10}
+                  onChange={(e) => setSettings({ ...settings, trendingTopicsCount: Number(e.target.value) })}
+                >
+                  <option value={10}>10 tendências em alta (Padrão / Sem Paginação)</option>
+                  <option value={15}>15 tendências em alta</option>
+                  <option value={20}>20 tendências em alta</option>
+                </select>
+                <small style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "4px", display: "block" }}>
+                  Total de cards exibidos na tela de Temas em Alta com botões de Gerar Publicação, Ignorar e Ler Tudo.
+                </small>
+              </div>
+            </div>
+          </div>
+
+          {/* CARD: PILOTO NOTURNO / PLANEJAMENTO SEMANAL AUTOMÁTICO */}
+          <div className="settings-card" style={{ borderColor: settings.nightlyScheduleEnabled ? "rgba(147, 51, 234, 0.35)" : "var(--border-card)" }}>
+            <div className="settings-card-header">
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#c084fc", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    AUTOMAÇÃO HANDS-FREE
+                  </span>
+                </div>
+                <h3>Piloto Noturno (Planejamento Semanal Automático)</h3>
+                <p>O robô acorda no dia e horário escolhidos para renovar tendências, gerar a grade semanal e deixar tudo pronto para você.</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, nightlyScheduleEnabled: !settings.nightlyScheduleEnabled })}
+                className={settings.nightlyScheduleEnabled ? "primary-button" : "btn-secondary"}
+                style={{
+                  fontSize: "12px",
+                  padding: "7px 16px",
+                  background: settings.nightlyScheduleEnabled ? "linear-gradient(135deg, #8b5cf6, #6366f1)" : undefined,
+                  borderColor: settings.nightlyScheduleEnabled ? "#8b5cf6" : undefined,
+                }}
+              >
+                {settings.nightlyScheduleEnabled ? "Ativado (Piloto Ligado)" : "Desativado"}
+              </button>
+            </div>
+
+            {settings.nightlyScheduleEnabled && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "12px" }}>
+                <div className="settings-form-group">
+                  <label>Dia da Semana para Executar</label>
+                  <select
+                    className="settings-input"
+                    value={settings.nightlyScheduleDay || "Domingo"}
+                    onChange={(e) => setSettings({ ...settings, nightlyScheduleDay: e.target.value })}
+                  >
+                    <option value="Domingo">Domingo (Recomendado para planejar a semana)</option>
+                    <option value="Segunda-feira">Segunda-feira</option>
+                    <option value="Sábado">Sábado</option>
+                    <option value="Sexta-feira">Sexta-feira</option>
+                  </select>
+                  <small style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "4px", display: "block" }}>
+                    Dia em que o sistema varre o mercado e estrutura os 5 posts da semana.
+                  </small>
+                </div>
+
+                <div className="settings-form-group">
+                  <label>Horário de Execução</label>
+                  <input
+                    type="time"
+                    className="settings-input"
+                    value={settings.nightlyScheduleTime || "22:00"}
+                    onChange={(e) => setSettings({ ...settings, nightlyScheduleTime: e.target.value })}
+                  />
+                  <small style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "4px", display: "block" }}>
+                    Horário em que o robô roda em background (Padrão: 22:00).
+                  </small>
+                </div>
+              </div>
+            )}
+
+            {settings.lastNightlyRunAt && (
+              <div style={{ marginTop: "12px", fontSize: "11px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px" }}>
+                <IconCheck size={12} color="#34d399" />
+                <span>Última execução do piloto noturno: {new Date(settings.lastNightlyRunAt).toLocaleString("pt-BR")}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* ABA 4: MODELOS DE IA & MOTOR                             */}
+      {/* ======================================================== */}
+      {activeTab === "models" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <h3>Modelos Preset Oficiais do Google DeepMind</h3>
+                <p>Selecione o modelo do Gemini utilizado pelo Redator, Analista RAG e Quality Control.</p>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px", marginBottom: "22px" }}>
+              {PRESET_GEMINI_MODELS.map((m) => {
+                const isSelected = settings.defaultGeminiModel === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setSettings({ ...settings, defaultGeminiModel: m.id })}
+                    style={{
+                      background: isSelected ? "rgba(56, 189, 248, 0.15)" : "var(--bg-surface)",
+                      border: isSelected ? "1px solid #38bdf8" : "1px solid var(--border-card)",
+                      borderRadius: "10px",
+                      padding: "14px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span style={{ color: isSelected ? "#38bdf8" : "var(--text-primary)", fontWeight: "700", fontSize: "14px" }}>
+                      {m.name}
+                    </span>
+                    <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{m.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* MODELOS CUSTOMIZADOS ADICIONADOS */}
             {customModels.length > 0 && (
-              <div style={{ marginBottom: "14px" }}>
-                <span style={{ fontSize: "11px", color: "#a1a1aa", fontWeight: "700", display: "block", marginBottom: "6px" }}>
-                  Modelos Salvos por Você (Clique para Selecionar):
-                </span>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "8px" }}>
-                  {customModels.map((customId) => {
-                    const isSelected = settings.defaultGeminiModel === customId;
+              <div style={{ marginBottom: "22px", borderTop: "1px solid var(--border-subtle)", paddingTop: "18px" }}>
+                <h4 style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px", fontWeight: "700" }}>
+                  Modelos Customizados Adicionados por Você:
+                </h4>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
+                  {customModels.map((customModel) => {
+                    const isSelected = settings.defaultGeminiModel === customModel;
                     return (
                       <div
-                        key={customId}
-                        onClick={() => setSettings({ ...settings, defaultGeminiModel: customId })}
-                        className={`format-card-btn ${isSelected ? "active" : ""}`}
+                        key={customModel}
+                        onClick={() => setSettings({ ...settings, defaultGeminiModel: customModel })}
                         style={{
-                          padding: "10px",
+                          background: isSelected ? "rgba(56, 189, 248, 0.15)" : "var(--bg-surface)",
+                          border: isSelected ? "1px solid #38bdf8" : "1px solid var(--border-card)",
+                          borderRadius: "8px",
+                          padding: "10px 14px",
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
                           cursor: "pointer",
                         }}
                       >
-                        <div>
-                          <strong style={{ fontSize: "12px", color: isSelected ? "#38bdf8" : "#fafafa", display: "block" }}>
-                            {customId}
-                          </strong>
-                          <span style={{ fontSize: "9px", color: "#a855f7", fontWeight: "700" }}>Customizado</span>
-                        </div>
-
+                        <span style={{ color: isSelected ? "#38bdf8" : "var(--text-primary)", fontWeight: "700", fontSize: "13px" }}>
+                          {customModel}
+                        </span>
                         <button
                           type="button"
-                          onClick={(e) => handleRemoveCustomModel(customId, e)}
+                          onClick={(e) => handleRemoveCustomModel(customModel, e)}
+                          title="Remover este modelo"
                           style={{
                             background: "transparent",
                             border: "none",
-                            color: "#71717a",
+                            color: "#ef4444",
                             cursor: "pointer",
-                            padding: "2px 4px",
+                            padding: "4px",
+                            display: "flex",
+                            alignItems: "center",
                           }}
-                          title="Remover este modelo salvo"
                         >
-                          <IconX size={12} />
+                          <IconTrash size={13} />
                         </button>
                       </div>
                     );
@@ -939,172 +2502,148 @@ export function SettingsPage() {
             )}
 
             {/* ADICIONAR NOVO MODELO CUSTOMIZADO */}
-            <div style={{ background: "#09090b", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <label style={{ fontSize: "11px", color: "#a1a1aa", margin: 0, fontWeight: "600" }}>
-                  Adicionar Novo Modelo Gemini (Cria um card salvo):
-                </label>
-                <span style={{ fontSize: "11px", color: "#38bdf8" }}>
-                  Modelo Ativo: <strong>{settings.defaultGeminiModel}</strong>
-                </span>
-              </div>
-              <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+            <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "18px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "8px", fontWeight: "600" }}>
+                Adicionar Novo Modelo Customizado (ex: gemini-3.6-flash, gemini-3.1-pro-preview):
+              </label>
+              <div style={{ display: "flex", gap: "10px", maxWidth: "480px" }}>
                 <input
                   type="text"
-                  className="form-input"
+                  className="settings-input"
                   value={newModelInput}
                   onChange={(e) => setNewModelInput(e.target.value)}
-                  placeholder="Ex: gemini-3.5-flash, gemini-exp-1206, etc."
-                  style={{ flex: 1 }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddCustomModel(newModelInput);
+                    }
+                  }}
+                  placeholder="Nome do modelo (ex: gemini-3.6-flash)"
                 />
                 <button
                   type="button"
                   onClick={() => handleAddCustomModel(newModelInput)}
-                  disabled={!newModelInput.trim()}
-                  className="primary-button"
-                  style={{ padding: "8px 14px", fontSize: "11px", whiteSpace: "nowrap" }}
+                  className="btn-primary"
+                  style={{ whiteSpace: "nowrap", padding: "8px 16px" }}
                 >
-                  <IconPlus size={12} />
-                  <span>Criar Card do Modelo</span>
+                  <IconPlus size={14} />
+                  <span>Adicionar</span>
                 </button>
               </div>
             </div>
           </div>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "16px",
-              background: "#09090b",
-              border: "1px solid rgba(255, 255, 255, 0.06)",
-              borderRadius: "10px",
-            }}
-          >
-            <div>
-              <strong style={{ fontSize: "13px", color: "#fafafa", display: "block", marginBottom: "2px" }}>
-                Publicação Automática Imediata
-              </strong>
-              <span style={{ fontSize: "11px", color: "#71717a" }}>
-                Se ativado, o pipeline publica direto na Meta API após aprovação da IA. Se desativado (recomendado), o post aguarda revisão no painel.
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setSettings({ ...settings, autoPublish: !settings.autoPublish })}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "8px",
-                border: "1px solid",
-                borderColor: settings.autoPublish ? "#10b981" : "rgba(255, 255, 255, 0.15)",
-                background: settings.autoPublish ? "rgba(16, 185, 129, 0.15)" : "transparent",
-                color: settings.autoPublish ? "#34d399" : "#a1a1aa",
-                fontWeight: "700",
-                fontSize: "12px",
-                cursor: "pointer",
-              }}
-            >
-              {settings.autoPublish ? "ATIVADO" : "DESATIVADO"}
-            </button>
-          </div>
         </div>
+      )}
 
-        {/* SEÇÃO 5: NOTIFICAÇÕES & BRIEFING EXECUTIVO POR E-MAIL */}
-        <div
-          style={{
-            background: "#111114",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "14px",
-            padding: "24px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "18px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
-            <div>
-              <div className="section-tag" style={{ color: "#38bdf8", display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                <IconMail size={13} />
-                <span>RELATÓRIOS EXECUTIVOS AUTOMÁTICOS</span>
+      {/* ======================================================== */}
+      {/* ABA 5: NOTIFICAÇÕES & SMTP                               */}
+      {/* ======================================================== */}
+      {activeTab === "email" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div className="settings-card">
+            <div className="settings-card-header">
+              <div>
+                <h3>Alertas por E-mail & Configuração SMTP</h3>
+                <p>Receba avisos instantâneos quando um post agendado estiver pronto para publicação.</p>
               </div>
-              <h3 style={{ fontSize: "16px", color: "#fafafa", margin: "4px 0" }}>
-                Notificações & Briefing Executivo por E-mail
-              </h3>
-              <p style={{ fontSize: "12px", color: "#71717a", margin: 0 }}>
-                Receba o resumo de performance da sua conta, a análise individual post a post e os próximos passos estratégicos diretamente na sua caixa de entrada.
-              </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSettings({ ...settings, emailNotificationsEnabled: !settings.emailNotificationsEnabled })}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "8px",
-                border: "1px solid",
-                borderColor: settings.emailNotificationsEnabled ? "#38bdf8" : "rgba(255, 255, 255, 0.15)",
-                background: settings.emailNotificationsEnabled ? "rgba(56, 189, 248, 0.15)" : "transparent",
-                color: settings.emailNotificationsEnabled ? "#38bdf8" : "#a1a1aa",
-                fontWeight: "700",
-                fontSize: "12px",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <IconMail size={13} />
-              <span>{settings.emailNotificationsEnabled ? "ENVIO DE E-MAIL ATIVADO" : "ENVIO DE E-MAIL DESATIVADO"}</span>
-            </button>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#fafafa", marginBottom: "6px" }}>
-                Seu E-mail de Destino:
+            <div className="settings-form-group">
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "var(--text-primary)" }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.emailNotificationsEnabled)}
+                  onChange={(e) => setSettings({ ...settings, emailNotificationsEnabled: e.target.checked })}
+                />
+                <span>Habilitar alertas por e-mail quando posts atingirem o horário agendado</span>
               </label>
+            </div>
+
+            <div className="settings-form-group">
+              <label>E-mail de Notificação (Destinatário)</label>
               <input
                 type="email"
-                className="form-input"
-                placeholder="ex: yago.commercial@gmail.com"
+                className="settings-input"
                 value={settings.notificationEmail || ""}
                 onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
-                style={{ width: "100%" }}
+                placeholder="seu.email@dominio.com"
+                style={{ maxWidth: "420px" }}
               />
-              <span style={{ fontSize: "11px", color: "#71717a", marginTop: "4px", display: "block" }}>
-                Onde você quer receber os relatórios periódicos de crescimento e métricas.
-              </span>
             </div>
 
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#fafafa", marginBottom: "6px" }}>
-                Testar Entrega de E-mail:
-              </label>
-              <div style={{ display: "flex", gap: "8px" }}>
+            <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "18px", marginTop: "18px" }}>
+              <h4 style={{ fontSize: "14px", color: "var(--text-primary)", marginBottom: "14px", fontWeight: "700" }}>
+                Credenciais do Servidor SMTP (Opcional)
+              </h4>
+
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                <div className="settings-form-group">
+                  <label>Host SMTP</label>
+                  <input
+                    type="text"
+                    className="settings-input"
+                    value={settings.smtpConfig?.host || ""}
+                    onChange={(e) => setSettings({ ...settings, smtpConfig: { ...settings.smtpConfig!, host: e.target.value } })}
+                    placeholder="smtp.gmail.com"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label>Porta</label>
+                  <input
+                    type="number"
+                    className="settings-input"
+                    value={settings.smtpConfig?.port || 587}
+                    onChange={(e) => setSettings({ ...settings, smtpConfig: { ...settings.smtpConfig!, port: Number(e.target.value) } })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                <div className="settings-form-group">
+                  <label>Usuário SMTP</label>
+                  <input
+                    type="text"
+                    className="settings-input"
+                    value={settings.smtpConfig?.user || ""}
+                    onChange={(e) => setSettings({ ...settings, smtpConfig: { ...settings.smtpConfig!, user: e.target.value } })}
+                    placeholder="usuario@dominio.com"
+                  />
+                </div>
+                <div className="settings-form-group">
+                  <label>Senha de Aplicativo</label>
+                  <input
+                    type="password"
+                    className="settings-input"
+                    value={settings.smtpConfig?.pass || ""}
+                    onChange={(e) => setSettings({ ...settings, smtpConfig: { ...settings.smtpConfig!, pass: e.target.value } })}
+                    placeholder="••••••••••••"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                 <button
                   type="button"
+                  className="btn-secondary"
                   onClick={handleSendTestEmail}
-                  disabled={sendingTestEmail || !settings.notificationEmail}
-                  className="secondary-button"
-                  style={{ padding: "8px 16px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  disabled={sendingTestEmail}
+                  style={{ fontSize: "12px", padding: "8px 16px" }}
                 >
-                  {sendingTestEmail ? <IconLoader size={13} /> : <IconSend size={13} />}
-                  <span>{sendingTestEmail ? "Enviando Teste..." : "Enviar E-mail de Teste Agora"}</span>
+                  {sendingTestEmail ? <IconLoader className="spin" size={13} /> : <IconSend size={13} />}
+                  <span>Enviar E-mail de Teste</span>
                 </button>
               </div>
 
               {testEmailFeedback && (
                 <div
                   style={{
-                    marginTop: "8px",
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    fontSize: "11px",
-                    background: testEmailFeedback.success ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
-                    border: `1px solid ${testEmailFeedback.success ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                    marginTop: "14px",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    background: testEmailFeedback.success ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
                     color: testEmailFeedback.success ? "#34d399" : "#f87171",
+                    border: `1px solid ${testEmailFeedback.success ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
                   }}
                 >
                   {testEmailFeedback.message}
@@ -1112,105 +2651,8 @@ export function SettingsPage() {
               )}
             </div>
           </div>
-
-          {/* CREDENCIAIS SMTP CONFIGURÁVEIS */}
-          <div style={{ background: "#09090b", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "16px" }}>
-            <strong style={{ fontSize: "13px", color: "#fafafa", display: "block", marginBottom: "4px" }}>
-              Configuração do Servidor SMTP (Opcional se usar .env)
-            </strong>
-            <p style={{ fontSize: "11px", color: "#71717a", margin: "0 0 12px" }}>
-              Configure seu provedor SMTP (ex: Gmail App Password, Resend, Amazon SES, SendGrid). Para Gmail, use <em>smtp.gmail.com</em>, porta <em>587</em> e uma <em>Senha de Aplicativo (16 dígitos)</em> gerada no Google Security.
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "11px", color: "#a1a1aa", marginBottom: "4px" }}>SMTP Host</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="smtp.gmail.com"
-                  value={settings.smtpConfig?.host || ""}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      smtpConfig: { ...(settings.smtpConfig || { port: 587, user: "", pass: "" }), host: e.target.value },
-                    })
-                  }
-                  style={{ width: "100%", fontSize: "12px", padding: "6px 10px" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "11px", color: "#a1a1aa", marginBottom: "4px" }}>Porta</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  placeholder="587"
-                  value={settings.smtpConfig?.port || 587}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      smtpConfig: { ...(settings.smtpConfig || { host: "", user: "", pass: "" }), port: parseInt(e.target.value) || 587 },
-                    })
-                  }
-                  style={{ width: "100%", fontSize: "12px", padding: "6px 10px" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "11px", color: "#a1a1aa", marginBottom: "4px" }}>Usuário / E-mail SMTP</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="seu-email@gmail.com"
-                  value={settings.smtpConfig?.user || ""}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      smtpConfig: { ...(settings.smtpConfig || { host: "", port: 587, pass: "" }), user: e.target.value },
-                    })
-                  }
-                  style={{ width: "100%", fontSize: "12px", padding: "6px 10px" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "11px", color: "#a1a1aa", marginBottom: "4px" }}>Senha de App / API Key</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder="••••••••••••••••"
-                  value={settings.smtpConfig?.pass || ""}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      smtpConfig: { ...(settings.smtpConfig || { host: "", port: 587, user: "" }), pass: e.target.value },
-                    })
-                  }
-                  style={{ width: "100%", fontSize: "12px", padding: "6px 10px" }}
-                />
-              </div>
-            </div>
-          </div>
         </div>
-
-        {/* BOTÃO SALVAR */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px" }}>
-          <button type="submit" className="btn-modal-save" disabled={saving}>
-            {saving ? (
-              <>
-                <IconLoader size={13} />
-                <span>Salvando...</span>
-              </>
-            ) : (
-              <>
-                <IconCheck size={14} />
-                <span>Salvar Todas as Configurações</span>
-              </>
-            )}
-          </button>
-        </div>
-      </form>
+      )}
     </div>
   );
 }

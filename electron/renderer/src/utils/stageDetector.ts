@@ -35,6 +35,18 @@ export function detectStage(message: string): string | null {
   }
 
   if (
+    lower.includes("sintetizando voz") ||
+    lower.includes("edge tts") ||
+    lower.includes("elevenlabs") ||
+    lower.includes("renderizando vídeo reels") ||
+    lower.includes("transcrevendo palavras para sincronização") ||
+    lower.includes("produção de áudio e vídeo reels") ||
+    lower.includes("reels renderizado")
+  ) {
+    return "video";
+  }
+
+  if (
     lower.includes("gerando imagens") ||
     lower.includes("gerando slide") ||
     lower.includes("cloudflare") ||

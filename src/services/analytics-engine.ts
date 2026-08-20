@@ -4,6 +4,7 @@ import { getBrandInfo } from "../config/brand.js";
 import { getInstagramProfile, getInstagramMedia, getInstagramAudience } from "../integrations/instagram/client.js";
 import { getAllInsights, recordInsight } from "./embedding-service.js";
 import { sendExecutiveBriefingEmail } from "./email-service.js";
+import { mineAndStoreWinningHookPatterns } from "./hook-mining.js";
 
 export interface IndividualPostAudit {
   postTopic: string;
@@ -12,6 +13,20 @@ export interface IndividualPostAudit {
   whatHurtIt: string;
   hookAnalysis: string;
   retentionEstimate?: string;
+  watchTimeAnalysis?: string;
+  playsCount?: number;
+  reachTotal?: number;
+  sharesCount?: number;
+  repostsCount?: number;
+  avgWatchTime?: number;
+  totalWatchTime?: number;
+  trafficSources?: {
+    reelsTab?: number;
+    explore?: number;
+    feed?: number;
+    profile?: number;
+    other?: number;
+  } | null;
   individualScore: number;
 }
 
@@ -101,6 +116,14 @@ export async function getAnalyticsHistory(): Promise<AnalyticsReport[]> {
             whatHurtIt: a.whatHurtIt,
             hookAnalysis: a.hookAnalysis,
             retentionEstimate: a.retentionEstimate || undefined,
+            watchTimeAnalysis: a.watchTimeAnalysis || undefined,
+            playsCount: a.playsCount || undefined,
+            reachTotal: a.reachTotal || undefined,
+            sharesCount: a.sharesCount || undefined,
+            repostsCount: a.repostsCount || undefined,
+            avgWatchTime: a.avgWatchTime ?? undefined,
+            totalWatchTime: a.totalWatchTime ?? undefined,
+            trafficSources: (a.trafficSources as any) || undefined,
             individualScore: a.individualScore,
           })),
         };
@@ -160,8 +183,17 @@ export async function runAnalyticsAudit(params?: { days?: number }): Promise<{
     dbPosts = [];
   }
 
-  // 3. Recupera a Memória RAG existente
+  // 3. Recupera a Memória RAG existente e Experimentos A/B pendentes
   const existingInsights = await getAllInsights();
+
+  let activeExperiments: any[] = [];
+  try {
+    activeExperiments = await prisma.contentExperiment.findMany({
+      where: { status: { in: ["PLANNED", "HYPOTHESIS", "ACTIVE"] } },
+    });
+  } catch {
+    activeExperiments = [];
+  }
 
   // 4. Compilação de Métricas Quantitativas 100% REAIS (SEM ESTIMATIVAS OU MOCKS)
   const totalPosts = mediaList.length || dbPosts.length || 0;
@@ -205,21 +237,41 @@ DADOS REAIS COLETADOS DA META GRAPH API (NÃO INVENTE MÉTRICAS):
 - Interações Totais Reais: ${realInteractions}
 - Taxa de Engajamento Real: ${engagementRate}%
 
+DIRETRIZES DE RIGOR ESTATÍSTICO (IMPORTANTE):
+1. Se a conta for pequena ou inicial (< 100 seguidores ou < 10 posts no histórico):
+   - PROIBIDO afirmar que 'alcançou 100% dos seguidores' ou validar teses definitivas (90%+ de confiança).
+   - Reconheça explicitamente a amostragem inicial reduzida. Trate observações como tendências ou hipóteses iniciais a serem testadas.
+   - Seja realista sobre o desafio de engajamento orgânico frio.
+
 MÍDIAS REAIS NO INSTAGRAM:
 ${JSON.stringify(
   mediaList.map((m) => ({
     id: m.id,
     caption: m.caption?.slice(0, 160),
     type: m.media_type,
-    reach: m.reach || 0,
+    reachViewers: m.reach || 0,
     likes: m.like_count || 0,
     comments: m.comments_count || 0,
     saved: m.saved || 0,
+    shares: m.shares || 0,
+    reposts: m.reposts || 0,
+    playsViews: m.plays || 0,
+    avgWatchTimeSeconds: m.avg_watch_time || 0,
+    totalWatchTimeSeconds: m.total_watch_time || 0,
+    trafficSources: m.traffic_sources || null,
     timestamp: m.timestamp,
   })),
   null,
   2
 )}
+
+DIRETRIZES ESPECÍFICAS DE REELS E TEMPO DE RETENÇÃO (WATCH TIME & TRAFEGO):
+- Para mídias do tipo VIDEO ou REELS:
+  * Analise a relação entre Visualizações (playsViews) e Visualizadores Únicos (reachViewers) para identificar a taxa de repetição/replays.
+  * Avalie o tempo médio assistido (avgWatchTimeSeconds) em relação à duração do vídeo.
+  * Analise a taxa de compartilhamentos (shares) e reposts/replays nos stories/feed.
+  * Avalie a origem do tráfego (Aba Reels vs Explorar vs Feed vs Perfil) para entender se o post atraiu público novo (topo de funil) ou engajou seguidores atuais.
+  * Em 'watchTimeAnalysis', forneça um diagnóstico minucioso com esses indicadores.
 
 APRENDIZADOS ANTERIORES NO RAG:
 ${JSON.stringify(
@@ -234,6 +286,24 @@ ${JSON.stringify(
   2
 )}
 
+${activeExperiments.length > 0 ? `
+EXPERIMENTOS E HIPÓTESES A/B ATIVOS NO BANCO DE DADOS:
+${JSON.stringify(
+  activeExperiments.map((e) => ({
+    id: e.id,
+    topic: e.topic,
+    format: e.format,
+    targetVariable: e.targetVariable,
+    hypothesis: e.hypothesis,
+    plannedPromptDiff: e.plannedPromptDiff,
+  })),
+  null,
+  2
+)}
+DIRETRIZ DE AVALIAÇÃO DE EXPERIMENTOS:
+- Se qualquer post analisado corresponder a um dos experimentos A/B ativos, avalie se os dados reais confirmam a hipótese ('VALIDATED'), a refutam ('REFUTED') ou se os dados ainda são insuficientes ('INCONCLUSIVE').
+` : ""}
+
 RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
 {
   "score": 7.5,
@@ -246,15 +316,15 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "efficiencyNote": "Maior profundidade técnica, gerou compartilhamentos"
     },
     {
-      "format": "SINGLE_IMAGE",
-      "avgInteractions": 2,
-      "efficiencyNote": "Gancho rápido e direto sobre SQL"
+      "format": "REEL_SCRIPT",
+      "avgInteractions": 8,
+      "efficiencyNote": "Retenção média de 6.0s, taxa de compartilhamento ativa e alcance via Aba Reels"
     }
   ],
   "quantitativeSummary": "Conta em fase inicial com 2 publicações. Obteve 6 interações e 7 contas alcançadas, mas ainda com 0 salvamentos.",
   "qualitativeStrengths": [
     "Temas técnicos de alto valor para programadores (Docker e SQL).",
-    "Ganchos imperativos ('Pare de usar') capturam atenção no feed."
+    "Ganchos imperativos ('Pare de usar') capturam atenção no feed e geram repetições."
   ],
   "qualitativeWeaknesses": [
     "Zero salvamentos: falta de CTA explícito orientando a salvar para consulta posterior.",
@@ -269,13 +339,21 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "topic": "Monólito Modular: A arquitetura inteligente antes dos Microserviços",
       "suggestedFormat": "CAROUSEL",
       "suggestedDay": "Terça-feira",
-      "reason": "Tema com potencial de alto salvamento se estruturado com diagramas."
+      "suggestedTime": "18:30",
+      "objective": "AUTHORITY",
+      "reason": "Tema com potencial de alto salvamento se estruturado com diagramas e boas práticas.",
+      "baseCopyPrompt": "Carrossel de 5 slides: 1. O erro de adotar microserviços cedo demais; 2. O que é Monólito Modular (pastas e boundaries isolados no mesmo repo); 3. Exemplo em NestJS/Fastify com DDD; 4. Vantagens de performance e deploy simplificado; 5. Conclusão e CTA de salvamento.",
+      "baseVisualPrompt": "Dark tech architecture diagram showing modular boundary boxes, clean isometric arrows, cyan (#38bdf8) accents and minimalist dev aesthetics"
     },
     {
-      "topic": "3 Comandos Git que salvam seu código em emergências",
+      "topic": "3 comandos Docker essenciais para limpar espaço em disco no ambiente dev",
       "suggestedFormat": "CAROUSEL",
       "suggestedDay": "Quinta-feira",
-      "reason": "Checklist prático perfeito para estimular o primeiro salvamento."
+      "suggestedTime": "12:00",
+      "objective": "EDUCATION",
+      "reason": "Checklist prático perfeito para estimular o primeiro salvamento orgânico.",
+      "baseCopyPrompt": "Carrossel prático de 4 slides: 1. Alerta de 'no space left on device'; 2. docker system df para ver onde está o lixo; 3. docker builder prune -a e docker system prune; 4. CTA para salvar antes da próxima build travar.",
+      "baseVisualPrompt": "Dark terminal VS Code mockup with red disk full warning transforming to glowing cyan cleaned storage metrics"
     }
   ],
   "individualPostsBreakdown": [
@@ -286,16 +364,18 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "whatHurtIt": "Imagem estática única limitou a demonstração da alternativa ideal de código e teve 0 salvamentos.",
       "hookAnalysis": "Gancho de alta qualidade, direto ao ponto.",
       "retentionEstimate": "Média retenção",
+      "watchTimeAnalysis": null,
       "individualScore": 7.5
     },
     {
-      "postTopic": "Docker: Como reduzir o tamanho das suas imagens em até 80%",
-      "postFormat": "CAROUSEL",
-      "whyItWorked": "Promessa mensurável (80%) que resolve uma dor real de custo e CI/CD.",
-      "whatHurtIt": "Falta de chamada final forte para salvar o post.",
-      "hookAnalysis": "Excelente gancho quantitativo.",
-      "retentionEstimate": "Boa retenção",
-      "individualScore": 8.0
+      "postTopic": "Pare de usar try/catch em todo lugar",
+      "postFormat": "REEL_SCRIPT",
+      "whyItWorked": "117 visualizações em 105 espectadores com reposts em stories e distribuição via Aba Reels.",
+      "whatHurtIt": "Queda após os 6 segundos médios de retenção por falta de quebra de padrão visual no código.",
+      "hookAnalysis": "Gancho forte reteve 90% dos espectadores nos primeiros 3 segundos.",
+      "retentionEstimate": "Boa retenção (6.0s de média em 117 views)",
+      "watchTimeAnalysis": "117 reproduções em 105 visualizadores únicos (1.11 views/pessoa). Tempo médio assistido de 6.0 segundos com forte tráfego vindo da Aba Reels e reposts nos stories.",
+      "individualScore": 8.5
     }
   ],
   "selfCorrectionsApplied": [
@@ -304,6 +384,32 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "newValidatedFinding": "Mesmo posts técnicos de alto valor precisam de comando explícito de salvamento no último slide.",
       "reasoning": "Os 2 posts técnicos da conta tiveram 0 salvamentos pela ausência de CTA direcionado.",
       "supersededInsightId": null
+    }
+  ],
+  "evaluatedExperiments": [
+    {
+      "experimentId": "id-do-experimento",
+      "outcome": "VALIDATED",
+      "finding": "Ganchos provocativos com quebra de paradigma geraram 3x mais compartilhamentos",
+      "evidence": "6 compartilhamentos no post sobre try/catch versus 1 da média anterior"
+    }
+  ],
+  "pillarTimingOptimizations": [
+    {
+      "pillar": "Notícias & Lançamentos Tech",
+      "bestDay": "Quinta-feira",
+      "bestTime": "18:00",
+      "confidence": 0.85,
+      "hypothesisState": "VALIDATED",
+      "reasoning": "Quinta-feira no final da tarde concentra o maior pico de visualizações para novidades e lançamentos semanais."
+    },
+    {
+      "pillar": "Segunda da Arquitetura",
+      "bestDay": "Segunda-feira",
+      "bestTime": "18:30",
+      "confidence": 0.80,
+      "hypothesisState": "VALIDATED",
+      "reasoning": "Segunda-feira no início da noite entrega a maior taxa de salvamentos para carrosséis profundos de engenharia."
     }
   ]
 }
@@ -363,19 +469,31 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       // Grava diagnósticos individuais post a post no PostgreSQL vinculados a este relatório
       if (report.individualPostsBreakdown && report.individualPostsBreakdown.length > 0) {
         for (const postAudit of report.individualPostsBreakdown) {
+          const matchingMedia = mediaList.find((m) =>
+            (postAudit.postTopic && m.caption && m.caption.toLowerCase().includes(postAudit.postTopic.toLowerCase().slice(0, 20))) ||
+            (postAudit.postFormat === "REEL_SCRIPT" && (m.media_type === "VIDEO" || m.media_type === "REELS"))
+          );
+
           await prisma.postAnalyticsAudit.create({
             data: {
               reportId: report.id,
               postTopic: postAudit.postTopic,
               postFormat: postAudit.postFormat,
-              likesCount: realLikes,
-              commentsCount: realComments,
-              savesCount: realSaves,
-              reachTotal: realReach,
+              likesCount: matchingMedia?.like_count || realLikes,
+              commentsCount: matchingMedia?.comments_count || realComments,
+              savesCount: matchingMedia?.saved || realSaves,
+              sharesCount: matchingMedia?.shares || postAudit.sharesCount || 0,
+              repostsCount: matchingMedia?.reposts || postAudit.repostsCount || 0,
+              reachTotal: matchingMedia?.reach || postAudit.reachTotal || realReach,
+              playsCount: matchingMedia?.plays || postAudit.playsCount || 0,
+              avgWatchTime: matchingMedia?.avg_watch_time || postAudit.avgWatchTime || null,
+              totalWatchTime: matchingMedia?.total_watch_time || postAudit.totalWatchTime || null,
+              trafficSources: matchingMedia?.traffic_sources || postAudit.trafficSources || null,
               whyItWorked: postAudit.whyItWorked,
               whatHurtIt: postAudit.whatHurtIt,
               hookAnalysis: postAudit.hookAnalysis,
               retentionEstimate: postAudit.retentionEstimate,
+              watchTimeAnalysis: postAudit.watchTimeAnalysis,
               individualScore: postAudit.individualScore,
             },
           });
@@ -415,7 +533,62 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       }
     }
 
-    // 9. Envio do Briefing Executivo por E-mail
+    // 9. Processamento e Validação Científica dos Experimentos A/B com RAG
+    if (aiAudit.evaluatedExperiments && Array.isArray(aiAudit.evaluatedExperiments)) {
+      for (const exp of aiAudit.evaluatedExperiments) {
+        if (exp.experimentId && (exp.outcome === "VALIDATED" || exp.outcome === "REFUTED")) {
+          try {
+            await prisma.contentExperiment.update({
+              where: { id: exp.experimentId },
+              data: {
+                status: exp.outcome,
+                previousResult: `${exp.finding} (Evidência: ${exp.evidence})`,
+              },
+            });
+
+            await recordInsight({
+              type: "HOOK_PERFORMANCE",
+              title: `Experimento ${exp.outcome === "VALIDATED" ? "Confirmado" : "Refutado"}: ${exp.finding.slice(0, 50)}`,
+              content: `${exp.finding}. Evidência empírica: ${exp.evidence}`,
+              status: exp.outcome === "VALIDATED" ? "VALIDATED" : "REFUTED",
+              confidenceScore: exp.outcome === "VALIDATED" ? 0.85 : 0.70,
+              evidencePostsCount: totalPosts,
+            });
+            console.log(`[Analytics] Experimento A/B ${exp.experimentId} avaliado como ${exp.outcome}: ${exp.finding}`);
+          } catch (e) {
+            console.warn("[Analytics] Aviso ao atualizar experimento A/B:", e);
+          }
+        }
+      }
+    }
+
+    // 10. Processamento e Registro Científico de Otimização de Pilares & Dias (Timing)
+    if (aiAudit.pillarTimingOptimizations && Array.isArray(aiAudit.pillarTimingOptimizations)) {
+      for (const opt of aiAudit.pillarTimingOptimizations) {
+        if (opt.pillar && opt.bestDay) {
+          try {
+            await recordInsight({
+              type: "TIMING_OPTIMIZATION",
+              title: `Otimização Científica: ${opt.pillar} -> ${opt.bestDay}`,
+              content: `O pilar '${opt.pillar}' atinge seu melhor desempenho em '${opt.bestDay}' às '${opt.bestTime || "18:00"}'. ${opt.reasoning}`,
+              status: opt.hypothesisState === "VALIDATED" ? "VALIDATED" : "HYPOTHESIS",
+              confidenceScore: typeof opt.confidence === "number" ? opt.confidence : 0.80,
+              evidencePostsCount: totalPosts,
+            });
+            console.log(`[Analytics] RAG Atualizado: Otimização de Dia para '${opt.pillar}' -> ${opt.bestDay}`);
+          } catch (e) {
+            console.warn("[Analytics] Aviso ao gravar otimização de pilar/dia:", e);
+          }
+        }
+      }
+    }
+
+    // 11. Mineração Assíncrona de Padrões de Ganchos em Background (Sem bloquear)
+    mineAndStoreWinningHookPatterns().catch((err) => {
+      console.warn("[Analytics] Aviso na mineração assíncrona de ganchos:", err);
+    });
+
+    // 12. Envio do Briefing Executivo por E-mail
     try {
       await sendExecutiveBriefingEmail(report);
     } catch (emailErr) {

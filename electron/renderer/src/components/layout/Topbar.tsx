@@ -1,7 +1,8 @@
 import React from "react";
 import { Page } from "../../types";
 import { formatSeconds } from "../../utils/formatters";
-import { IconPlay, IconLoader } from "../common/Icons";
+import { IconPlay } from "../common/Icons";
+import { WindowControls } from "./WindowControls";
 
 interface TopbarProps {
   currentPage: Page;
@@ -11,7 +12,13 @@ interface TopbarProps {
   onStopAgent?: () => void;
 }
 
-export function Topbar({ currentPage, running, elapsedTime, onRunAgent, onStopAgent }: TopbarProps) {
+export function Topbar({
+  currentPage,
+  running,
+  elapsedTime,
+  onRunAgent,
+  onStopAgent,
+}: TopbarProps) {
   function getPageTitle(page: Page): string {
     switch (page) {
       case "schedule":
@@ -31,7 +38,7 @@ export function Topbar({ currentPage, running, elapsedTime, onRunAgent, onStopAg
 
   return (
     <header className="topbar">
-      <div>
+      <div className="topbar-left" style={{ WebkitAppRegion: "no-drag" as any }}>
         <div className="topbar-title-row">
           <h1>{getPageTitle(currentPage)}</h1>
           {currentPage === "home" && running && (
@@ -44,7 +51,7 @@ export function Topbar({ currentPage, running, elapsedTime, onRunAgent, onStopAg
         <p>Gerenciamento autônomo de conteúdo técnico para o Instagram.</p>
       </div>
 
-      <div className="topbar-actions">
+      <div className="topbar-actions" style={{ WebkitAppRegion: "no-drag" as any }}>
         {currentPage === "home" && (
           <>
             {running ? (
@@ -80,6 +87,9 @@ export function Topbar({ currentPage, running, elapsedTime, onRunAgent, onStopAg
             )}
           </>
         )}
+
+        {/* Botões customizados de Minimizar, Maximizar e Fechar (Frameless) */}
+        <WindowControls />
       </div>
     </header>
   );

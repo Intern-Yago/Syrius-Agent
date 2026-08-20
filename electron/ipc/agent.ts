@@ -10,6 +10,7 @@ import {
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getSettings } from "../../src/config/settings.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -104,8 +105,15 @@ export function registerAgentIPC(
        * através de variáveis de ambiente.
        */
 
+      const settings = await getSettings().catch(() => null);
+      const configuredModel = settings?.defaultGeminiModel || process.env.GEMINI_TEXT_MODEL || "gemini-3.6-flash";
+      process.env.GEMINI_TEXT_MODEL = configuredModel;
+
+      console.log(`🤖 Modelo Gemini ativo para o agente: ${configuredModel}`);
+
       const env = {
         ...process.env,
+        GEMINI_TEXT_MODEL: configuredModel,
 
         ...(fromStage
           ? {

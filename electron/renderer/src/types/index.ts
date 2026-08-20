@@ -1,6 +1,53 @@
-export type Page = "home" | "schedule" | "posts" | "interactions" | "analytics" | "tests" | "settings";
+export type Page =
+  | "home"
+  | "activities"
+  | "schedule"
+  | "trending"
+  | "posts"
+  | "interactions"
+  | "analytics"
+  | "tests"
+  | "settings";
 
-export type LogType = "info" | "success" | "warning" | "error";
+export type ActivityType =
+  | "agent"
+  | "publishing"
+  | "image_regeneration"
+  | "video_regeneration"
+  | "analytics"
+  | "tests"
+  | "schedule_ai"
+  | "trending_scan"
+  | "repo_to_post"
+  | "voice_synthesis"
+  | "voice_training"
+  | "generic";
+
+export type ActivityStatus =
+  | "running"
+  | "paused"
+  | "completed"
+  | "error"
+  | "cancelled";
+
+export interface Activity {
+  id: string;
+  type: ActivityType;
+  title: string;
+  subtitle?: string;
+  targetPage: Page;
+  targetId?: string;
+  status: ActivityStatus;
+  statusMessage: string;
+  progress: number; // 0 to 100
+  startedAt: number;
+  elapsedSeconds?: number;
+  errorLog?: string;
+  canPause?: boolean;
+  canStop?: boolean;
+  canRetry?: boolean;
+  meta?: Record<string, any>;
+}
 
 export interface CommunityInteraction {
   id: string;
@@ -23,7 +70,11 @@ export interface RecommendedTopicItem {
   topic: string;
   suggestedFormat: "CAROUSEL" | "SINGLE_IMAGE" | "REEL_SCRIPT" | "STORY_PHOTO" | string;
   suggestedDay: string;
+  suggestedTime?: string;
   reason: string;
+  baseCopyPrompt?: string;
+  baseVisualPrompt?: string;
+  objective?: "AUTHORITY" | "VIRALITY" | "EDUCATION" | "ENGAGEMENT" | string;
 }
 
 export interface IndividualPostAudit {
@@ -35,6 +86,20 @@ export interface IndividualPostAudit {
   whatHurtIt: string;
   hookAnalysis: string;
   retentionEstimate?: string;
+  watchTimeAnalysis?: string;
+  playsCount?: number;
+  reachTotal?: number;
+  sharesCount?: number;
+  repostsCount?: number;
+  avgWatchTime?: number;
+  totalWatchTime?: number;
+  trafficSources?: {
+    reelsTab?: number;
+    explore?: number;
+    feed?: number;
+    profile?: number;
+    other?: number;
+  } | null;
   individualScore: number;
 }
 
@@ -99,6 +164,17 @@ export interface SmtpConfig {
   from?: string;
 }
 
+export interface VoiceCloningConfig {
+  provider: "elevenlabs" | "local" | "edge_tts" | "disabled";
+  elevenLabsApiKey?: string;
+  elevenLabsVoiceId?: string;
+  voiceName?: string;
+  stability?: number;
+  similarityBoost?: number;
+  localSampleAudioPath?: string;
+  lastCalibratedAt?: string;
+}
+
 export interface AppSettings {
   instagramHandle: string;
   accountName: string;
@@ -111,6 +187,7 @@ export interface AppSettings {
   notificationEmail?: string;
   emailNotificationsEnabled?: boolean;
   smtpConfig?: SmtpConfig;
+  voiceConfig?: VoiceCloningConfig;
 }
 
 export interface ScheduleSlot {
@@ -126,6 +203,11 @@ export interface ScheduleSlot {
   postId?: string;
   isCustom?: boolean;
   pinned?: boolean;
+  baseCopyPrompt?: string;
+  baseVisualPrompt?: string;
+  weekOffset?: number;
+  lastOverdueNotifiedAt?: string;
+  instagramUrl?: string | null;
 }
 
 export interface AgentLog {
@@ -185,6 +267,7 @@ export interface PostSlide {
 
 export interface Post {
   id: string;
+  slotId?: string;
   topic: string;
   format: string;
   caption: string | null;
@@ -192,6 +275,10 @@ export interface Post {
   status: string;
   createdAt: string;
   slides: PostSlide[];
+  instagramUrl?: string | null;
+  instagramMediaId?: string | null;
+  videoUrl?: string | null;
+  audioUrl?: string | null;
 }
 
 export interface UpdatePostData {
@@ -226,12 +313,134 @@ export type AnalyticsScheduleMode =
   | "MONTHLY"
   | "MANUAL";
 
-export interface AnalyticsScheduleConfig {
-  mode: AnalyticsScheduleMode;
-  intervalHours?: number; // 1, 6, 12, 24, 48
-  selectedDays?: string[]; // ["Segunda-feira", "Quarta-feira", "Sexta-feira"]
-  timeSlot?: string; // "20:00"
-  dayOfMonth?: number; // 1 to 31
+export interface VoiceCloningConfig {
+  provider: "elevenlabs" | "local" | "edge_tts" | "disabled";
+  elevenLabsApiKey?: string;
+  elevenLabsVoiceId?: string;
+  voiceName?: string;
+  stability?: number;
+  similarityBoost?: number;
+  localSampleAudioPath?: string;
+  lastCalibratedAt?: string;
+  devicePreference?: "auto" | "cuda" | "cpu";
+  nfeSteps?: number;
+  trainedModelPath?: string;
+  isModelTrained?: boolean;
+}
+
+export interface AppSettings {
+  instagramHandle: string;
+  accountName: string;
+  niche: string;
+  positioning: string;
+  analyticsIntervalHours: number;
+  analyticsSchedule?: AnalyticsScheduleConfig;
+  autoPublish: boolean;
+  defaultGeminiModel: string;
+  notificationEmail?: string;
+  emailNotificationsEnabled?: boolean;
+  smtpConfig?: any;
+  voiceConfig?: VoiceCloningConfig;
+  trendingTopicsCount?: number;
+  trendingRefreshIntervalDays?: number;
+  lastTrendingRefreshedAt?: string;
+  nightlyScheduleEnabled?: boolean;
+  nightlyScheduleDay?: string;
+  nightlyScheduleTime?: string;
+  nightlyAutoProduceQueue?: boolean;
+  lastNightlyRunAt?: string;
+}
+
+export interface TrendingTopicItem {
+  id: string;
+  title: string;
+  category: string;
+  summary: string;
+  whyTrending: string;
+  suggestedAngle: string;
+  suggestedFormat: "CAROUSEL" | "REEL_SCRIPT" | "SINGLE_IMAGE" | "STORY_PHOTO" | string;
+  hookIdea: string;
+  baseCopyPrompt?: string | null;
+  baseVisualPrompt?: string | null;
+  sourceLinks: string[];
+  relevanceScore: number;
+  status: "ACTIVE" | "IGNORED" | "GENERATED";
+  generatedPostId?: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+declare global {
+  interface Window {
+    electronAPI?: {
+      ping?: () => Promise<string>;
+      runAgent?: (fromStage?: string, slot?: any) => Promise<any>;
+      stopAgent?: () => Promise<any>;
+      onAgentLog?: (callback: (log: AgentLog) => void) => () => void;
+      getPosts?: () => Promise<Post[]>;
+      updatePost?: (postId: string, data: UpdatePostData) => Promise<{ success: boolean; post?: Post; error?: string }>;
+      deletePost?: (postId: string) => Promise<{ success: boolean; error?: string }>;
+      openImage?: (imagePath: string) => Promise<OpenImageResult>;
+      downloadImage?: (payload: { imagePath: string; defaultFilename: string }) => Promise<{ success: boolean; error?: string }>;
+      downloadAllPostImages?: (postId: string) => Promise<{ success: boolean; count?: number; error?: string }>;
+      regenerateImage?: (payload: { postId: string; slideId?: string; slideNumber?: number; customPrompt?: string; feedback?: string }) => Promise<{ success: boolean; imagePath?: string; post?: Post; error?: string }>;
+      regenerateVideo?: (payload: { postId: string }) => Promise<{ success: boolean; post?: Post; error?: string }>;
+      setPostStatus?: (postId: string, status: "READY" | "PUBLISHED" | "DRAFT" | "FAILED") => Promise<Post>;
+      publishPost?: (postId: string, options?: { deletePrevious?: boolean }) => Promise<{ success: boolean; publishedMediaId?: string; permalink?: string; error?: string }>;
+      getActivePublishings?: () => Promise<any>;
+      onPublishProgress?: (callback: (data: any) => void) => () => void;
+      getActiveRegenerations?: () => Promise<any>;
+      onRegenerateProgress?: (callback: (data: any) => void) => () => void;
+      getSchedule?: () => Promise<ScheduleSlot[]>;
+      saveScheduleSlot?: (slot: ScheduleSlot) => Promise<ScheduleSlot[]>;
+      saveScheduleAll?: (slots: ScheduleSlot[], weekOffset?: number) => Promise<ScheduleSlot[]>;
+      deleteScheduleSlot?: (slotId: string) => Promise<ScheduleSlot[]>;
+      generateScheduleAI?: (weekOffset?: number) => Promise<any>;
+      advanceWeek?: () => Promise<any>;
+      getAutoplay?: () => Promise<boolean>;
+      setAutoplay?: (active: boolean) => Promise<boolean>;
+      addTopicToSchedule?: (payload: any) => Promise<any>;
+      getPendingRecommendations?: () => Promise<any[]>;
+      clearPendingRecommendations?: () => Promise<any>;
+      getSettings?: () => Promise<AppSettings>;
+      saveSettings?: (settings: AppSettings) => Promise<boolean>;
+      getProfile?: () => Promise<any>;
+      generateBio?: (payload: any) => Promise<any>;
+      generateHighlights?: (payload: any) => Promise<any>;
+      sendTestEmail?: (targetEmail: string) => Promise<any>;
+      getLearningInsights?: () => Promise<LearningInsight[]>;
+      searchLearningInsights?: (query: string, limit?: number) => Promise<LearningInsight[]>;
+      getAnalyticsHistory?: () => Promise<AnalyticsReport[]>;
+      runAnalyticsAudit?: (options: any) => Promise<any>;
+      getAnalyticsRunning?: () => Promise<boolean>;
+      exportAnalyticsReport?: (format: string, report: any) => Promise<any>;
+      onAnalyticsStatusChange?: (callback: (data: any) => void) => () => void;
+      getInteractions?: () => Promise<CommunityInteraction[]>;
+      generateInteractionReply?: (interactionId: string) => Promise<any>;
+      sendInteractionReply?: (payload: any) => Promise<any>;
+      convertInteractionToPost?: (payload: any) => Promise<any>;
+      addManualInteraction?: (payload: any) => Promise<any>;
+      getInteractionsAutoReply?: () => Promise<boolean>;
+      setInteractionsAutoReply?: (active: boolean) => Promise<boolean>;
+      getTests?: () => Promise<TestModuleInfo[]>;
+      runTest?: (filename: string) => Promise<TestRunResult>;
+      cancelTest?: (filename: string) => Promise<any>;
+      getTestLogs?: (filename: string) => Promise<AgentLog[]>;
+      onTestLog?: (callback: (log: AgentLog) => void) => () => void;
+      onTestStatusChange?: (callback: (data: any) => void) => () => void;
+      onSchedulePublishAlert?: (callback: (alert: any) => void) => () => void;
+      openExternal?: (url: string) => Promise<{ success: boolean; error?: string }>;
+      cloneVoiceElevenLabs?: (payload: { apiKey: string; voiceName: string; audioBase64: string; mimeType: string }) => Promise<{ success: boolean; voiceId?: string; error?: string }>;
+      saveLocalVoiceSample?: (payload: { audioBase64: string; mimeType?: string }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
+      testVoiceTTS?: (payload: { apiKey?: string; voiceId?: string; text: string; provider: string }) => Promise<{ success: boolean; audioBase64?: string; error?: string }>;
+      listElevenLabsVoices?: (apiKey: string) => Promise<{ success: boolean; voices?: { voice_id: string; name: string }[]; error?: string }>;
+      getTrendingTopics?: () => Promise<TrendingTopicItem[]>;
+      refreshTrendingTopics?: () => Promise<{ success: boolean; topics?: TrendingTopicItem[]; error?: string }>;
+      ignoreTrendingTopic?: (topicId: string) => Promise<{ success: boolean; error?: string }>;
+      markTrendingAsGenerated?: (topicId: string, postId: string) => Promise<{ success: boolean; error?: string }>;
+    };
+  }
 }
 
 

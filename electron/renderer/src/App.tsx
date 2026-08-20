@@ -8,14 +8,26 @@ import { Topbar } from "./components/layout/Topbar";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SchedulePage } from "./pages/SchedulePage";
 import { PostsPage } from "./pages/PostsPage";
+import { ActivitiesPage } from "./pages/ActivitiesPage";
 import { InteractionsPage } from "./pages/InteractionsPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { TestsPage } from "./pages/TestsPage";
+import { TrendingPage } from "./pages/TrendingPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { IconX, IconLoader, IconClock, IconTag, IconCalendar } from "./components/common/Icons";
+import { ActivitiesProvider, useActivities } from "./context/ActivitiesContext";
+import { ModalProvider, useModal } from "./context/ModalContext";
+import { RepoToPostModal } from "./components/modals/RepoToPostModal";
+import { ExperimentsModal } from "./components/modals/ExperimentsModal";
 
-export function App() {
+function AppContent() {
+  const { syncAgentRunningState, publishPost: executePublishPost } = useActivities();
+  const { toast } = useModal();
   const [currentPage, setCurrentPage] = useState<Page>("home");
+  const [navTargetId, setNavTargetId] = useState<string | null>(null);
+  const [repoModalOpen, setRepoModalOpen] = useState(false);
+  const [repoInitialQuery, setRepoInitialQuery] = useState("");
+  const [experimentsModalOpen, setExperimentsModalOpen] = useState(false);
   const [dueAlert, setDueAlert] = useState<{
     slot: any;
     dayOfWeek: string;
@@ -83,6 +95,57 @@ export function App() {
     message: string;
   } | null>(null);
 
+  // Fila de Geração Sequencial de Slots do Cronograma (FIFO)
+  const [generationQueue, setGenerationQueue] = useState<ScheduleSlot[]>([]);
+  const [activeQueueSlot, setActiveQueueSlot] = useState<ScheduleSlot | null>(null);
+
+  useEffect(() => {
+    if (!running && generationQueue.length > 0) {
+      const nextSlot = generationQueue[0];
+      setGenerationQueue((prev) => prev.slice(1));
+      setActiveQueueSlot(nextSlot);
+      runAgent(undefined, nextSlot);
+    } else if (!running && generationQueue.length === 0) {
+      setActiveQueueSlot(null);
+    }
+  }, [running, generationQueue]);
+
+  function handleEnqueueSlot(slot: ScheduleSlot) {
+    if (activeQueueSlot?.id === slot.id) return;
+    if (generationQueue.some((s) => s.id === slot.id)) return;
+
+    if (!running) {
+      setActiveQueueSlot(slot);
+      runAgent(undefined, slot);
+    } else {
+      setGenerationQueue((prev) => [...prev, slot]);
+    }
+  }
+
+  function handleEnqueueMultipleSlots(slotsToQueue: ScheduleSlot[]) {
+    const unqueued = slotsToQueue.filter(
+      (s) => s.id !== activeQueueSlot?.id && !generationQueue.some((q) => q.id === s.id)
+    );
+    if (unqueued.length === 0) return;
+
+    if (!running) {
+      const [first, ...rest] = unqueued;
+      setActiveQueueSlot(first);
+      setGenerationQueue((prev) => [...prev, ...rest]);
+      runAgent(undefined, first);
+    } else {
+      setGenerationQueue((prev) => [...prev, ...unqueued]);
+    }
+  }
+
+  function handleRemoveFromQueue(slotId: string) {
+    setGenerationQueue((prev) => prev.filter((s) => s.id !== slotId));
+  }
+
+  function handleClearQueue() {
+    setGenerationQueue([]);
+  }
+
   function handleResetDashboard() {
     try {
       localStorage.removeItem("social_agent_stages");
@@ -143,6 +206,11 @@ export function App() {
     return removeListener;
   }, []);
 
+  // Sincronização do estado do agente com o ActivitiesContext
+  useEffect(() => {
+    syncAgentRunningState(running, failedStage);
+  }, [running, failedStage, syncAgentRunningState]);
+
   // Listener para Alerta de Publicação no Horário Agendado
   useEffect(() => {
     if (!window.electronAPI?.onSchedulePublishAlert) return;
@@ -156,11 +224,15 @@ export function App() {
     if (!dueAlert?.postId) return;
     try {
       setPublishingDuePost(true);
-      await window.electronAPI.publishPost(dueAlert.postId);
-      alert(`Publicação "${dueAlert.topic}" enviada com sucesso para o Instagram!`);
-      setDueAlert(null);
+      const res = await executePublishPost(dueAlert.postId, dueAlert.topic, dueAlert.slot?.format);
+      if (res.success) {
+        toast.success(`Publicação "${dueAlert.topic}" enviada com sucesso para o Instagram!`);
+        setDueAlert(null);
+      } else {
+        toast.error(`Erro ao publicar: ${res.error || "Erro desconhecido"}`);
+      }
     } catch (err) {
-      alert(`Erro ao publicar: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+      toast.error(`Erro ao publicar: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     } finally {
       setPublishingDuePost(false);
     }
@@ -399,6 +471,8 @@ export function App() {
           elapsedTime={runElapsedTime}
           onRunAgent={() => runAgent()}
           onStopAgent={handleStopAgent}
+          onOpenRepoToPost={() => setRepoModalOpen(true)}
+          onOpenExperiments={() => setExperimentsModalOpen(true)}
         />
 
         <section className="content">
@@ -418,16 +492,65 @@ export function App() {
             />
           )}
 
-          {currentPage === "schedule" && (
-            <SchedulePage
-              onProduceSlot={(slot) => {
-                setCurrentPage("home");
-                runAgent(undefined, slot);
+          {currentPage === "activities" && (
+            <ActivitiesPage
+              onNavigate={(page, targetId) => {
+                if (targetId?.startsWith("repo:")) {
+                  const repoSlug = targetId.replace("repo:", "");
+                  setRepoInitialQuery(repoSlug);
+                  setRepoModalOpen(true);
+                  setCurrentPage("posts");
+                  return;
+                }
+                setCurrentPage(page);
+                if (targetId) setNavTargetId(targetId);
               }}
             />
           )}
 
-          {currentPage === "posts" && <PostsPage />}
+          {currentPage === "schedule" && (
+            <SchedulePage
+              onProduceSlot={(slot) => handleEnqueueSlot(slot)}
+              onNavigate={(page, targetId) => {
+                setCurrentPage(page as Page);
+                if (targetId) setNavTargetId(targetId);
+              }}
+              generationQueue={generationQueue}
+              activeQueueSlot={activeQueueSlot}
+              onEnqueueSlot={handleEnqueueSlot}
+              onEnqueueMultipleSlots={handleEnqueueMultipleSlots}
+              onRemoveFromQueue={handleRemoveFromQueue}
+              onClearQueue={handleClearQueue}
+              onOpenRepoToPost={() => setRepoModalOpen(true)}
+              onOpenExperiments={() => setExperimentsModalOpen(true)}
+            />
+          )}
+
+          {currentPage === "trending" && (
+            <TrendingPage
+              onGeneratePost={(slot) => {
+                handleEnqueueSlot(slot as any);
+                setCurrentPage("home");
+              }}
+              onNavigateToPosts={() => setCurrentPage("posts")}
+              onOpenRepoToPost={(q) => {
+                setRepoInitialQuery(q || "");
+                setRepoModalOpen(true);
+              }}
+            />
+          )}
+
+          {currentPage === "posts" && (
+            <PostsPage
+              initialPostId={navTargetId}
+              onNavigateToActivities={() => setCurrentPage("activities")}
+              onOpenRepoToPost={() => {
+                setRepoInitialQuery("");
+                setRepoModalOpen(true);
+              }}
+              onOpenExperiments={() => setExperimentsModalOpen(true)}
+            />
+          )}
 
           {currentPage === "interactions" && (
             <InteractionsPage onNavigateToSchedule={() => setCurrentPage("schedule")} />
@@ -509,7 +632,41 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* MODAL: REPO-TO-POST (GITHUB ENGINE) */}
+      <RepoToPostModal
+        isOpen={repoModalOpen}
+        initialQuery={repoInitialQuery}
+        onClose={() => {
+          setRepoModalOpen(false);
+          setRepoInitialQuery("");
+        }}
+        onDispatchToPipeline={(slot) => {
+          handleEnqueueSlot(slot as any);
+          setCurrentPage("home");
+        }}
+      />
+
+      {/* MODAL: LABORATÓRIO DE TESTES A/B */}
+      <ExperimentsModal
+        isOpen={experimentsModalOpen}
+        onClose={() => setExperimentsModalOpen(false)}
+        onDispatchVariant={(slot) => {
+          handleEnqueueSlot(slot as any);
+          setCurrentPage("home");
+        }}
+      />
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <ModalProvider>
+      <ActivitiesProvider>
+        <AppContent />
+      </ActivitiesProvider>
+    </ModalProvider>
   );
 }
 

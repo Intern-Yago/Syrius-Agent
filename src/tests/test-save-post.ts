@@ -49,7 +49,7 @@ async function main() {
   const content = await generatePostContent(apiKey, decision);
 
   console.log("\n💾 Salvando post no PostgreSQL...");
-  const saved = await saveGeneratedPost(content, decision);
+  const saved = await saveGeneratedPost(decision, content);
 
   console.log(`\n✅ Post salvo com SUCESSO! ID: ${saved.id}`);
   console.log(`- Slides inseridos: ${saved.slides?.length || 0}`);

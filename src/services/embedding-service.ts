@@ -126,16 +126,9 @@ export async function getAllInsights(): Promise<LearningInsight[]> {
         updatedAt: d.updatedAt.toISOString(),
       }));
     }
+    return [];
   } catch (err) {
     console.warn("[RAG] Erro ao consultar insights no PostgreSQL:", err);
-  }
-
-  // Fallback para arquivo apenas se o DB estiver offline
-  try {
-    const content = await fs.readFile(ragMemoryFilePath, "utf-8");
-    const parsed = JSON.parse(content);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
     return [];
   }
 }
@@ -256,3 +249,66 @@ export async function searchRelevantInsights(query: string, limit = 5): Promise<
     refutedInsights,
   };
 }
+
+/**
+ * 6. Atualizar status e calibração de um insight
+ */
+export async function updateInsightStatus(
+  id: string,
+  newStatus: InsightStatus,
+  confidenceScore?: number,
+  correctionReasoning?: string
+): Promise<boolean> {
+  try {
+    await prisma.learningInsightEmbedding.update({
+      where: { id },
+      data: {
+        status: newStatus as any,
+        confidenceScore: confidenceScore !== undefined ? confidenceScore : newStatus === "HYPOTHESIS" ? 0.40 : newStatus === "REFUTED" ? 0.0 : 0.75,
+        correctionReasoning: correctionReasoning || undefined,
+        updatedAt: new Date(),
+      },
+    });
+    return true;
+  } catch (err) {
+    console.error("[RAG] Erro ao atualizar status do insight:", err);
+    return false;
+  }
+}
+
+/**
+ * 7. Excluir um insight da memória RAG
+ */
+export async function deleteInsightById(id: string): Promise<boolean> {
+  try {
+    await prisma.learningInsightEmbedding.delete({
+      where: { id },
+    });
+    return true;
+  } catch (err) {
+    console.error("[RAG] Erro ao excluir insight:", err);
+    return false;
+  }
+}
+
+/**
+ * 8. Desvalidar todos os insights (definir como HIPÓTESE por amostragem reduzida)
+ */
+export async function devalidateAllInsights(): Promise<number> {
+  try {
+    const res = await prisma.learningInsightEmbedding.updateMany({
+      where: { status: "VALIDATED" },
+      data: {
+        status: "HYPOTHESIS" as any,
+        confidenceScore: 0.40,
+        correctionReasoning: "Desvalidado: amostragem inicial reduzida (< 100 seguidores / amostragem inicial)",
+        updatedAt: new Date(),
+      },
+    });
+    return res.count;
+  } catch (err) {
+    console.error("[RAG] Erro ao desvalidar insights:", err);
+    return 0;
+  }
+}
+

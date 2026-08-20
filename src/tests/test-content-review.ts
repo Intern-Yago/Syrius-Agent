@@ -62,11 +62,11 @@ async function main() {
     console.log("RESULTADO DO QC (SIMULADO)");
     console.log("==============================");
     console.log(`Status: ${reviewResult.status}`);
-    console.log(`Score Técnico: ${reviewResult.technicalAccuracyScore}/10`);
-    console.log(`Score Engajamento: ${reviewResult.engagementScore}/10`);
-    console.log(`Score Final: ${reviewResult.overallScore}/10`);
-    console.log(`Aprovado: ${reviewResult.approved ? "SIM ✅" : "NÃO ❌"}`);
-    console.log(`Feedback: ${reviewResult.feedback}`);
+    console.log(`Score Técnico: ${reviewResult.technicalAccuracy}/10`);
+    console.log(`Score Engajamento: ${reviewResult.engagementPotential}/10`);
+    console.log(`Score Final: ${reviewResult.score}/10`);
+    console.log(`Aprovado: ${reviewResult.status === "APPROVED" ? "SIM ✅" : "NÃO ❌"}`);
+    console.log(`Resumo: ${reviewResult.summary}`);
     console.log("\n✅ Teste de Quality Control concluído com sucesso!");
     return;
   }
@@ -81,11 +81,11 @@ async function main() {
   console.log("RESULTADO DO QC");
   console.log("==============================");
   console.log(`Status: ${reviewResult.status}`);
-  console.log(`Score Técnico: ${reviewResult.technicalAccuracyScore}/10`);
-  console.log(`Score Engajamento: ${reviewResult.engagementScore}/10`);
-  console.log(`Score Final: ${reviewResult.overallScore}/10`);
-  console.log(`Aprovado: ${reviewResult.approved ? "SIM ✅" : "NÃO ❌"}`);
-  console.log(`Feedback: ${reviewResult.feedback}`);
+  console.log(`Score Técnico: ${reviewResult.technicalAccuracy}/10`);
+  console.log(`Score Engajamento: ${reviewResult.engagementPotential}/10`);
+  console.log(`Score Final: ${reviewResult.score}/10`);
+  console.log(`Aprovado: ${reviewResult.status === "APPROVED" ? "SIM ✅" : "NÃO ❌"}`);
+  console.log(`Resumo: ${reviewResult.summary}`);
 
   console.log("\n✅ Teste de Quality Control finalizado com sucesso!");
 }
