@@ -139,7 +139,6 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
     setInputText("");
     setLoading(true);
 
-    // Adiciona a mensagem do usuário temporariamente para feedback visual imediato
     const tempUserMsg: ChatMessage = {
       id: `temp-user-${Date.now()}`,
       sender: "user",
@@ -161,14 +160,12 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
             return [...filtered, res.userMsg || tempUserMsg, res.claraMsg];
           });
 
-          // Se tiver áudio gerado e voz ativada, toca automaticamente
           if (res.claraMsg.audioPath && voiceEnabled) {
             playAudio(res.claraMsg.audioPath);
           }
 
-          // Se a Clara realizou um despacho autônomo
           if (res.autoDispatched && res.dispatchedSlot) {
-            toast.success(`Pauta aprovada pela Clara e despachada com sucesso: "${res.dispatchedSlot.topic}"!`);
+            toast.success(`Pauta aprovada pela Clara e despachada com sucesso: "${res.dispatchedSlot.topic}".`);
             if (onProduceSlot && res.dispatchedSlot.isUrgent) {
               onProduceSlot(res.dispatchedSlot);
             }
@@ -280,47 +277,39 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
     }
   }
 
-  const QUICK_PROMPTS = [
-    "Vamos falar sobre IPC no Electron e segurança",
-    "Sugira 3 pautas quentes para falarmos esta semana",
-    "Quero falar sobre Monólito Modular vs Microsserviços",
-    "Crie uma pauta urgente sobre o lançamento do React 19",
-    "Gostei da Opção 1, pode agendar e produzir!",
-    "Gostei da Opção 2, publique com urgência hoje!",
-  ];
-
   return (
-    <div style={{ maxWidth: "1100px", margin: "0 auto", height: "calc(100vh - 120px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ width: "100%", maxWidth: "1050px", margin: "0 auto", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* CABEÇALHO DA SALA DE REUNIÃO */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "16px 20px",
+          padding: "14px 20px",
           background: "var(--bg-surface)",
           border: "1px solid var(--border-card)",
           borderRadius: "14px",
-          marginBottom: "16px",
-          flexWrap: "wrap",
+          marginBottom: "12px",
+          flexShrink: 0,
           gap: "12px",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div
             style={{
-              width: "44px",
-              height: "44px",
+              width: "42px",
+              height: "42px",
               borderRadius: "12px",
               background: "linear-gradient(135deg, #ec4899, #a855f7)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "#ffffff",
-              fontSize: "18px",
+              fontSize: "17px",
               fontWeight: "800",
               boxShadow: "0 0 15px rgba(236, 72, 153, 0.4)",
               position: "relative",
+              flexShrink: 0,
             }}
           >
             C
@@ -329,8 +318,8 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                 position: "absolute",
                 bottom: "-2px",
                 right: "-2px",
-                width: "12px",
-                height: "12px",
+                width: "11px",
+                height: "11px",
                 borderRadius: "50%",
                 background: "#10b981",
                 border: "2px solid #09090b",
@@ -341,7 +330,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
 
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <h2 style={{ margin: 0, fontSize: "16px", color: "#fafafa" }}>Clara</h2>
+              <h2 style={{ margin: 0, fontSize: "15px", color: "#fafafa" }}>Clara</h2>
               <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "rgba(236, 72, 153, 0.15)", border: "1px solid rgba(236, 72, 153, 0.3)", color: "#f472b6", fontWeight: "700" }}>
                 HEAD EDITORIAL SYRIUS
               </span>
@@ -352,7 +341,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
           <button
             type="button"
             onClick={toggleVoice}
@@ -364,9 +353,9 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
               borderColor: voiceEnabled ? "rgba(56, 189, 248, 0.4)" : "rgba(255, 255, 255, 0.1)",
               color: voiceEnabled ? "#38bdf8" : "#71717a",
             }}
-            title="Ativar/Desativar leitura de voz neural feminina (Edge TTS)"
+            title="Ativar ou desativar leitura de voz neural feminina (Edge TTS)"
           >
-            <span>{voiceEnabled ? "🔊 Voz Neural Feminina: Ativa" : "🔇 Modo Silencioso"}</span>
+            <span>{voiceEnabled ? "Voz Neural Feminina: Ativa" : "Modo Silencioso (Sem Voz)"}</span>
           </button>
 
           <button
@@ -382,10 +371,11 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
         </div>
       </div>
 
-      {/* FEED DE MENSAGENS (CHAT) */}
+      {/* FEED DE MENSAGENS (CHAT) COM SCROLL EXCLUSIVO */}
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: "auto",
           background: "rgba(24, 24, 27, 0.4)",
           border: "1px solid rgba(255, 255, 255, 0.05)",
@@ -394,7 +384,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
           display: "flex",
           flexDirection: "column",
           gap: "16px",
-          marginBottom: "16px",
+          marginBottom: "12px",
         }}
       >
         {messages.map((msg) => {
@@ -565,32 +555,6 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
         <div ref={messagesEndRef} />
       </div>
 
-      {/* CHIPS DE SUGESTÃO RÁPIDA */}
-      <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "8px", marginBottom: "8px" }}>
-        {QUICK_PROMPTS.map((prompt, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => handleSendMessage(prompt)}
-            disabled={loading || isRecording || transcribing}
-            style={{
-              padding: "5px 12px",
-              borderRadius: "16px",
-              fontSize: "11px",
-              fontWeight: "600",
-              background: "rgba(255, 255, 255, 0.04)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              color: "#a1a1aa",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              transition: "all 0.15s ease",
-            }}
-          >
-            {prompt}
-          </button>
-        ))}
-      </div>
-
       {/* BARRA DE ENTRADA MULTIMODAL (TEXTO + ÁUDIO) */}
       <div
         style={{
@@ -601,6 +565,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
           border: "1px solid var(--border-card)",
           borderRadius: "14px",
           padding: "10px 14px",
+          flexShrink: 0,
         }}
       >
         {isRecording ? (

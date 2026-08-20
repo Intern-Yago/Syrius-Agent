@@ -476,7 +476,7 @@ function AppContent() {
           onOpenExperiments={() => setExperimentsModalOpen(true)}
         />
 
-        <section className="content">
+        <section className={`content ${currentPage === "agency" ? "content-agency-mode" : ""}`}>
           {currentPage === "home" && (
             <DashboardPage
               stages={stages}

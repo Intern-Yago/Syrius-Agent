@@ -317,3 +317,12 @@ nav {
   padding: 30px 36px 60px;
   flex: 1;
 }
+
+.content.content-agency-mode {
+  padding: 16px 28px 20px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 73px);
+  overflow: hidden;
+  box-sizing: border-box;
+}
