@@ -1,5 +1,6 @@
 export type Page =
   | "home"
+  | "agency"
   | "activities"
   | "schedule"
   | "trending"

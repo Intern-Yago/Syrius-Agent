@@ -275,6 +275,19 @@ declare global {
 
     // Notificações Nativas do SO
     sendNativeNotification: (payload: { title: string; body: string }) => Promise<{ success: boolean }>;
+
+    // Sala de Reunião com a Gestora Editorial (Clara)
+    agencyGetHistory: () => Promise<any[]>;
+    agencySendMessage: (payload: { text: string; voiceEnabled?: boolean }) => Promise<{
+      success: boolean;
+      userMsg?: any;
+      claraMsg?: any;
+      autoDispatched?: boolean;
+      dispatchedSlot?: any;
+      error?: string;
+    }>;
+    agencyTranscribeAudio: (payload: { audioBase64: string; mimeType?: string }) => Promise<{ success: boolean; text?: string; error?: string }>;
+    agencyClearHistory: () => Promise<boolean>;
   }
 
   interface Window {

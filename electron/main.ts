@@ -77,6 +77,10 @@ import {
 } from "./ipc/experiments.js";
 
 import {
+  registerAgencyChatHandlers,
+} from "./ipc/agency-chat.js";
+
+import {
   startMediaServer,
 } from "./media-server.js";
 
@@ -305,6 +309,7 @@ app.whenReady().then(async () => {
   registerTrendingIPC();
   registerGitHubIPC();
   registerExperimentsIPC();
+  registerAgencyChatHandlers(() => mainWindow);
 
   // Criação do System Tray
   createTray();

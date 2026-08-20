@@ -58,6 +58,31 @@ export function Sidebar({ currentPage, onNavigate, running, systemAlert, onDismi
         </button>
 
         <button
+          className={currentPage === "agency" ? "nav-item active" : "nav-item"}
+          onClick={() => onNavigate("agency")}
+        >
+          <span className="nav-icon" style={{ color: "#f472b6" }}>
+            <IconMessageSquare size={16} />
+          </span>
+          <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+            <span>Sala de Reunião</span>
+            <span
+              style={{
+                background: "rgba(236, 72, 153, 0.15)",
+                color: "#f472b6",
+                fontSize: "9px",
+                fontWeight: "700",
+                padding: "1px 5px",
+                borderRadius: "6px",
+                border: "1px solid rgba(236, 72, 153, 0.3)",
+              }}
+            >
+              Clara
+            </span>
+          </span>
+        </button>
+
+        <button
           className={currentPage === "activities" ? "nav-item active" : "nav-item"}
           onClick={() => onNavigate("activities")}
         >

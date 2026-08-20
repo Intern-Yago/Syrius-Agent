@@ -6,6 +6,7 @@ import { detectStage, isStageCompleted, extractProgress } from "./utils/stageDet
 import { Sidebar } from "./components/layout/Sidebar";
 import { Topbar } from "./components/layout/Topbar";
 import { DashboardPage } from "./pages/DashboardPage";
+import { AgencyMeetingPage } from "./pages/AgencyMeetingPage";
 import { SchedulePage } from "./pages/SchedulePage";
 import { PostsPage } from "./pages/PostsPage";
 import { ActivitiesPage } from "./pages/ActivitiesPage";
@@ -505,6 +506,17 @@ function AppContent() {
                 setCurrentPage(page);
                 if (targetId) setNavTargetId(targetId);
               }}
+            />
+          )}
+
+          {currentPage === "agency" && (
+            <AgencyMeetingPage
+              onProduceSlot={(slot) => {
+                handleEnqueueSlot(slot);
+                setCurrentPage("home");
+              }}
+              onNavigateToPosts={() => setCurrentPage("posts")}
+              onNavigateToSchedule={() => setCurrentPage("schedule")}
             />
           )}
 

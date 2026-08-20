@@ -205,6 +205,18 @@ flowchart TD
 
 ---
 
+### 🎙️ 16. Sala de Reunião com a Gestora Editorial (Clara — Head Editorial)
+- **Responsabilidade**: Central de ideação conversacional em linguagem natural com locução neural e despacho autônomo.
+- **Capacidades**:
+  - **Comunicação Bilateral por Texto e Áudio**: O criador pode digitar ou falar via microfone; a Gestora Clara responde por texto e por voz neural feminina (`pt-BR-FranciscaNeural` via Edge TTS local).
+  - **Abstração Total de Mídia**: O criador foca exclusivamente no conteúdo e nas ideias técnicas; a Gestora Clara define o formato ideal (Carrossel, Reels ou Post Solo) e o Ângulo Narrativo nos bastidores.
+  - **Reunião Interna com Analytics & Despacho Autônomo**:
+    - Ao aprovar uma pauta ("gostei desse!"), a Gestora cruza os dados com o Analytics e o Cronograma.
+    - Se houver pedido de urgência, enfileira com prioridade máxima no pipeline para hoje/amanhã.
+    - Se for pauta regular, agenda automaticamente para a melhor janela de pico da próxima semana.
+
+---
+
 ## 🗄️ 3. Modelo de Dados Relacional (PostgreSQL / Prisma)
 
 | Tabela | Função Principal |
