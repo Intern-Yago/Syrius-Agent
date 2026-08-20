@@ -62,11 +62,8 @@ const ALL_WEEKDAYS = [
 ];
 
 const PRESET_GEMINI_MODELS = [
-  { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", desc: "Equilíbrio ideal entre velocidade, precisão e estabilidade" },
+  { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash (Padrão)", desc: "Máxima velocidade, multimodal e altíssima precisão" },
   { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro (Preview)", desc: "Raciocínio complexo e máxima profundidade técnica" },
-  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", desc: "Versão rápida anterior" },
-  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", desc: "Raciocínio profundo anterior" },
-  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", desc: "Geração rápida multimodal" },
 ];
 
 const VOICE_READING_SCRIPT = `Fala pessoal, sejam muito bem-vindos! Se você é desenvolvedor de software ou apaixonado por tecnologia, este conteúdo foi preparado especialmente para você.

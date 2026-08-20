@@ -175,35 +175,45 @@ export async function synthesizeClaraVoice(text: string, voiceOverride?: string)
  * Transcreve áudio do usuário enviado via microfone
  */
 export async function transcribeUserAudio(audioBase64: string, mimeType = "audio/webm"): Promise<string> {
-  try {
-    const { ai } = getGeminiAI();
-    const cleanBase64 = audioBase64.replace(/^data:audio\/\w+;base64,/, "");
+  const settings = await getSettings();
+  const modelToUse = settings.defaultGeminiModel || "gemini-3.6-flash";
+  const cleanBase64 = audioBase64.replace(/^data:audio\/\w+;base64,/, "");
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType,
-                data: cleanBase64,
+  const modelsToTry = [modelToUse, "gemini-3.6-flash", "gemini-3.1-pro-preview"];
+  let lastError: Error | null = null;
+
+  for (const model of [...new Set(modelsToTry)]) {
+    try {
+      const { ai } = getGeminiAI();
+      const response = await ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  mimeType,
+                  data: cleanBase64,
+                },
               },
-            },
-            {
-              text: "Transcreva este áudio do usuário em português brasileiro exatamente como foi falado. Retorne APENAS o texto puro transcrito, sem comentários, sem aspas e sem explicações.",
-            },
-          ],
-        },
-      ],
-    });
+              {
+                text: "Transcreva este áudio do usuário em português brasileiro exatamente como foi falado. Retorne APENAS o texto puro transcrito, sem comentários, sem aspas e sem explicações adicionais.",
+              },
+            ],
+          },
+        ],
+      });
 
-    return response.text?.trim() || "";
-  } catch (err) {
-    console.error("[AgencyChat] Erro ao transcrever áudio do usuário:", err);
-    throw new Error(`Erro na transcrição de voz: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+      const text = response.text?.trim() || "";
+      if (text) return text;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[AgencyChat] Falha na transcrição com modelo ${model}:`, err);
+    }
   }
+
+  throw new Error(`Erro na transcrição de voz: ${lastError?.message || "Não foi possível transcrever o áudio"}`);
 }
 
 /**
