@@ -61,6 +61,18 @@ const OBJECTIVES = [
   { id: "ENGAGEMENT", label: "Engajamento & Comunidade" },
 ];
 
+const NARRATIVE_ANGLES = [
+  { id: "BEFORE_AFTER", label: "Before vs After", desc: "Código legado vs moderno (Alto salvamento)" },
+  { id: "HOT_TAKE", label: "Hot Take", desc: "Opinião polêmica e contra-intuitiva (Debate)" },
+  { id: "MIGRATION_GUIDE", label: "Guia de Migração", desc: "Passo a passo com checklist prático" },
+  { id: "SENIOR_REVIEW", label: "Senior Review", desc: "Hype de marketing vs produção real" },
+  { id: "BREAKING_NEWS", label: "Breaking News", desc: "Lançamentos e novidades com impacto" },
+  { id: "DEEP_DIVE", label: "Deep Dive", desc: "Dissecação por baixo dos panos (internals)" },
+  { id: "COMMUNITY_PULSE", label: "Community Pulse", desc: "Repercussão da comunidade (Reddit/X/GitHub)" },
+  { id: "TLDR_SUMMARY", label: "TL;DR Summary", desc: "Resumo executivo em tópicos rápidos" },
+  { id: "STEP_BY_STEP_TUTORIAL", label: "Tutorial Passo a Passo", desc: "Implementação prática do zero" },
+];
+
 export function EditSlotModal({ slot, onClose, onSave }: EditSlotModalProps) {
   if (!slot) return null;
 
@@ -68,6 +80,7 @@ export function EditSlotModal({ slot, onClose, onSave }: EditSlotModalProps) {
   const [timeSlot, setTimeSlot] = useState(slot.timeSlot || "18:30");
   const [editorialPillar, setEditorialPillar] = useState(slot.editorialPillar || "");
   const [format, setFormat] = useState(slot.format || "CAROUSEL");
+  const [narrativeAngle, setNarrativeAngle] = useState(slot.narrativeAngle || "BEFORE_AFTER");
   const [topic, setTopic] = useState(slot.topic || "");
   const [objective, setObjective] = useState(slot.objective || "AUTHORITY");
   const [reasoning, setReasoning] = useState(slot.reasoning || "");
@@ -86,7 +99,6 @@ export function EditSlotModal({ slot, onClose, onSave }: EditSlotModalProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!topic.trim()) {
-      toast.warning("Por favor, informe o tema da publicação.");
       return;
     }
 
@@ -96,6 +108,7 @@ export function EditSlotModal({ slot, onClose, onSave }: EditSlotModalProps) {
       timeSlot,
       editorialPillar: editorialPillar.trim() || undefined,
       format,
+      narrativeAngle,
       topic: topic.trim(),
       objective,
       reasoning: reasoning.trim() || `Slot estratégico planejado para ${dayOfWeek} às ${timeSlot}.`,
@@ -179,6 +192,30 @@ export function EditSlotModal({ slot, onClose, onSave }: EditSlotModalProps) {
                 );
               })}
             </div>
+          </div>
+
+          {/* ÂNGULO NARRATIVO (CAMADA 1) */}
+          <div className="form-field">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+              <label className="form-label" style={{ margin: 0 }}>
+                <span>Ângulo Narrativo Editorial (IA)</span>
+              </label>
+              <span style={{ fontSize: "11px", color: "#38bdf8", fontWeight: "600" }}>
+                Camada 1: Estratégia de Engajamento
+              </span>
+            </div>
+            <select
+              className="form-select"
+              value={narrativeAngle}
+              onChange={(e) => setNarrativeAngle(e.target.value)}
+              style={{ fontSize: "13px" }}
+            >
+              {NARRATIVE_ANGLES.map((ang) => (
+                <option key={ang.id} value={ang.id}>
+                  {ang.label} — {ang.desc}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* QUADRO FIXO / EDITORIA RECORRENTE */}

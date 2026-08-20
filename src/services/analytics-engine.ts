@@ -243,29 +243,42 @@ DIRETRIZES DE RIGOR ESTATÍSTICO (IMPORTANTE):
    - Reconheça explicitamente a amostragem inicial reduzida. Trate observações como tendências ou hipóteses iniciais a serem testadas.
    - Seja realista sobre o desafio de engajamento orgânico frio.
 
-MÍDIAS REAIS NO INSTAGRAM:
+MÍDIAS REAIS NO INSTAGRAM (COM ÂNGULO NARRATIVO E VEÍCULO):
 ${JSON.stringify(
-  mediaList.map((m) => ({
-    id: m.id,
-    caption: m.caption?.slice(0, 160),
-    type: m.media_type,
-    reachViewers: m.reach || 0,
-    likes: m.like_count || 0,
-    comments: m.comments_count || 0,
-    saved: m.saved || 0,
-    shares: m.shares || 0,
-    reposts: m.reposts || 0,
-    playsViews: m.plays || 0,
-    avgWatchTimeSeconds: m.avg_watch_time || 0,
-    totalWatchTimeSeconds: m.total_watch_time || 0,
-    trafficSources: m.traffic_sources || null,
-    timestamp: m.timestamp,
-  })),
+  mediaList.map((m) => {
+    const matchingDbPost = dbPosts.find(
+      (p) => p.instagramMediaId === m.id || (m.caption && p.topic && m.caption.toLowerCase().includes(p.topic.toLowerCase().slice(0, 20)))
+    );
+    return {
+      id: m.id,
+      caption: m.caption?.slice(0, 160),
+      type: m.media_type,
+      format: matchingDbPost?.format || m.media_type,
+      narrativeAngle: matchingDbPost?.narrativeAngle || "BEFORE_AFTER",
+      reachViewers: m.reach || 0,
+      likes: m.like_count || 0,
+      comments: m.comments_count || 0,
+      saved: m.saved || 0,
+      shares: m.shares || 0,
+      reposts: m.reposts || 0,
+      playsViews: m.plays || 0,
+      avgWatchTimeSeconds: m.avg_watch_time || 0,
+      totalWatchTimeSeconds: m.total_watch_time || 0,
+      trafficSources: m.traffic_sources || null,
+      timestamp: m.timestamp,
+    };
+  }),
   null,
   2
 )}
 
-DIRETRIZES ESPECÍFICAS DE REELS E TEMPO DE RETENÇÃO (WATCH TIME & TRAFEGO):
+DIRETRIZES DE AVALIAÇÃO DO ÂNGULO NARRATIVO & FORMATO (DUAS CAMADAS):
+- Analise como cada ÂNGULO NARRATIVO ("BEFORE_AFTER", "HOT_TAKE", "MIGRATION_GUIDE", "SENIOR_REVIEW", "BREAKING_NEWS", "DEEP_DIVE", "COMMUNITY_PULSE", "TLDR_SUMMARY") desempenhou:
+  * Quais ângulos geraram mais salvamentos (ex: BEFORE_AFTER / MIGRATION_GUIDE)?
+  * Quais ângulos geraram mais comentários e debates (ex: HOT_TAKE / SENIOR_REVIEW)?
+  * Quais geraram maior alcance orgânico e novos seguidores (ex: BREAKING_NEWS em REELS)?
+
+DIRETRIZES ESPECÍFICAS DE REELS E TEMPO DE RETENÇÃO (WATCH TIME & TRÁFEGO):
 - Para mídias do tipo VIDEO ou REELS:
   * Analise a relação entre Visualizações (playsViews) e Visualizadores Únicos (reachViewers) para identificar a taxa de repetição/replays.
   * Avalie o tempo médio assistido (avgWatchTimeSeconds) em relação à duração do vídeo.

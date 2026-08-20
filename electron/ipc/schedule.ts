@@ -29,6 +29,7 @@ export interface ScheduleSlot {
   timeSlot: string;  // "18:30", "12:00", etc.
   editorialPillar?: string; // "Segunda da Arquitetura", "Desafio de Código (Quiz)", etc.
   format: "CAROUSEL" | "SINGLE_IMAGE" | "REEL_SCRIPT" | "STORY_PHOTO" | string;
+  narrativeAngle?: string; // "BEFORE_AFTER", "HOT_TAKE", "MIGRATION_GUIDE", "SENIOR_REVIEW", "BREAKING_NEWS", "DEEP_DIVE", "COMMUNITY_PULSE", "TLDR_SUMMARY", "STEP_BY_STEP_TUTORIAL"
   topic: string;
   objective: "AUTHORITY" | "VIRALITY" | "EDUCATION" | "ENGAGEMENT" | string;
   reasoning: string;
@@ -52,6 +53,7 @@ const DEFAULT_SCHEDULE: ScheduleSlot[] = [
     timeSlot: "18:30",
     editorialPillar: "Segunda da Arquitetura",
     format: "CAROUSEL",
+    narrativeAngle: "BEFORE_AFTER",
     topic: "Guia Definitivo de Docker Multi-stage Builds e Otimização de Imagens",
     objective: "AUTHORITY",
     reasoning: "Segunda-feira com Carrossel denso focado em salvamentos e autoridade técnica para a semana.",
@@ -64,6 +66,7 @@ const DEFAULT_SCHEDULE: ScheduleSlot[] = [
     timeSlot: "12:15",
     editorialPillar: "Desafio de Código (Quiz)",
     format: "STORY_PHOTO",
+    narrativeAngle: "COMMUNITY_PULSE",
     topic: "Quiz Técnico: Você sabe a diferença prática entre Type e Interface no TypeScript?",
     objective: "ENGAGEMENT",
     reasoning: "Quiz interativo de 1 clique no horário de almoço da terça-feira para gerar engajamento instantâneo nos Stories.",
@@ -77,6 +80,7 @@ const DEFAULT_SCHEDULE: ScheduleSlot[] = [
     timeSlot: "19:00",
     editorialPillar: "Clean Code & Boas Práticas",
     format: "SINGLE_IMAGE",
+    narrativeAngle: "SENIOR_REVIEW",
     topic: "Como estruturar um Error Handling limpo e desacoplado no Node.js",
     objective: "EDUCATION",
     reasoning: "Meio de semana com foco em código limpo. Post solo no Feed de leitura direta e compartilhamentos.",
@@ -89,6 +93,7 @@ const DEFAULT_SCHEDULE: ScheduleSlot[] = [
     timeSlot: "18:00",
     editorialPillar: "Notícias & Lançamentos Tech",
     format: "REEL_SCRIPT",
+    narrativeAngle: "BREAKING_NEWS",
     topic: "Anthropic lança Claude 3.7 Sonnet: Modo Híbrido de Raciocínio e Mudança na Arquitetura de LLMs",
     objective: "VIRALITY",
     reasoning: "Vídeo dinâmico de notícias e lançamentos em alta para atrair novos programadores no topo de funil com breaking news.",
@@ -101,6 +106,7 @@ const DEFAULT_SCHEDULE: ScheduleSlot[] = [
     timeSlot: "17:30",
     editorialPillar: "Engenharia de Software",
     format: "CAROUSEL",
+    narrativeAngle: "BEFORE_AFTER",
     topic: "Arquitetura Hexagonal vs Clean Architecture: Comparativo Prático em TypeScript",
     objective: "AUTHORITY",
     reasoning: "Encerramento da semana com conteúdo denso de engenharia no Feed para leitura e debate durante o fim de semana.",
@@ -260,6 +266,7 @@ async function loadSchedule(weekOffset: number = 0): Promise<ScheduleSlot[]> {
         timeSlot: slot.timeSlot,
         editorialPillar: slot.editorialPillar || undefined,
         format: slot.format,
+        narrativeAngle: slot.narrativeAngle || undefined,
         topic: slot.topic,
         objective: slot.objective,
         reasoning: slot.reasoning,
@@ -302,6 +309,7 @@ async function saveSchedule(slots: ScheduleSlot[], weekOffset: number = 0): Prom
           timeSlot: s.timeSlot,
           editorialPillar: s.editorialPillar,
           format: s.format,
+          narrativeAngle: s.narrativeAngle || null,
           topic: s.topic,
           objective: s.objective,
           reasoning: s.reasoning,
@@ -323,6 +331,7 @@ async function saveSchedule(slots: ScheduleSlot[], weekOffset: number = 0): Prom
           timeSlot: s.timeSlot,
           editorialPillar: s.editorialPillar,
           format: s.format,
+          narrativeAngle: s.narrativeAngle || null,
           topic: s.topic,
           objective: s.objective,
           reasoning: s.reasoning,
@@ -693,9 +702,10 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "timeSlot": "18:30",
       "editorialPillar": "Segunda da Arquitetura",
       "format": "CAROUSEL",
+      "narrativeAngle": "BEFORE_AFTER",
       "topic": "Tema técnico aprofundado",
       "objective": "AUTHORITY",
-      "reasoning": "Justificativa estratégica"
+      "reasoning": "Justificativa estratégica com combinação de ângulo editorial e formato de distribuição"
     },
     {
       "id": "slot-2",
@@ -703,6 +713,7 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "timeSlot": "12:15",
       "editorialPillar": "Pílula Rápida de Dev",
       "format": "STORY_PHOTO",
+      "narrativeAngle": "COMMUNITY_PULSE",
       "topic": "Tema de Story",
       "objective": "ENGAGEMENT",
       "reasoning": "Justificativa estratégica"

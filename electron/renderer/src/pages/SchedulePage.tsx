@@ -1158,6 +1158,22 @@ export function SchedulePage({
                       >
                         {formatBadge.label}
                       </span>
+
+                      {slot.narrativeAngle && (
+                        <span
+                          style={{
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            fontSize: "10px",
+                            fontWeight: "700",
+                            background: "rgba(56, 189, 248, 0.12)",
+                            border: "1px solid rgba(56, 189, 248, 0.3)",
+                            color: "#38bdf8",
+                          }}
+                        >
+                          {slot.narrativeAngle.replace("_", " ")}
+                        </span>
+                      )}
                     </div>
                   </div>
 
