@@ -182,6 +182,18 @@ function createWindow() {
     mainWindow?.webContents.send("window:maximized-change", false);
   });
 
+  // Atalhos essenciais de desenvolvimento e diagnóstico (F12 para DevTools, F5 / Ctrl+R para recarregar)
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i")) {
+      mainWindow?.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+    if (input.key === "F5" || (input.control && input.key.toLowerCase() === "r")) {
+      mainWindow?.reload();
+      event.preventDefault();
+    }
+  });
+
   // Intercepta o fechamento para manter o app rodando silenciosamente na bandeja (System Tray)
   mainWindow.on("close", (event) => {
     if (!isQuitting) {

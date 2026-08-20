@@ -660,13 +660,141 @@ function AppContent() {
   );
 }
 
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: React.ErrorInfo | null;
+}
+
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("[React ErrorBoundary]", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null });
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "40px 20px",
+            background: "#09090b",
+            color: "#fafafa",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "640px",
+              width: "100%",
+              background: "#18181b",
+              border: "1px solid rgba(239, 68, 68, 0.4)",
+              borderRadius: "16px",
+              padding: "32px",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  background: "rgba(239, 68, 68, 0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#f87171",
+                  flexShrink: 0,
+                }}
+              >
+                <IconX size={22} />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "18px", color: "#fafafa" }}>Ocorreu um erro inesperado na interface</h2>
+                <span style={{ fontSize: "12px", color: "#a1a1aa" }}>O aplicativo capturou a exceção com segurança. Você pode copiar os detalhes ou recarregar.</span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "#09090b",
+                borderRadius: "8px",
+                padding: "14px",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                marginBottom: "20px",
+                fontFamily: "monospace",
+                fontSize: "12px",
+                color: "#fca5a5",
+                maxHeight: "180px",
+                overflowY: "auto",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {this.state.error?.toString() || "Erro desconhecido"}
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(this.state.error?.stack || String(this.state.error));
+                }}
+                className="secondary-button"
+                style={{ padding: "10px 16px", fontSize: "13px" }}
+              >
+                Copiar Detalhes
+              </button>
+              <button
+                type="button"
+                onClick={this.handleReset}
+                className="primary-button"
+                style={{ padding: "10px 20px", fontSize: "13px", fontWeight: "700" }}
+              >
+                Recarregar Interface (F5)
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function App() {
   return (
-    <ModalProvider>
-      <ActivitiesProvider>
-        <AppContent />
-      </ActivitiesProvider>
-    </ModalProvider>
+    <ErrorBoundary>
+      <ModalProvider>
+        <ActivitiesProvider>
+          <AppContent />
+        </ActivitiesProvider>
+      </ModalProvider>
+    </ErrorBoundary>
   );
 }
 

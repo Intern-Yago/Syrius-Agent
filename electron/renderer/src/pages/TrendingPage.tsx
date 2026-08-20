@@ -43,7 +43,7 @@ const CATEGORIES = [
   "Carreira Dev",
 ];
 
-export function TrendingPage({ onGeneratePost, onNavigateToPosts }: TrendingPageProps) {
+export function TrendingPage({ onGeneratePost, onNavigateToPosts, onOpenRepoToPost }: TrendingPageProps) {
   const { toast, showConfirm } = useModal();
   const { registerOrUpdateActivity } = useActivities();
   const [topics, setTopics] = useState<TrendingTopicItem[]>([]);
@@ -430,7 +430,7 @@ export function TrendingPage({ onGeneratePost, onNavigateToPosts }: TrendingPage
 
       {/* MODAL DE DEEP DIVE (LEITURA APROFUNDADA DA TENDÊNCIA) */}
       {selectedTopic && (
-        <div className="post-modal-backdrop" onClick={() => setSelectedTopic(null)}>
+        <div className="post-modal-backdrop">
           <div
             className="edit-modal"
             onClick={(e) => e.stopPropagation()}
@@ -440,16 +440,16 @@ export function TrendingPage({ onGeneratePost, onNavigateToPosts }: TrendingPage
               <div>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "6px" }}>
                   <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", background: "rgba(147, 51, 234, 0.15)", border: "1px solid rgba(147, 51, 234, 0.3)", color: "#c084fc", fontWeight: "700" }}>
-                    {selectedTopic.category}
+                    {selectedTopic.category || "Tecnologia"}
                   </span>
                   <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", background: "rgba(56, 189, 248, 0.15)", border: "1px solid rgba(56, 189, 248, 0.3)", color: "#38bdf8", fontWeight: "700" }}>
-                    {selectedTopic.suggestedFormat}
+                    {selectedTopic.suggestedFormat || "CAROUSEL"}
                   </span>
                   <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#34d399", fontWeight: "700" }}>
-                    {selectedTopic.relevanceScore}% Relevância
+                    {selectedTopic.relevanceScore ?? 90}% Relevância
                   </span>
                 </div>
-                <h2 style={{ fontSize: "18px", color: "#fafafa", margin: 0 }}>{selectedTopic.title}</h2>
+                <h2 style={{ fontSize: "18px", color: "#fafafa", margin: 0 }}>{selectedTopic.title || "Tema em Destaque"}</h2>
               </div>
 
               <button className="modal-close" onClick={() => setSelectedTopic(null)} title="Fechar">
@@ -464,7 +464,7 @@ export function TrendingPage({ onGeneratePost, onNavigateToPosts }: TrendingPage
                   Por Que Este Tema Está em Alta Agora?
                 </span>
                 <p style={{ fontSize: "13px", color: "#e4e4e7", lineHeight: "1.5", margin: 0 }}>
-                  {selectedTopic.whyTrending}
+                  {selectedTopic.whyTrending || selectedTopic.summary || "Tópico com alto engajamento no ecossistema de desenvolvimento."}
                 </p>
               </div>
 
@@ -474,7 +474,7 @@ export function TrendingPage({ onGeneratePost, onNavigateToPosts }: TrendingPage
                   Ângulo Contra-intuitivo & Estratégia
                 </span>
                 <p style={{ fontSize: "13px", color: "#e4e4e7", lineHeight: "1.5", margin: 0 }}>
-                  {selectedTopic.suggestedAngle}
+                  {selectedTopic.suggestedAngle || "Abordagem técnica com foco em arquitetura e boas práticas."}
                 </p>
               </div>
 
@@ -484,7 +484,7 @@ export function TrendingPage({ onGeneratePost, onNavigateToPosts }: TrendingPage
                   Gancho de Alta Retenção (Primeiros 3 Segundos / Capa)
                 </span>
                 <strong style={{ fontSize: "14px", color: "#f0f9ff", display: "block", lineHeight: "1.4" }}>
-                  "{selectedTopic.hookIdea}"
+                  "{selectedTopic.hookIdea || selectedTopic.title}"
                 </strong>
               </div>
 
