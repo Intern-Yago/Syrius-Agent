@@ -9,9 +9,33 @@ import { getBrandInfo } from "../config/brand.js";
 import { getSettings } from "../config/settings.js";
 import { getAllInsights } from "./embedding-service.js";
 
+import fsSync from "node:fs";
+
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, "..", "..");
+
+function getProjectRoot(): string {
+  const cwd = process.cwd();
+  if (fsSync.existsSync(path.join(cwd, "scripts", "synthesize_tts.py"))) {
+    return cwd;
+  }
+  const fromDirname = path.resolve(__dirname, "..", "..");
+  if (fsSync.existsSync(path.join(fromDirname, "scripts", "synthesize_tts.py"))) {
+    return fromDirname;
+  }
+  const fromParent = path.resolve(__dirname, "..");
+  if (fsSync.existsSync(path.join(fromParent, "scripts", "synthesize_tts.py"))) {
+    return fromParent;
+  }
+  return cwd;
+}
+
+function getSynthesizeScriptPath(): string {
+  const root = getProjectRoot();
+  const primary = path.join(root, "scripts", "synthesize_tts.py");
+  if (fsSync.existsSync(primary)) return primary;
+  return path.resolve(process.cwd(), "scripts", "synthesize_tts.py");
+}
 
 export interface ChatMessage {
   id: string;
@@ -66,14 +90,17 @@ interface GeminiClaraResponse {
   }>;
 }
 
-const HISTORY_FILE_PATH = path.join(projectRoot, "output", "agency-chat-history.json");
+function getHistoryFilePath(): string {
+  return path.join(getProjectRoot(), "output", "agency-chat-history.json");
+}
 
 /**
  * Carrega o histórico da conversa com o Gestor Editorial
  */
 export async function getAgencyChatHistory(): Promise<ChatMessage[]> {
+  const filePath = getHistoryFilePath();
   try {
-    const data = await fs.readFile(HISTORY_FILE_PATH, "utf-8");
+    const data = await fs.readFile(filePath, "utf-8");
     return JSON.parse(data);
   } catch {
     const settings = await getSettings();
@@ -95,10 +122,11 @@ export async function getAgencyChatHistory(): Promise<ChatMessage[]> {
  * Salva o histórico da conversa
  */
 export async function saveAgencyChatHistory(history: ChatMessage[]): Promise<void> {
+  const filePath = getHistoryFilePath();
   try {
-    const dir = path.dirname(HISTORY_FILE_PATH);
+    const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(HISTORY_FILE_PATH, JSON.stringify(history.slice(-40), null, 2), "utf-8");
+    await fs.writeFile(filePath, JSON.stringify(history.slice(-40), null, 2), "utf-8");
   } catch (err) {
     console.error("[AgencyChat] Erro ao salvar histórico:", err);
   }
@@ -108,8 +136,9 @@ export async function saveAgencyChatHistory(history: ChatMessage[]): Promise<voi
  * Limpa o histórico da conversa
  */
 export async function clearAgencyChatHistory(): Promise<void> {
+  const filePath = getHistoryFilePath();
   try {
-    await fs.unlink(HISTORY_FILE_PATH);
+    await fs.unlink(filePath);
   } catch {}
 }
 
@@ -120,7 +149,7 @@ export async function synthesizeClaraVoice(text: string, voiceOverride?: string)
   const settings = await getSettings();
   const voice = voiceOverride || settings.agencyManager?.edgeTtsVoice || "pt-BR-FranciscaNeural";
 
-  const audioDir = path.join(projectRoot, "output", "audio");
+  const audioDir = path.join(getProjectRoot(), "output", "audio");
   await fs.mkdir(audioDir, { recursive: true });
 
   const fileName = `agency-manager-${Date.now()}.mp3`;
@@ -131,7 +160,7 @@ export async function synthesizeClaraVoice(text: string, voiceOverride?: string)
     .replace(/\n+/g, " ")
     .trim();
 
-  const scriptPath = path.join(projectRoot, "scripts", "synthesize_tts.py");
+  const scriptPath = getSynthesizeScriptPath();
 
   try {
     await execFileAsync("python", [scriptPath, outputPath, voice, cleanText]);

@@ -265,8 +265,10 @@ app.whenReady().then(async () => {
         const basename = path.basename(raw);
         const altVideo = path.resolve(process.cwd(), "output", "reels-video", basename);
         const altAudio = path.resolve(process.cwd(), "output", "reels-audio", basename);
+        const altAgencyAudio = path.resolve(process.cwd(), "output", "audio", basename);
         if (fs.existsSync(altVideo)) resolvedPath = altVideo;
         else if (fs.existsSync(altAudio)) resolvedPath = altAudio;
+        else if (fs.existsSync(altAgencyAudio)) resolvedPath = altAgencyAudio;
       }
 
       if (!fs.existsSync(resolvedPath)) {
