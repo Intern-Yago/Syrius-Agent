@@ -309,9 +309,19 @@ COMO VOCÊ DEVE SE COMPORTAR:
 RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
 {
   "replyText": "texto completo amigável e estilizado para exibição no chat",
-  "spokenText": "texto fluido e conversacional para a locução neural feminina",
+  "spokenText": "texto fluido e conversacional para a locução neural feminina (sem markdown, sem emojis)",
   "actionTaken": "NONE",
-  "dispatchedPauta": null,
+  "dispatchedPauta": {
+    "topic": "Título completo e claro da pauta escolhida (OBRIGATÓRIO quando actionTaken != NONE)",
+    "format": "CAROUSEL",
+    "narrativeAngle": "BEFORE_AFTER",
+    "objective": "AUTHORITY",
+    "hook": "Gancho magnético de retenção",
+    "reasoning": "Por que esta pauta foi agendada neste formato e horário",
+    "scheduledDay": "Próxima Terça",
+    "scheduledTime": "18:30",
+    "isUrgent": false
+  },
   "suggestedOptions": [
     {
       "optionNumber": 1,
@@ -321,6 +331,7 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
     }
   ]
 }
+Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null. Quando actionTaken for "DISPATCHED_TO_PIPELINE", "SCHEDULED_FOR_GRADE" ou "SCHEDULED_URGENT", o objeto "dispatchedPauta" deve conter obrigatoriamente o campo "topic".
 `.trim();
 
   const aiResponse = await executeStructuredPrompt<GeminiClaraResponse>(prompt);

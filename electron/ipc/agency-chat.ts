@@ -79,6 +79,14 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
           claraMsg.dispatchedPauta
         ) {
           const pauta = claraMsg.dispatchedPauta;
+          const topic =
+            pauta.topic ||
+            (pauta as any).title ||
+            (pauta as any).theme ||
+            (pauta as any).headline ||
+            pauta.hook ||
+            userMsg?.text?.slice(0, 80) ||
+            "Pauta aprovada na Reunião Editorial";
           const targetDay = pauta.scheduledDay || (pauta.isUrgent ? "Hoje" : "Próxima Terça");
           const targetTime = pauta.scheduledTime || (pauta.isUrgent ? "18:30" : "18:30");
 
@@ -97,11 +105,11 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
               editorialPillar: `Briefing de ${managerName}`,
               format: pauta.format || "CAROUSEL",
               narrativeAngle: pauta.narrativeAngle || "BEFORE_AFTER",
-              topic: pauta.topic,
+              topic,
               objective: pauta.objective || "AUTHORITY",
               reasoning: pauta.reasoning || `Pauta aprovada na Sala de Reunião com ${managerName}.`,
-              baseCopyPrompt: pauta.baseCopyPrompt,
-              baseVisualPrompt: pauta.baseVisualPrompt,
+              baseCopyPrompt: pauta.baseCopyPrompt || undefined,
+              baseVisualPrompt: pauta.baseVisualPrompt || undefined,
               weekOffset: isUrgent ? 0 : 1,
               status: "PLANNED",
               isCustom: true,
@@ -127,7 +135,7 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
 
           sendNativeNotification(
             `Pauta Aprovada por ${managerName}`,
-            `${managerName} despachou "${pauta.topic}" para o pipeline (${pauta.format} - ${targetDay}).`
+            `${managerName} despachou "${topic}" para o pipeline (${pauta.format || "CAROUSEL"} - ${targetDay}).`
           );
         }
 
