@@ -87,11 +87,28 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
             pauta.hook ||
             userMsg?.text?.slice(0, 80) ||
             "Pauta aprovada na Reunião Editorial";
-          const targetDay = pauta.scheduledDay || (pauta.isUrgent ? "Hoje" : "Próxima Terça");
-          const targetTime = pauta.scheduledTime || (pauta.isUrgent ? "18:30" : "18:30");
+          const rawDay = pauta.scheduledDay || (pauta.isUrgent ? "Hoje" : "Terça-feira");
+          const lowerDay = rawDay.toLowerCase();
+          const isUrgent = Boolean(pauta.isUrgent || claraMsg.actionTaken === "SCHEDULED_URGENT");
+          const isNextWeek = !isUrgent && (lowerDay.includes("próxima") || lowerDay.includes("proxima") || claraMsg.actionTaken === "SCHEDULED_FOR_GRADE" || claraMsg.actionTaken === "DISPATCHED_TO_PIPELINE");
+
+          let cleanDay = "Terça-feira";
+          if (lowerDay.includes("segunda")) cleanDay = "Segunda-feira";
+          else if (lowerDay.includes("terça") || lowerDay.includes("terca")) cleanDay = "Terça-feira";
+          else if (lowerDay.includes("quarta")) cleanDay = "Quarta-feira";
+          else if (lowerDay.includes("quinta")) cleanDay = "Quinta-feira";
+          else if (lowerDay.includes("sexta")) cleanDay = "Sexta-feira";
+          else if (lowerDay.includes("sábado") || lowerDay.includes("sabado")) cleanDay = "Sábado";
+          else if (lowerDay.includes("domingo")) cleanDay = "Domingo";
+          else if (lowerDay.includes("hoje")) cleanDay = "Hoje";
+          else if (lowerDay.includes("amanhã") || lowerDay.includes("amanha")) cleanDay = "Amanhã";
+          else cleanDay = rawDay;
+
+          const targetDay = cleanDay;
+          const targetTime = pauta.scheduledTime || "18:30";
+          const weekOffset = isUrgent ? 0 : (isNextWeek ? 1 : 0);
 
           const slotId = `slot-clara-${Date.now()}`;
-          const isUrgent = Boolean(pauta.isUrgent || claraMsg.actionTaken === "SCHEDULED_URGENT");
 
           const settings = await getSettings();
           const managerName = settings.agencyManager?.name || "Clara";
@@ -110,7 +127,7 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
               reasoning: pauta.reasoning || `Pauta aprovada na Sala de Reunião com ${managerName}.`,
               baseCopyPrompt: pauta.baseCopyPrompt || undefined,
               baseVisualPrompt: pauta.baseVisualPrompt || undefined,
-              weekOffset: isUrgent ? 0 : 1,
+              weekOffset,
               status: "PLANNED",
               isCustom: true,
             },

@@ -2,19 +2,26 @@ import { ScheduleSlot } from "../types";
 
 const DAYS_ORDER: Record<string, number> = {
   domingo: 0,
+  dom: 0,
   "segunda-feira": 1,
   segunda: 1,
+  seg: 1,
   "terça-feira": 2,
   terca: 2,
   terça: 2,
+  ter: 2,
   "quarta-feira": 3,
   quarta: 3,
+  qua: 3,
   "quinta-feira": 4,
   quinta: 4,
+  qui: 4,
   "sexta-feira": 5,
   sexta: 5,
+  sex: 5,
   sábado: 6,
   sabado: 6,
+  sab: 6,
 };
 
 export interface SlotTimingInfo {
@@ -27,6 +34,18 @@ export interface SlotTimingInfo {
   statusBg: string;
   statusBorder: string;
   formattedTiming: string;
+}
+
+function parseDayIndex(dayStr: string): number {
+  const clean = dayStr.trim().toLowerCase()
+    .replace(/^pr[oó]xima\s+/i, "")
+    .replace(/^proxima\s+/i, "")
+    .trim();
+
+  for (const [key, idx] of Object.entries(DAYS_ORDER)) {
+    if (clean === key || clean.startsWith(key)) return idx;
+  }
+  return 1;
 }
 
 export function getSlotTimingInfo(slot?: ScheduleSlot | null, isPublished = false): SlotTimingInfo | null {
@@ -45,17 +64,33 @@ export function getSlotTimingInfo(slot?: ScheduleSlot | null, isPublished = fals
     };
   }
 
+  const isNextWeek = (slot.weekOffset ?? 0) > 0 || /pr[oó]xima/i.test(slot.dayOfWeek);
+
   const now = new Date();
   const currentDayOfWeek = now.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
   const currentHours = now.getHours();
   const currentMinutes = now.getMinutes();
   const currentTimeInMinutes = currentHours * 60 + currentMinutes;
 
-  const normalizedSlotDay = slot.dayOfWeek.trim().toLowerCase();
-  const slotDayIndex = DAYS_ORDER[normalizedSlotDay] !== undefined ? DAYS_ORDER[normalizedSlotDay] : 1;
+  const slotDayIndex = parseDayIndex(slot.dayOfWeek);
 
   const [slotH, slotM] = (slot.timeSlot || "18:00").split(":").map(Number);
   const slotTimeInMinutes = (isNaN(slotH) ? 18 : slotH) * 60 + (isNaN(slotM) ? 0 : slotM);
+
+  // Se o slot é da PRÓXIMA SEMANA, ele está garantidamente no futuro!
+  if (isNextWeek) {
+    return {
+      isToday: false,
+      isOverdue: false,
+      isDueNow: false,
+      isUpcoming: true,
+      statusLabel: "Agendado",
+      statusColor: "#38bdf8",
+      statusBg: "rgba(56, 189, 248, 0.12)",
+      statusBorder: "rgba(56, 189, 248, 0.25)",
+      formattedTiming: `${slot.dayOfWeek} às ${slot.timeSlot}`,
+    };
+  }
 
   const isToday = currentDayOfWeek === slotDayIndex;
   const isPastDay = currentDayOfWeek > slotDayIndex;
@@ -93,7 +128,7 @@ export function getSlotTimingInfo(slot?: ScheduleSlot | null, isPublished = fals
     };
   }
 
-  // Futuro / No prazo
+  // Futuro / No prazo na semana atual
   const dayName = isToday
     ? "Hoje"
     : currentDayOfWeek + 1 === slotDayIndex
