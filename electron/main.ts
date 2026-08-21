@@ -31,9 +31,10 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// Define o App User Model ID no Windows para garantir que o ícone na barra de tarefas seja o customizado
+// Define nome da aplicação e App User Model ID no Windows para notificações e barra de tarefas
+app.name = "Syrius Agent";
 if (process.platform === "win32") {
-  app.setAppUserModelId("com.syrius.agent");
+  app.setAppUserModelId("Syrius Agent");
 }
 
 import {

@@ -6,24 +6,35 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let cachedAppIcon: Electron.NativeImage | undefined;
+let cachedAppIconPath: string | undefined;
 
-export function getAppIcon(): Electron.NativeImage | undefined {
-  if (cachedAppIcon) return cachedAppIcon;
+export function getAppIconPath(): string | undefined {
+  if (cachedAppIconPath) return cachedAppIconPath;
 
   const candidates = [
+    path.join(process.cwd(), "electron", "assets", "icon.png"),
+    path.join(process.cwd(), "electron", "assets", "logo.png"),
     path.join(__dirname, "..", "electron", "assets", "icon.png"),
     path.join(__dirname, "..", "electron", "assets", "logo.png"),
     path.join(__dirname, "assets", "icon.png"),
     path.join(__dirname, "assets", "logo.png"),
-    path.join(process.cwd(), "electron", "assets", "icon.png"),
-    path.join(process.cwd(), "electron", "assets", "logo.png"),
   ];
 
   for (const c of candidates) {
     if (fs.existsSync(c)) {
-      cachedAppIcon = nativeImage.createFromPath(c);
-      return cachedAppIcon;
+      cachedAppIconPath = path.resolve(c);
+      return cachedAppIconPath;
     }
+  }
+  return undefined;
+}
+
+export function getAppIcon(): Electron.NativeImage | undefined {
+  if (cachedAppIcon) return cachedAppIcon;
+  const iconPath = getAppIconPath();
+  if (iconPath) {
+    cachedAppIcon = nativeImage.createFromPath(iconPath);
+    return cachedAppIcon;
   }
   return undefined;
 }
@@ -40,11 +51,13 @@ export function sendNativeNotification(title: string, body: string, onClick?: ()
       return;
     }
 
-    const icon = getAppIcon();
+    const iconPath = getAppIconPath();
+    const iconImage = getAppIcon();
+
     const notif = new Notification({
       title: title || "Syrius Agent",
       body: body || "",
-      icon: icon && !icon.isEmpty() ? icon : undefined,
+      icon: iconPath || (iconImage && !iconImage.isEmpty() ? iconImage : undefined),
       silent: false,
     });
 
