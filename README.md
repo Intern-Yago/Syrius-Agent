@@ -63,9 +63,9 @@ flowchart TD
 1. **⚡ Dashboard em Tempo Real**:
    - Visualização gráfica de todas as etapas com progresso dinâmico, logs em tempo real, reexecução a partir de etapas falhas (`retry`) e alertas de cota.
 2. **📈 Radar de Temas em Alta (Trending Topics)**:
-   - Varredura periódica de tendências quentes no ecossistema tech (DevOps, Backend, Frontend, IA, Segurança, Carreira) com despacho em 1 clique para o pipeline.
-3. **📅 Cronograma Editorial Semanal & Fila FIFO**:
-   - Grade semanal por pilares (Autoridade, Viralidade, Educação, Engajamento, Alcance) com suporte a Stories interativos, geração sequencial em lote e alerta no horário agendado.
+   - Varredura de tendências no ecossistema dev com persistência no PostgreSQL e **zero chamadas silenciosas de IA** na inicialização. Atualização 100% sob demanda ou semanal.
+3. **📅 Cronograma Editorial Semanal & Distribuição Balanceada**:
+   - Grade semanal por pilares com detecção de colisão, prevenção de empilhamento de posts no mesmo horário e suporte a Stories interativos e fila FIFO.
 4. **📊 Central de Atividades em Background**:
    - Controle total sobre processos concorrentes com botões de Pausar, Retomar (Play), Parar (Cancel), Recomeçar (Retry) e log de diagnósticos com cópia rápida.
 5. **📚 Acervo de Publicações & Visualizador de Mídia**:
@@ -84,6 +84,8 @@ flowchart TD
     - Execução semanal agendada (Padrão: Domingo às 22:00) para auto-renovação de tendências, geração inteligente do cronograma e envio de briefing executivo.
 12. **✏️ Editor WYSIWYG de Slides & Recomposição Instantânea**:
     - Ajuste fino de títulos e textos de slides no visualizador com recomposição gráfica via Sharp em < 500ms sem custo de tokens de IA.
+13. **🎙️ Sala de Reunião com a Gestora Editorial (Clara / Estelar)**:
+    - Central de ideação conversacional por texto ou áudio do microfone, locução neural feminina, despacho autônomo, substituição inteligente de pautas com cancelamento do slot anterior e alocação distribuída na grade semanal.
 
 ---
 

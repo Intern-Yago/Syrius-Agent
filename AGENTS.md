@@ -163,8 +163,10 @@ flowchart TD
 ---
 
 ### 📈 11. Radar de Temas em Alta (Trending Topics)
-- **Responsabilidade**: Varredura semanal das maiores tendências no ecossistema tech (DevOps, Backend, Frontend, IA, Segurança, Carreira).
+- **Responsabilidade**: Varredura das maiores tendências no ecossistema tech (DevOps, Backend, Frontend, IA, Segurança, Carreira).
 - **Capacidades**:
+  - **Leitura Local Persistida no PostgreSQL**: Carregamento instantâneo em milissegundos a partir do banco de dados na inicialização com **zero chamadas automáticas de IA**, evitando consumo indevido de cotas e tokens.
+  - **Varredura Sob Demanda & Semanal**: Renovação acionada exclusivamente via botão manual no Radar ou na rotina agendada do Piloto Noturno.
   - Classificação por score de relevância (80% a 99%) e categorias especializadas.
   - Ganchos sugeridos, resumos técnicos e diretrizes base de prompt.
   - Despacho imediato de tendências para o pipeline de geração em 1 clique.
@@ -205,15 +207,15 @@ flowchart TD
 
 ---
 
-### 🎙️ 16. Sala de Reunião com a Gestora Editorial (Clara — Head Editorial)
-- **Responsabilidade**: Central de ideação conversacional em linguagem natural com locução neural e despacho autônomo.
+### 🎙️ 16. Sala de Reunião com a Gestora Editorial (Clara / Estelar — Head Editorial)
+- **Responsabilidade**: Central de ideação conversacional em linguagem natural com locução neural, despacho autônomo, substituição inteligente e distribuição balanceada na grade.
 - **Capacidades**:
-  - **Comunicação Bilateral por Texto e Áudio**: O criador pode digitar ou falar via microfone; a Gestora Clara responde por texto e por voz neural feminina (`pt-BR-FranciscaNeural` via Edge TTS local).
-  - **Abstração Total de Mídia**: O criador foca exclusivamente no conteúdo e nas ideias técnicas; a Gestora Clara define o formato ideal (Carrossel, Reels ou Post Solo) e o Ângulo Narrativo nos bastidores.
-  - **Reunião Interna com Analytics & Despacho Autônomo**:
-    - Ao aprovar uma pauta ("gostei desse!"), a Gestora cruza os dados com o Analytics e o Cronograma.
-    - Se houver pedido de urgência, enfileira com prioridade máxima no pipeline para hoje/amanhã.
-    - Se for pauta regular, agenda automaticamente para a melhor janela de pico da próxima semana.
+  - **Comunicação Bilateral por Texto e Áudio**: O criador pode digitar ou falar via microfone; a Gestora responde por texto e por voz neural feminina (`pt-BR-FranciscaNeural` via Edge TTS local).
+  - **Abstração Total de Mídia**: O criador foca exclusivamente no conteúdo e nas ideias técnicas; a Gestora define o formato ideal (Carrossel, Reels ou Post Solo) e o Ângulo Narrativo nos bastidores.
+  - **Substituição Inteligente & Mudança de Ideia (`REPLACED_PREVIOUS_PAUTA`)**: Se o criador mudar de ideia após aprovar uma pauta ("mudei de ideia, quero a opção 2"), o sistema cancela e remove automaticamente o slot anterior no PostgreSQL, registrando a nova pauta sem duplicidade.
+  - **Distribuição Dinâmica na Grade & Prevenção de Conflitos**:
+    - A Gestora consulta slots ocupados em tempo real e sugere apenas janelas de publicação livres (Segunda 18:30, Terça 18:30, Quarta 19:00, Quinta 18:00, Sexta 17:30, Domingo 19:30).
+    - O backend possui detecção de colisão que impede empilhamento no mesmo dia e horário.
 
 ---
 
