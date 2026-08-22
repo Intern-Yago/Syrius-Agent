@@ -44,36 +44,31 @@ interface GeminiTrendingResponse {
 
 /**
  * Retorna os tópicos em alta ativos salvos no PostgreSQL.
- * Se a lista estiver vazia ou expirada, realiza a renovação automática com IA.
+ * Realiza apenas leitura do banco de dados para evitar chamadas desnecessárias de IA.
  */
 export async function getActiveTrendingTopics(): Promise<TrendingTopicItem[]> {
   const settings = await getSettings();
   const maxCount = settings.trendingTopicsCount || 10;
-  const now = new Date();
 
-  // 1. Busca tópicos ativos e não expirados no PostgreSQL
+  // Busca tópicos ativos salvos no PostgreSQL
   const activeTopics = await prisma.trendingTopic.findMany({
     where: {
       status: "ACTIVE",
-      expiresAt: { gt: now },
     },
-    orderBy: { relevanceScore: "desc" },
+    orderBy: [
+      { createdAt: "desc" },
+      { relevanceScore: "desc" },
+    ],
     take: maxCount,
   });
 
-  if (activeTopics.length > 0) {
-    return activeTopics.map((t) => ({
-      ...t,
-      status: t.status as TrendingTopicItem["status"],
-      expiresAt: t.expiresAt.toISOString(),
-      createdAt: t.createdAt.toISOString(),
-      updatedAt: t.updatedAt.toISOString(),
-    }));
-  }
-
-  // 2. Se não houver tópicos ativos válidos, dispara renovação com IA
-  console.log("[TrendingService] Nenhum tópico ativo válido encontrado. Realizando varredura de tendências com IA...");
-  return refreshTrendingTopics(true);
+  return activeTopics.map((t) => ({
+    ...t,
+    status: t.status as TrendingTopicItem["status"],
+    expiresAt: t.expiresAt.toISOString(),
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+  }));
 }
 
 /**

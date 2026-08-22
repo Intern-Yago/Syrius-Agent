@@ -108,7 +108,7 @@ const defaultSettings: AppSettings = {
     similarityBoost: 0.75,
   },
   trendingTopicsCount: 10,
-  trendingRefreshIntervalDays: 1,
+  trendingRefreshIntervalDays: 7,
   nightlyScheduleEnabled: true,
   nightlyScheduleDay: "Domingo",
   nightlyScheduleTime: "22:00",

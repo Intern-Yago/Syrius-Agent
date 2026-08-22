@@ -28,7 +28,7 @@ interface ChatMessage {
   text: string;
   audioPath?: string;
   timestamp: string;
-  actionTaken?: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT";
+  actionTaken?: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT" | "REPLACED_PREVIOUS_PAUTA" | "CANCELED_PAUTA";
   dispatchedPauta?: {
     topic: string;
     format: string;
@@ -39,6 +39,7 @@ interface ChatMessage {
     scheduledDay?: string;
     scheduledTime?: string;
     isUrgent?: boolean;
+    canceledPreviousTopic?: string;
   };
   suggestedOptions?: ChatOption[];
 }
@@ -178,7 +179,12 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
           }
 
           if (res.autoDispatched && res.dispatchedSlot) {
-            toast.success(`Pauta aprovada pela Clara e despachada com sucesso: "${res.dispatchedSlot.topic}".`);
+            const isReplaced = res.claraMsg.actionTaken === "REPLACED_PREVIOUS_PAUTA";
+            toast.success(
+              isReplaced
+                ? `Pauta anterior cancelada e substituída por "${res.dispatchedSlot.topic}" no Cronograma!`
+                : `Pauta aprovada por ${managerName} e agendada com sucesso: "${res.dispatchedSlot.topic}".`
+            );
             if (onProduceSlot && res.dispatchedSlot.isUrgent) {
               onProduceSlot(res.dispatchedSlot);
             }
@@ -572,7 +578,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
                         <IconCheck size={13} color="#34d399" />
                         <strong style={{ fontSize: "12px", color: "#34d399", textTransform: "uppercase" }}>
-                          Pauta Aprovada & Despachada para Produção
+                          {msg.actionTaken === "REPLACED_PREVIOUS_PAUTA" ? "Pauta Substituída & Atualizada no Cronograma" : "Pauta Aprovada & Despachada para Produção"}
                         </strong>
                       </div>
                       <span style={{ fontSize: "11px", color: "#e4e4e7" }}>

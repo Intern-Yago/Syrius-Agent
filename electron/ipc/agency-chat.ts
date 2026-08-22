@@ -71,14 +71,51 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
         let autoDispatched = false;
         let dispatchedSlot: any = null;
 
-        // Se a Clara tomou a decisão de despachar autonomamente a pauta
+        // Se a Clara tomou a decisão de despachar autonomamente a pauta ou substituir uma anterior
         if (
           (claraMsg.actionTaken === "DISPATCHED_TO_PIPELINE" ||
             claraMsg.actionTaken === "SCHEDULED_FOR_GRADE" ||
-            claraMsg.actionTaken === "SCHEDULED_URGENT") &&
+            claraMsg.actionTaken === "SCHEDULED_URGENT" ||
+            claraMsg.actionTaken === "REPLACED_PREVIOUS_PAUTA") &&
           claraMsg.dispatchedPauta
         ) {
           const pauta = claraMsg.dispatchedPauta;
+          const settings = await getSettings();
+          const managerName = settings.agencyManager?.name || "Clara";
+
+          const canceledTopic = pauta.canceledPreviousTopic;
+
+          // Se houve uma pauta anterior substituída ou se a ação for de substituição, limpa o slot antigo do cronograma
+          if (canceledTopic) {
+            try {
+              await prisma.editorialScheduleSlot.deleteMany({
+                where: {
+                  OR: [
+                    { topic: { contains: canceledTopic.slice(0, 30) } },
+                    { editorialPillar: { contains: managerName } },
+                  ],
+                  status: "PLANNED",
+                },
+              });
+              console.log(`[AgencyChat] Pauta anterior "${canceledTopic}" cancelada e removida do cronograma.`);
+            } catch (delErr) {
+              console.warn("[AgencyChat] Aviso ao remover pauta substituída:", delErr);
+            }
+          } else if (claraMsg.actionTaken === "REPLACED_PREVIOUS_PAUTA") {
+            try {
+              const lastClaraSlot = await prisma.editorialScheduleSlot.findFirst({
+                where: { editorialPillar: { contains: managerName }, status: "PLANNED" },
+                orderBy: { id: "desc" },
+              });
+              if (lastClaraSlot) {
+                await prisma.editorialScheduleSlot.delete({ where: { id: lastClaraSlot.id } });
+                console.log(`[AgencyChat] Slot planejado anterior de ${managerName} (${lastClaraSlot.topic}) substituído.`);
+              }
+            } catch (delErr) {
+              console.warn("[AgencyChat] Aviso ao substituir slot anterior:", delErr);
+            }
+          }
+
           const topic =
             pauta.topic ||
             (pauta as any).title ||
@@ -90,7 +127,7 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
           const rawDay = pauta.scheduledDay || (pauta.isUrgent ? "Hoje" : "Terça-feira");
           const lowerDay = rawDay.toLowerCase();
           const isUrgent = Boolean(pauta.isUrgent || claraMsg.actionTaken === "SCHEDULED_URGENT");
-          const isNextWeek = !isUrgent && (lowerDay.includes("próxima") || lowerDay.includes("proxima") || claraMsg.actionTaken === "SCHEDULED_FOR_GRADE" || claraMsg.actionTaken === "DISPATCHED_TO_PIPELINE");
+          const isNextWeek = !isUrgent && (lowerDay.includes("próxima") || lowerDay.includes("proxima") || claraMsg.actionTaken === "SCHEDULED_FOR_GRADE" || claraMsg.actionTaken === "DISPATCHED_TO_PIPELINE" || claraMsg.actionTaken === "REPLACED_PREVIOUS_PAUTA");
 
           let cleanDay = "Terça-feira";
           if (lowerDay.includes("segunda")) cleanDay = "Segunda-feira";
@@ -104,16 +141,46 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
           else if (lowerDay.includes("amanhã") || lowerDay.includes("amanha")) cleanDay = "Amanhã";
           else cleanDay = rawDay;
 
-          const targetDay = cleanDay;
-          const targetTime = pauta.scheduledTime || "18:30";
+          let targetDay = cleanDay;
+          let targetTime = pauta.scheduledTime || "18:30";
           const weekOffset = isUrgent ? 0 : (isNextWeek ? 1 : 0);
+
+          // Verifica se o dia e horário já estão ocupados por outro slot na mesma semana e redistribui para o próximo slot livre
+          const existingSlotSameTime = await prisma.editorialScheduleSlot.findFirst({
+            where: {
+              dayOfWeek: targetDay,
+              timeSlot: targetTime,
+              weekOffset,
+            },
+          });
+
+          if (existingSlotSameTime) {
+            const candidateSlots = [
+              { day: "Quinta-feira", time: "18:00" },
+              { day: "Quarta-feira", time: "19:00" },
+              { day: "Sexta-feira", time: "17:30" },
+              { day: "Segunda-feira", time: "18:30" },
+              { day: "Domingo", time: "19:30" },
+              { day: "Terça-feira", time: "18:30" },
+            ];
+
+            const occupiedWeekSlots = await prisma.editorialScheduleSlot.findMany({
+              where: { weekOffset },
+              select: { dayOfWeek: true, timeSlot: true },
+            });
+
+            const occupiedSet = new Set(occupiedWeekSlots.map((s) => `${s.dayOfWeek}_${s.timeSlot}`));
+            const freeSlot = candidateSlots.find((c) => !occupiedSet.has(`${c.day}_${c.time}`));
+
+            if (freeSlot) {
+              targetDay = freeSlot.day;
+              targetTime = freeSlot.time;
+            }
+          }
 
           const slotId = `slot-clara-${Date.now()}`;
 
-          const settings = await getSettings();
-          const managerName = settings.agencyManager?.name || "Clara";
-
-          // Cria o slot no banco de dados
+          // Cria o novo slot no banco de dados
           const createdSlot = await prisma.editorialScheduleSlot.create({
             data: {
               id: slotId,
@@ -150,10 +217,15 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
 
           autoDispatched = true;
 
-          sendNativeNotification(
-            `Pauta Aprovada por ${managerName}`,
-            `${managerName} despachou "${topic}" para o pipeline (${pauta.format || "CAROUSEL"} - ${targetDay}).`
-          );
+          const notificationTitle = claraMsg.actionTaken === "REPLACED_PREVIOUS_PAUTA"
+            ? `Pauta Substituída por ${managerName}`
+            : `Pauta Aprovada por ${managerName}`;
+
+          const notificationBody = claraMsg.actionTaken === "REPLACED_PREVIOUS_PAUTA"
+            ? `${managerName} atualizou a pauta no cronograma para "${topic}" (${pauta.format || "CAROUSEL"} - ${targetDay}).`
+            : `${managerName} despachou "${topic}" para o pipeline (${pauta.format || "CAROUSEL"} - ${targetDay}).`;
+
+          sendNativeNotification(notificationTitle, notificationBody);
         }
 
         return {

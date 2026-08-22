@@ -43,7 +43,7 @@ export interface ChatMessage {
   text: string;
   audioPath?: string;
   timestamp: string;
-  actionTaken?: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT";
+  actionTaken?: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT" | "REPLACED_PREVIOUS_PAUTA" | "CANCELED_PAUTA";
   dispatchedPauta?: {
     topic: string;
     format: string;
@@ -56,6 +56,7 @@ export interface ChatMessage {
     isUrgent?: boolean;
     baseCopyPrompt?: string;
     baseVisualPrompt?: string;
+    canceledPreviousTopic?: string;
   };
   suggestedOptions?: Array<{
     optionNumber: number;
@@ -68,7 +69,7 @@ export interface ChatMessage {
 interface GeminiClaraResponse {
   replyText: string;
   spokenText: string;
-  actionTaken: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT";
+  actionTaken: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT" | "REPLACED_PREVIOUS_PAUTA" | "CANCELED_PAUTA";
   dispatchedPauta?: {
     topic: string;
     format: string;
@@ -81,6 +82,7 @@ interface GeminiClaraResponse {
     isUrgent?: boolean;
     baseCopyPrompt?: string;
     baseVisualPrompt?: string;
+    canceledPreviousTopic?: string;
   };
   suggestedOptions?: Array<{
     optionNumber: number;
@@ -242,6 +244,27 @@ export async function processAgencyMessage(
     select: { dayOfWeek: true, timeSlot: true, topic: true, format: true, status: true, weekOffset: true },
   });
 
+  const standardSlots = [
+    { day: "Segunda-feira", time: "18:30", format: "CAROUSEL", label: "Segunda da Arquitetura & DevOps" },
+    { day: "Terça-feira", time: "18:30", format: "CAROUSEL", label: "Terça de Backend & Algoritmos" },
+    { day: "Quarta-feira", time: "19:00", format: "SINGLE_IMAGE", label: "Quarta de Clean Code & Boas Práticas" },
+    { day: "Quinta-feira", time: "18:00", format: "REEL_SCRIPT", label: "Quinta de Lançamentos & Notícias Tech" },
+    { day: "Sexta-feira", time: "17:30", format: "CAROUSEL", label: "Sexta de Engenharia de Software" },
+    { day: "Domingo", time: "19:30", format: "CAROUSEL", label: "Domingo de Planejamento & Carreira Dev" },
+  ];
+
+  const occupiedSlotKeys = new Set(slots.map((s) => `${s.weekOffset === 0 ? "Semana Atual" : "Próxima Semana"} - ${s.dayOfWeek} às ${s.timeSlot}`));
+
+  const availableSlotsList: string[] = [];
+  for (const weekLabel of ["Semana Atual", "Próxima Semana"]) {
+    for (const std of standardSlots) {
+      const key = `${weekLabel} - ${std.day} às ${std.time}`;
+      if (!occupiedSlotKeys.has(key)) {
+        availableSlotsList.push(`- [${weekLabel}] ${std.day} às ${std.time} (LIVRE — Ideal para ${std.format} / ${std.label})`);
+      }
+    }
+  }
+
   const insights = await getAllInsights();
   const activeInsights = insights.filter((i) => i.status === "VALIDATED").slice(0, 5);
 
@@ -261,13 +284,18 @@ SUA PERSONALIDADE & TOM DE VOZ:
   * É VOCÊ QUEM CUIDA DE TODA A ESTRATÉGIA DE MÍDIA, FORMATO, HORÁRIO E ENGENHARIA EDITORIAL NOS BASTIDORES!
   * Quando você sugerir ideias, apresente **3 opções de pautas em linguagem simples e empolgante**, mostrando o título provocativo e por que a comunidade tech vai amar.
 
-CONTEXTO REAL DO PERFIL AGORA:
+CONTEXTO REAL DA GRADE EDITORIAL DO PERFIL AGORA:
 - Data & Hora Atual: ${currentDayName}, às ${currentTimeStr}
 - Posicionamento: ${brand.name} (${brand.handle})
 - Histórico Recente de Posts no Banco:
 ${recentPosts.map((p) => `- [${p.format} / ${p.narrativeAngle || "BEFORE_AFTER"}] "${p.topic}" (${p.status})`).join("\n")}
-- Slots no Cronograma Semanal:
-${slots.map((s) => `- [Semana ${s.weekOffset === 0 ? "Atual" : "Próxima"}] ${s.dayOfWeek} ${s.timeSlot}: "${s.topic}" (${s.status})`).join("\n")}
+
+- SLOTS JÁ OCUPADOS NO CRONOGRAMA:
+${slots.length > 0 ? slots.map((s) => `- [Semana ${s.weekOffset === 0 ? "Atual" : "Próxima"}] ${s.dayOfWeek} às ${s.timeSlot}: "${s.topic}" (${s.format})`).join("\n") : "Nenhum slot ocupado."}
+
+- SLOTS LIVRES E RECOMENDADOS PARA NOVAS PAUTAS:
+${availableSlotsList.length > 0 ? availableSlotsList.slice(0, 8).join("\n") : "- Próxima Quinta-feira às 18:00\n- Próxima Sexta-feira às 17:30\n- Próxima Segunda-feira às 18:30"}
+
 - Diretrizes Validadas do RAG:
 ${activeInsights.map((i) => `- ${i.title}: ${i.content}`).join("\n")}
 
@@ -289,20 +317,31 @@ COMO VOCÊ DEVE SE COMPORTAR:
    - Se o criador disse que gostou de uma opção (ex: "gostei da opção 2", "pode fazer essa", "vamos na primeira", "adorei", "manda ver"):
    - Você **assume o controle total**:
      * Decide nos bastidores o melhor formato (CAROUSEL, REEL_SCRIPT ou SINGLE_IMAGE) e ângulo narrativo (BEFORE_AFTER, HOT_TAKE, MIGRATION_GUIDE, etc.).
+     * **REGRA CRÍTICA DE AGENDAMENTO (DISTRIBUIÇÃO EQUILIBRADA NA SEMANA)**:
+       - **NÃO agende todas as pautas para o mesmo dia/horário!** Se Terça-feira já está ocupada, escolha Quinta-feira, Sexta-feira, Quarta-feira ou Segunda-feira.
+       - Consulte a lista de SLOTS LIVRES acima e selecione o próximo dia/horário mais estratégico e vago.
      * **Se o criador pediu URGÊNCIA** ("urgente", "faz logo", "quero pra hoje", "posta amanhã"):
        - Defina "actionTaken": "SCHEDULED_URGENT" ou "DISPATCHED_TO_PIPELINE".
        - Responda avisando que já se reuniu com o Analytics e enfileirou a produção com prioridade máxima para a janela mais quente de hoje/amanhã.
      * **Se for uma pauta normal**:
        - Defina "actionTaken": "SCHEDULED_FOR_GRADE" ou "DISPATCHED_TO_PIPELINE".
-       - Analise a grade e escolha o melhor dia/horário estratégico.
-       - Responda tranquilizando o criador: *"Perfeito! Já me reuni com o Analytics e decidi o melhor formato e horário (${currentDayName === "Segunda-feira" ? "Terça às 18:30" : "Quinta às 18:00"}). Já despachei para a produção e você não precisa se preocupar com mais nada!"*
-     * Preencha "dispatchedPauta" com todos os detalhes técnicos que você escolheu.
+       - Responda tranquilizando o criador citando o dia e horário REAL escolhido (ex: *"Perfeito! Já me reuni com o Analytics, defini o formato ideal e encaixei na nossa grade para a próxima Quinta-feira às 18:00. Já despachei para a produção e você não precisa se preocupar com mais nada!"*).
+     * Preencha "dispatchedPauta" com o dia escolhido ("scheduledDay": "Quinta-feira", "scheduledTime": "18:00", etc.).
 
-3. **FASE DE REFINAMENTO**:
+3. **FASE DE MUDANÇA DE IDEIA OU SUBSTITUIÇÃO DE PAUTA**:
+   - Se o criador disse que mudou de ideia, preferiu outra opção ou quer trocar uma pauta já aprovada anteriormente (ex: "mudei de ideia, quero o 2", "cancela e faz a 1", "na verdade prefiro a opção 3", "troca para a pauta X", "nn quero essa, faz a outra"):
+   - Você deve:
+     * Ser super compreensiva, ágil, prestativa e natural: *"Sem problemas! Já cancelei a pauta anterior no cronograma e substitui pela Opção [N]: [Título da nova pauta]!"*
+     * Identificar qual é a nova pauta escolhida a partir do histórico de opções.
+     * Identificar qual foi a pauta anterior que deve ser cancelada.
+     * Definir "actionTaken": "REPLACED_PREVIOUS_PAUTA".
+     * Preencher "dispatchedPauta" com os dados da NOVA pauta escolhida e incluir o campo "canceledPreviousTopic" com o título/tema da pauta anterior que foi substituída.
+
+4. **FASE DE REFINAMENTO**:
    - Se o criador pedir ajustes ("não gostei", "quero algo mais para iniciantes", "muda o foco para segurança"):
    - Seja receptiva, compreenda o direcionamento e gere 3 novas opções afinadas.
 
-4. **SPOKEN TEXT (PARA VOZ DA CLARA)**:
+5. **SPOKEN TEXT (PARA VOZ DA CLARA)**:
    - O campo "spokenText" será lido diretamente pela voz neural feminina.
    - Escreva de forma 100% natural e conversacional em português (sem markdown, sem listas com asteriscos, sem emojis).
 
@@ -320,7 +359,8 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
     "reasoning": "Por que esta pauta foi agendada neste formato e horário",
     "scheduledDay": "Próxima Terça",
     "scheduledTime": "18:30",
-    "isUrgent": false
+    "isUrgent": false,
+    "canceledPreviousTopic": "Título da pauta anterior que foi cancelada/substituída se for o caso"
   },
   "suggestedOptions": [
     {
@@ -331,7 +371,7 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
     }
   ]
 }
-Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null. Quando actionTaken for "DISPATCHED_TO_PIPELINE", "SCHEDULED_FOR_GRADE" ou "SCHEDULED_URGENT", o objeto "dispatchedPauta" deve conter obrigatoriamente o campo "topic".
+Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null. Quando actionTaken for "DISPATCHED_TO_PIPELINE", "SCHEDULED_FOR_GRADE", "SCHEDULED_URGENT" ou "REPLACED_PREVIOUS_PAUTA", o objeto "dispatchedPauta" deve conter obrigatoriamente o campo "topic".
 `.trim();
 
   const aiResponse = await executeStructuredPrompt<GeminiClaraResponse>(prompt);
@@ -362,7 +402,24 @@ Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null. Quando actio
     suggestedOptions: aiResponse.suggestedOptions,
   };
 
-  const updatedHistory = [...history, userMsg, claraMsg];
+  // Se uma nova pauta foi aprovada ou substituída, desativa badges de pautas anteriores no histórico da Clara para evitar duplicidade visual
+  const sanitizedHistory = history.map((m) => {
+    if (
+      aiResponse.actionTaken &&
+      aiResponse.actionTaken !== "NONE" &&
+      m.sender === "clara" &&
+      m.actionTaken &&
+      m.actionTaken !== "NONE"
+    ) {
+      return {
+        ...m,
+        actionTaken: "NONE" as const,
+      };
+    }
+    return m;
+  });
+
+  const updatedHistory = [...sanitizedHistory, userMsg, claraMsg];
   await saveAgencyChatHistory(updatedHistory);
 
   return { userMsg, claraMsg };
