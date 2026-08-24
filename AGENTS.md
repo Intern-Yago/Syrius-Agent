@@ -154,22 +154,28 @@ flowchart TD
 - **Camada Dupla de Diagnóstico**:
   - **Camada Macro**: Diagnóstico da saúde da conta, alcance real, interações, taxa de engajamento e diretrizes para o próximo ciclo.
   - **Camada Micro**: Diagnóstico individual de cada publicação (por que funcionou, o que prejudicou e força do gancho).
-- **Memória RAG com `text-embedding-004`**:
+- **Memória RAG com `text-embedding-004` & Linhagem de Auto-Correção**:
   - Vetorização densa (768 dimensões) de insights e aprendizados.
   - **Calibração Estatística Rigorosa**: Amostragens pequenas (< 6 posts) são registradas obrigatoriamente como `HYPOTHESIS` (confiança $\le 0.40$). Hipóteses só viram `VALIDATED` após 6+ evidências empíricas.
-  - **Auto-Correção**: Invalidação e refutação automática de premissas quando novos dados contradizem teses anteriores.
+  - **Auto-Correção & Rastreabilidade de Linhagem**: Invalidação e refutação automática de premissas quando novos dados contradizem teses anteriores, com vinculação explícita entre a tese refutada e a nova diretriz (`supersededById`) e comparação visual lado a lado.
+  - **Filtros e Paginação**: Interface de exploração com filtros por status (Validadas, Hipóteses, Refutadas), busca instantânea e paginação limpa sem emojis.
 - **Despacho de Relatórios**: Envio de briefings executivos HTML estilizados para o e-mail do criador via Nodemailer SMTP.
 
 ---
 
-### 📈 11. Radar de Temas em Alta (Trending Topics)
-- **Responsabilidade**: Varredura das maiores tendências no ecossistema tech (DevOps, Backend, Frontend, IA, Segurança, Carreira).
+### 📈 11. Radar de Temas em Alta (Trending Topics & Compilador Multi-Fonte)
+- **Responsabilidade**: Varredura das maiores tendências no ecossistema tech (DevOps, Backend, Frontend, IA, Segurança, Carreira), repositórios em alta no GitHub e notícias de tecnologia.
 - **Capacidades**:
+  - **Navegação em 4 Abas Especializadas**:
+    1. *Destaques & Top Recomendações (5)*: Seleção das melhores oportunidades da semana.
+    2. *Temas Gerais & Arquitetura (10)*: Pautas aprofundadas distribuídas pelos 6 pilares de engenharia.
+    3. *Repositórios GitHub (Trending) (5)*: Repositórios reais coletados via GitHub API com dissecação em 1 clique via Repo-to-Post.
+    4. *Notícias & Lançamentos Tech (5 a 10)*: Manchetes das últimas 24h a 7 dias.
+  - **Compilador Concorrente de Notícias de 5 Fontes**: Scraping paralelo via `Promise.allSettled` no Hacker News API, Dev.to RSS, InfoQ Architecture, TecMundo Tech e Google News.
+  - **Garantia de Cotas e Auto-Preenchimento**: Fallback resiliente que assegura a quantidade exata de itens mesmo se houver corte de tokens na resposta de IA.
+  - **Sincronização em Tempo Real**: Monitoramento integrado ao `ActivitiesContext` que atualiza a tela sem recarregar.
+  - **Direcionamento Obrigatório de Repositórios**: Inclusão mandatória do link do repositório na legenda e CTA falado/escrito no encerramento.
   - **Leitura Local Persistida no PostgreSQL**: Carregamento instantâneo em milissegundos a partir do banco de dados na inicialização com **zero chamadas automáticas de IA**, evitando consumo indevido de cotas e tokens.
-  - **Varredura Sob Demanda & Semanal**: Renovação acionada exclusivamente via botão manual no Radar ou na rotina agendada do Piloto Noturno.
-  - Classificação por score de relevância (80% a 99%) e categorias especializadas.
-  - Ganchos sugeridos, resumos técnicos e diretrizes base de prompt.
-  - Despacho imediato de tendências para o pipeline de geração em 1 clique.
 
 ---
 
@@ -210,7 +216,9 @@ flowchart TD
 ### 🎙️ 16. Sala de Reunião com a Gestora Editorial (Clara / Estelar — Head Editorial)
 - **Responsabilidade**: Central de ideação conversacional em linguagem natural com locução neural, despacho autônomo, substituição inteligente e distribuição balanceada na grade.
 - **Capacidades**:
-  - **Comunicação Bilateral por Texto e Áudio**: O criador pode digitar ou falar via microfone; a Gestora responde por texto e por voz neural feminina (`pt-BR-FranciscaNeural` via Edge TTS local).
+  - **Comunicação Bilateral por Texto e Áudio com Controles Estilo WhatsApp**:
+    - Gravação com lixeira para cancelamento instantâneo, pausa/retomada com indicador âmbar, barras de ondas sonoras dinâmicas e botão de envio direto.
+    - Respostas faladas com voz neural feminina (`pt-BR-FranciscaNeural` via Edge TTS local).
   - **Abstração Total de Mídia**: O criador foca exclusivamente no conteúdo e nas ideias técnicas; a Gestora define o formato ideal (Carrossel, Reels ou Post Solo) e o Ângulo Narrativo nos bastidores.
   - **Substituição Inteligente & Mudança de Ideia (`REPLACED_PREVIOUS_PAUTA`)**: Se o criador mudar de ideia após aprovar uma pauta ("mudei de ideia, quero a opção 2"), o sistema cancela e remove automaticamente o slot anterior no PostgreSQL, registrando a nova pauta sem duplicidade.
   - **Distribuição Dinâmica na Grade & Prevenção de Conflitos**:

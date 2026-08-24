@@ -30,12 +30,26 @@ export const contentStage: PipelineStageHandler = {
       log(`RAG recuperou ${activeInsights.length} diretrizes validadas e ${refutedInsights.length} premissas refutadas.`, "info");
     }
 
+    // Recupera diretrizes estratégicas ativas do último relatório de Analytics
+    let globalDirectives: string[] = [];
+    try {
+      const { getAnalyticsHistory } = await import("../../services/analytics-engine.js");
+      const history = await getAnalyticsHistory();
+      if (history[0]?.strategicDirectives && Array.isArray(history[0].strategicDirectives)) {
+        globalDirectives = history[0].strategicDirectives;
+        if (globalDirectives.length > 0) {
+          log(`Analytics ativo: ${globalDirectives.length} diretrizes estratégicas injetadas na redação.`, "info");
+        }
+      }
+    } catch {}
+
     log(`Gerando conteúdo técnico (${format}) para ${brand.handle} sobre "${ctx.decision.topic}"...`);
 
     const prompt = buildContentGeneratorPrompt({
       ...ctx.decision,
       handle: brand.handle,
       ragInsights: ragInsightsStr || undefined,
+      globalDirectives: globalDirectives.length > 0 ? globalDirectives : undefined,
     });
     const content = await executeStructuredPrompt<GeneratedContentData>(prompt);
 

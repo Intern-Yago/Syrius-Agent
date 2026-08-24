@@ -133,8 +133,62 @@ let autoplayActive = false;
 let autoplayTimer: NodeJS.Timeout | null = null;
 const notifiedSlotsTodaySet = new Set<string>();
 
+/**
+ * Retorna a chave identificadora da semana civil (ISO) no formato YYYY-Www
+ */
+function getCurrentWeekKey(d: Date = new Date()): string {
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  return `${date.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+/**
+ * Verifica e executa a virada automática de semana (Rollover) quando o calendário muda
+ */
+async function checkAndPerformWeekRollover(): Promise<boolean> {
+  try {
+    const { getSettings, saveSettings } = await import("../../src/config/settings.js");
+    const settings = await getSettings();
+    const currentWeekKey = getCurrentWeekKey();
+
+    if (settings.lastActiveWeekKey && settings.lastActiveWeekKey !== currentWeekKey) {
+      console.log(`[schedule] 🔄 Virada de semana detectada (${settings.lastActiveWeekKey} -> ${currentWeekKey}). Executando rollover automático da grade...`);
+
+      const nextWeekSlots = await prisma.editorialScheduleSlot.findMany({
+        where: { weekOffset: 1 },
+      });
+
+      if (nextWeekSlots.length > 0) {
+        // Remove os slots da semana anterior em weekOffset: 0
+        await prisma.editorialScheduleSlot.deleteMany({ where: { weekOffset: 0 } });
+        // Promove os slots da próxima semana para a semana atual
+        await prisma.editorialScheduleSlot.updateMany({
+          where: { weekOffset: 1 },
+          data: { weekOffset: 0 },
+        });
+        console.log(`[schedule] ✅ ${nextWeekSlots.length} slots promovidos automaticamente da Próxima Semana para a Semana Atual.`);
+      }
+
+      await saveSettings({ lastActiveWeekKey: currentWeekKey });
+      return true;
+    } else if (!settings.lastActiveWeekKey) {
+      await saveSettings({ lastActiveWeekKey: currentWeekKey });
+    }
+  } catch (err) {
+    console.warn("[schedule] Aviso ao verificar rollover semanal:", err);
+  }
+  return false;
+}
+
 async function loadSchedule(weekOffset: number = 0): Promise<ScheduleSlot[]> {
   try {
+    if (weekOffset === 0) {
+      await checkAndPerformWeekRollover();
+    }
+
     let dbSlots = await prisma.editorialScheduleSlot.findMany({
       where: { weekOffset },
       orderBy: { orderIndex: "asc" },
@@ -376,6 +430,20 @@ export function registerScheduleIPC(getMainWindow?: () => BrowserWindow | null) 
   if (registered) return;
   registered = true;
 
+  // Restaura estado persistido do Autoplay / Publicação Automática das configurações
+  (async () => {
+    try {
+      const { getSettings } = await import("../../src/config/settings.js");
+      const s = await getSettings();
+      if (s && s.autoPublish !== undefined) {
+        autoplayActive = Boolean(s.autoPublish);
+        console.log(`[schedule] 🚀 Publicação Automática (Autoplay) restaurada: ${autoplayActive ? "ATIVO" : "DESATIVADO"}`);
+      }
+    } catch (err) {
+      console.warn("[schedule] Aviso ao restaurar estado do autoplay:", err);
+    }
+  })();
+
   // Inicia daemon do agendador automático em background
   startSchedulerDaemon(getMainWindow);
 
@@ -424,6 +492,13 @@ export function registerScheduleIPC(getMainWindow?: () => BrowserWindow | null) 
 
   // 4. Toggle Autoplay
   ipcMain.handle("schedule:get-autoplay", async (): Promise<boolean> => {
+    try {
+      const { getSettings } = await import("../../src/config/settings.js");
+      const s = await getSettings();
+      if (s && s.autoPublish !== undefined) {
+        autoplayActive = Boolean(s.autoPublish);
+      }
+    } catch {}
     return autoplayActive;
   });
 
@@ -452,10 +527,34 @@ export function registerScheduleIPC(getMainWindow?: () => BrowserWindow | null) 
         where: { weekOffset: 1 },
         data: { weekOffset: 0 },
       });
+      console.log(`[schedule] 🚀 Grade da Próxima Semana promovida para a Semana Atual (${nextWeekSlots.length} slots).`);
     }
+    const currentWeekKey = getCurrentWeekKey();
+    try {
+      const { saveSettings } = await import("../../src/config/settings.js");
+      await saveSettings({ lastActiveWeekKey: currentWeekKey });
+    } catch {}
+
     const updated = await loadSchedule(0);
     return { success: true, slots: updated };
   });
+
+  // Mover um slot específico entre Semana Atual (0) e Próxima Semana (1)
+  ipcMain.handle(
+    "schedule:move-slot-week",
+    async (
+      _event,
+      slotId: string,
+      targetWeekOffset: number
+    ): Promise<{ success: boolean; slots: ScheduleSlot[] }> => {
+      await prisma.editorialScheduleSlot.updateMany({
+        where: { id: slotId },
+        data: { weekOffset: targetWeekOffset },
+      });
+      const updated = await loadSchedule(targetWeekOffset);
+      return { success: true, slots: updated };
+    }
+  );
 
   // 5. Inserir Pauta Recomendada da Análise IA na Grade (com roteamento inteligente para Próxima Semana se a data já expirou)
   ipcMain.handle(

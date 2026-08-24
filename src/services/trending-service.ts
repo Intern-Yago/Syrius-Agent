@@ -26,7 +26,7 @@ export interface TrendingTopicItem {
 
 interface RawGeminiTrendingTopic {
   title: string;
-  category: string;
+  category?: string;
   summary: string;
   whyTrending: string;
   suggestedAngle: string;
@@ -35,11 +35,16 @@ interface RawGeminiTrendingTopic {
   hookIdea: string;
   baseCopyPrompt: string;
   baseVisualPrompt: string;
+  sourceLinks?: string[];
+  repoUrl?: string;
   relevanceScore: number;
 }
 
 interface GeminiTrendingResponse {
-  topics: RawGeminiTrendingTopic[];
+  generalTopics?: RawGeminiTrendingTopic[];
+  trendingRepositories?: RawGeminiTrendingTopic[];
+  techNews?: RawGeminiTrendingTopic[];
+  topics?: RawGeminiTrendingTopic[];
 }
 
 /**
@@ -47,11 +52,10 @@ interface GeminiTrendingResponse {
  * Realiza apenas leitura do banco de dados para evitar chamadas desnecessárias de IA.
  */
 export async function getActiveTrendingTopics(): Promise<TrendingTopicItem[]> {
-  const settings = await getSettings();
-  const maxCount = settings.trendingTopicsCount || 10;
+  const now = new Date();
 
-  // Busca tópicos ativos salvos no PostgreSQL
-  const activeTopics = await prisma.trendingTopic.findMany({
+  // Busca todos os tópicos ativos salvos no PostgreSQL (até 40)
+  let activeTopics = await prisma.trendingTopic.findMany({
     where: {
       status: "ACTIVE",
     },
@@ -59,8 +63,19 @@ export async function getActiveTrendingTopics(): Promise<TrendingTopicItem[]> {
       { createdAt: "desc" },
       { relevanceScore: "desc" },
     ],
-    take: maxCount,
+    take: 50,
   });
+
+  // Se não houver tópicos ativos OU se todos os tópicos ativos expiraram pelo calendário
+  const isExpired = activeTopics.length > 0 && activeTopics.every((t) => t.expiresAt.getTime() < now.getTime());
+  if (activeTopics.length === 0 || isExpired) {
+    console.log(`[TrendingService] 🔄 Tendências expiradas ou ausentes no banco. Executando renovação automática com IA...`);
+    try {
+      return await refreshTrendingTopics(true);
+    } catch (err) {
+      console.warn("[TrendingService] Aviso ao renovar automaticamente tendências expiradas:", err);
+    }
+  }
 
   return activeTopics.map((t) => ({
     ...t,
@@ -72,91 +87,328 @@ export async function getActiveTrendingTopics(): Promise<TrendingTopicItem[]> {
 }
 
 /**
+ * Coleta repositórios open-source reais em alta no GitHub via API pública de busca
+ */
+async function fetchRealGitHubTrending(): Promise<Array<{ name: string; url: string; description: string; stars: number; language: string }>> {
+  const dateStr = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  try {
+    const res = await fetch(
+      `https://api.github.com/search/repositories?q=created:>${dateStr}+stars:>100&sort=stars&order=desc&per_page=15`,
+      {
+        headers: {
+          "User-Agent": "Syrius-Agent-AI-Trends",
+          Accept: "application/vnd.github.v3+json",
+        },
+      }
+    );
+    if (res.ok) {
+      const data: any = await res.json();
+      if (data.items && data.items.length > 0) {
+        return data.items.map((item: any) => ({
+          name: item.full_name,
+          url: item.html_url,
+          description: item.description || "Sem descrição oficial",
+          stars: item.stargazers_count,
+          language: item.language || "TypeScript / Python / Rust / Go",
+        }));
+      }
+    }
+  } catch (err) {
+    console.warn("[TrendingService] Aviso ao buscar repositórios via GitHub Search API:", err);
+  }
+
+  // Fallback: repositórios populares atualizados recentemente
+  try {
+    const pushedDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const res2 = await fetch(
+      `https://api.github.com/search/repositories?q=stars:>1000+pushed:>${pushedDate}&sort=updated&order=desc&per_page=12`,
+      {
+        headers: {
+          "User-Agent": "Syrius-Agent-AI-Trends",
+          Accept: "application/vnd.github.v3+json",
+        },
+      }
+    );
+    if (res2.ok) {
+      const data2: any = await res2.json();
+      if (data2.items && data2.items.length > 0) {
+        return data2.items.map((item: any) => ({
+          name: item.full_name,
+          url: item.html_url,
+          description: item.description || "Sem descrição oficial",
+          stars: item.stargazers_count,
+          language: item.language || "Tech Geral",
+        }));
+      }
+    }
+  } catch {}
+
+  return [];
+}
+
+/**
+ * Coleta notícias e manchetes de tecnologia em tempo real através de 5 fontes nacionais e globais
+ */
+async function fetchRealTechNews(): Promise<Array<{ title: string; link: string; source: string }>> {
+  const newsList: Array<{ title: string; link: string; source: string }> = [];
+
+  function parseRssItems(xml: string, sourceName: string, maxItems = 5) {
+    const itemRegex = /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<\/item>/gi;
+    let match;
+    let count = 0;
+    while ((match = itemRegex.exec(xml)) !== null && count < maxItems) {
+      const rawTitle = match[1]
+        .replace(/<!\[CDATA\[(.*?)\]\]>/gi, "$1")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
+      const link = match[2].trim();
+      if (rawTitle && link && !rawTitle.toLowerCase().includes("patrocinado")) {
+        newsList.push({
+          title: rawTitle,
+          link,
+          source: sourceName,
+        });
+        count++;
+      }
+    }
+  }
+
+  // Executa todas as 5 fontes em paralelo com tolerância a falhas individuais
+  await Promise.allSettled([
+    // 1. Hacker News API (Global / Vale do Silício & Open Source)
+    (async () => {
+      try {
+        const hnRes = await fetch("https://hacker-news.firebaseio.com/v0/topstories.json");
+        if (hnRes.ok) {
+          const storyIds: number[] = await hnRes.json();
+          const topIds = storyIds.slice(0, 8);
+          const stories = await Promise.all(
+            topIds.map(async (id) => {
+              try {
+                const itemRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+                if (itemRes.ok) return await itemRes.json();
+              } catch {}
+              return null;
+            })
+          );
+          for (const s of stories) {
+            if (s && s.title && s.url) {
+              newsList.push({
+                title: s.title,
+                link: s.url,
+                source: "Hacker News (Global)",
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[TrendingService] Aviso ao buscar Hacker News:", err);
+      }
+    })(),
+
+    // 2. Dev.to RSS (Global / Comunidade de Desenvolvedores)
+    (async () => {
+      try {
+        const res = await fetch("https://dev.to/feed", {
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        if (res.ok) {
+          const xml = await res.text();
+          parseRssItems(xml, "Dev.to Community (Global)", 5);
+        }
+      } catch (err) {
+        console.warn("[TrendingService] Aviso ao buscar Dev.to RSS:", err);
+      }
+    })(),
+
+    // 3. InfoQ News RSS (Global / Arquitetura, Cloud & DevOps)
+    (async () => {
+      try {
+        const res = await fetch("https://feed.infoq.com/", {
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        if (res.ok) {
+          const xml = await res.text();
+          parseRssItems(xml, "InfoQ Architecture (Global)", 5);
+        }
+      } catch (err) {
+        console.warn("[TrendingService] Aviso ao buscar InfoQ RSS:", err);
+      }
+    })(),
+
+    // 4. Canaltech / TecMundo Tech RSS (Nacional / Brasil)
+    (async () => {
+      try {
+        const res = await fetch("https://rss.tecmundo.com.br/feed", {
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        if (res.ok) {
+          const xml = await res.text();
+          parseRssItems(xml, "TecMundo Tech (Nacional)", 5);
+        }
+      } catch (err) {
+        console.warn("[TrendingService] Aviso ao buscar TecMundo RSS:", err);
+      }
+    })(),
+
+    // 5. Google News Tech Brasil & Global RSS (Agregador Multi-Fonte)
+    (async () => {
+      try {
+        const rssUrl = "https://news.google.com/rss/search?q=tecnologia+programacao+software+inteligencia+artificial+when:5d&hl=pt-BR&gl=BR&ceid=BR:pt-419";
+        const res = await fetch(rssUrl, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        if (res.ok) {
+          const xml = await res.text();
+          parseRssItems(xml, "Google News Tech (Brasil & Global)", 6);
+        }
+      } catch (err) {
+        console.warn("[TrendingService] Aviso ao buscar Google News RSS:", err);
+      }
+    })(),
+  ]);
+
+  return newsList;
+}
+
+/**
  * Renova a lista de tendências tech utilizando IA e salva no PostgreSQL.
+ * Alimenta a IA com dados de scraping ao vivo do GitHub e Google News RSS.
  */
 export async function refreshTrendingTopics(force = false): Promise<TrendingTopicItem[]> {
   const settings = await getSettings();
   const brand = await getBrandInfo();
-  const maxCount = settings.trendingTopicsCount || 10;
-  const intervalDays = settings.trendingRefreshIntervalDays || 1;
+  const intervalDays = settings.trendingRefreshIntervalDays || 7;
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + intervalDays * 24 * 60 * 60 * 1000);
 
-  // Busca posts publicados recentemente no PostgreSQL para cooldown de 21 dias
+  // 1. Scraping e coleta de dados ao vivo em paralelo
+  console.log("[TrendingService] 📡 Coletando dados ao vivo do GitHub Trending e Google News RSS...");
+  const [liveGitHubRepos, liveTechNews] = await Promise.all([
+    fetchRealGitHubTrending(),
+    fetchRealTechNews(),
+  ]);
+  console.log(`[TrendingService] ✅ Coletados ${liveGitHubRepos.length} repositórios GitHub e ${liveTechNews.length} manchetes de notícias reais.`);
+
+  // 2. Busca posts publicados recentemente no PostgreSQL para cooldown de 30 dias (subtração)
   const recentPosts = await prisma.post.findMany({
     where: { createdAt: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) } },
     select: { topic: true, format: true },
     orderBy: { createdAt: "desc" },
-    take: 15,
+    take: 25,
   });
 
   // Busca tópicos recentes de tendências para evitar repetições
   const recentTopics = await prisma.trendingTopic.findMany({
     where: { createdAt: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) } },
-    select: { title: true },
+    select: { title: true, category: true, sourceLinks: true },
   });
   const recentTitles = recentTopics.map((t) => t.title);
 
   const prompt = `
 Você é o Chief Technology Officer e Trend Hunter sênior do perfil de tecnologia ${brand.handle} no Instagram.
 
-Sua missão é realizar uma VARREDURA DE ALTO NÍVEL DAS MAIORES TENDÊNCIAS EM ALTA NO ECOSSISTEMA TECH E DEV NESTA SEMANA.
+Sua missão é realizar uma VARREDURA DE ALTO NÍVEL DAS MAIORES TENDÊNCIAS EM ALTA NO ECOSSISTEMA TECH E DEV NESTA SEMANA, UTILIZANDO OS DADOS REAIS COLETADOS AO VIVO ABAIXO.
 
-DIRETRIZES DE INTELIGÊNCIA EDITORIAL E SISTEMA VIVO:
-1. Detecte exatamente ${maxCount} temas em alta profunda e relevante para desenvolvedores, engenheiros de software, arquitetos e profissionais tech.
-2. CATEGORIAS DE COBERTURA:
-   - "DevOps & Cloud" (Docker, Kubernetes, CI/CD, AWS, Terraform, Cloudflare, Linux)
-   - "Backend & Arquitetura" (Node.js, TypeScript, Go, Rust, PostgreSQL, Microsserviços, Clean Architecture, Filas, Caching)
-   - "Frontend & UI" (React 19, Next.js, Vite, Tailwind, Performance Web, Estado)
-   - "Inteligência Artificial & Agentes" (LLMs locais, RAG, MCP, Agentes autônomos, OpenAI, Anthropic, Gemini)
-   - "Segurança & Performance" (Vulnerabilidades críticas, Secrets leak, Benchmarks, Otimização de I/O)
-   - "Carreira Dev & Boas Práticas" (Senioridade real, System Design, Code Review, Refatoração)
+=== DADOS REAIS COLETADOS AO VIVO VIA SCRAPING / APIS ===
 
-3. DISCERNIMENTO DE ÂNGULO E INTENÇÃO DA AUDIÊNCIA (REPOSITÓRIO VS CONCEITO/IMPACTO):
-   - Se o tema envolve um repositório ou ferramenta open-source (ex: OpenClaw, Supabase, Bun, Drizzle):
-     * **Ângulo Repositório & Prática**: Use quando a ferramenta for uma novidade prática que o dev quer ver funcionando em poucas linhas de código ou quer dissecar a doc.
-     * **Ângulo Arquitetura & Impacto**: Use quando o debate central for o custo de infraestrutura, benchmark contra concorrentes, ou quando NÃO usar em produção.
-     * **Ângulo Provocativo / Quebra de Crença**: Use quando o mercado estiver adotando algo por hype sem entender os gargalos reais.
+--- REPOSITÓRIOS EM ALTA NO GITHUB (AO VIVO) ---
+${liveGitHubRepos.length > 0
+  ? liveGitHubRepos.map((r) => `- [${r.language}] ${r.name} (${r.stars} ⭐): ${r.description} (URL: ${r.url})`).join("\n")
+  : "- Repositórios populares: shadcn-ui/ui, drizzle-team/drizzle-orm, oven-sh/bun, langchain-ai/langchain, supabase/supabase"}
 
-4. REGRA DE COOLDOWN (ANTI-SATURAÇÃO DE CONTEÚDO):
-   - Se um tema ou ferramenta já foi publicado recentemente no perfil, É PROIBIDO repetir a mesma abordagem básica.
-   - Só sugira um tema similar se for sob um ângulo 100% INÉDITO e avançado (ex: 'Lições de 6 meses em produção', 'O benchmark oculto', 'A falha de segurança que ninguém viu').
+--- NOTÍCIAS E LANÇAMENTOS TECH EM TEMPO REAL (GOOGLE NEWS & HACKER NEWS) ---
+${liveTechNews.length > 0
+  ? liveTechNews.map((n) => `- [${n.source}] ${n.title} (Link: ${n.link})`).join("\n")
+  : "- Lançamentos recentes no ecossistema de software, cloud e inteligência artificial."}
 
-POSTS PUBLICADOS RECENTEMENTE NO PERFIL (RESPEITE O COOLDOWN):
+=======================================================
+
+VOCÊ DEVE GERAR OBRIGATORIAMENTE 3 SEÇÕES DISTINTAS E COMPLETAS (TOTAL DE 20 ITENS):
+
+1. **generalTopics (EXATAMENTE 10 TEMAS GERAIS & ARQUITETURA)**:
+   - Divida entre as categorias:
+     * "Backend & Arquitetura" (Node.js, TypeScript, Go, Rust, PostgreSQL, Microsserviços, Clean Architecture, Filas, Caching)
+     * "DevOps & Cloud" (Docker, Kubernetes, CI/CD, AWS, Terraform, Cloudflare, Linux)
+     * "Frontend & UI" (React 19, Next.js, Vite, Tailwind, Performance Web, Estado)
+     * "Inteligência Artificial & Agentes" (LLMs locais, RAG, MCP, Agentes autônomos, OpenAI, Anthropic, Gemini)
+     * "Segurança & Performance" (Vulnerabilidades críticas, Secrets leak, Benchmarks, Otimização de I/O)
+     * "Carreira Dev & Boas Práticas" (Senioridade real, System Design, Code Review, Refatoração)
+
+2. **trendingRepositories (EXATAMENTE 5 REPOSITÓRIOS EM ALTA NO GITHUB)**:
+   - SELECIONE 5 DOS REPOSITÓRIOS REAIS LISTADOS ACIMA (ou ferramentas open-source reais do ecossistema dev).
+   - "category": "Repositório GitHub"
+   - "repoUrl": URL oficial do GitHub
+   - "sourceLinks": [URL oficial do GitHub]
+   - "title": "owner/repo: O que a ferramenta faz em poucas palavras"
+   - "whyTrending": "Destaque a tração real no GitHub (estrelas reais, novidade técnica ou problema que resolve)"
+
+3. **techNews (EXATAMENTE 5 NOTÍCIAS & LANÇAMENTOS TECH)**:
+   - SELECIONE 5 DAS NOTÍCIAS E RELEASES REAIS LISTADAS ACIMA (ou lançamentos recentes de tecnologia).
+   - "category": "Notícias & Lançamentos Tech"
+   - "narrativeAngle": "BREAKING_NEWS"
+
+DIRETRIZ CRÍTICA DE SUBTRAÇÃO E COOLDOWN (ANTI-REPETIÇÃO):
+- Analise os posts recentes publicados abaixo. Se algum repositório ou assunto já foi publicado nos últimos 30 dias, **SUBTRAIA-O OBRIGATORIAMENTE** e traga opções 100% inéditas!
+
+POSTS PUBLICADOS RECENTEMENTE NO PERFIL (RESPEITE O COOLDOWN E SUBTRAIA):
 ${recentPosts.length > 0 ? recentPosts.map((p) => `- [${p.format}] ${p.topic}`).join("\n") : "Nenhum post recente no histórico."}
 
 TÓPICOS JÁ GERADOS RECENTEMENTE NO RADAR:
-${recentTitles.length > 0 ? recentTitles.map((t) => `- ${t}`).join("\n") : "Nenhum histórico recente."}
+${recentTitles.length > 0 ? recentTitles.slice(0, 15).map((t) => `- ${t}`).join("\n") : "Nenhum histórico recente."}
 
-5. CADA TEMA DEVE CONTER:
-   - "title": Título claro, direto e chamativo do assunto.
-   - "category": Uma das categorias acima.
-   - "summary": Resumo de 2 a 3 linhas explicando a essência técnica do assunto.
-   - "whyTrending": Explicação detalhada de POR QUE este assunto está em alta agora (novas releases, discussões na comunidade, artigos virais, quebras de paradigmas).
-   - "suggestedAngle": Ângulo contra-intuitivo ou prático para abordar o tema no Instagram.
-   - "narrativeAngle": Um dos 9 ângulos editoriais ("BEFORE_AFTER", "HOT_TAKE", "MIGRATION_GUIDE", "SENIOR_REVIEW", "BREAKING_NEWS", "DEEP_DIVE", "COMMUNITY_PULSE", "TLDR_SUMMARY", "STEP_BY_STEP_TUTORIAL").
-   - "suggestedFormat": Formato ideal ("CAROUSEL", "REEL_SCRIPT", "SINGLE_IMAGE" ou "STORY_PHOTO").
-   - "hookIdea": Gancho provocativo para os primeiros 3 segundos ou capa.
-   - "baseCopyPrompt": Diretriz base para a redação do post.
-   - "baseVisualPrompt": Diretriz estética para a geração visual da imagem/código.
-   - "relevanceScore": Número de 80 a 99 indicando o grau de relevância.
-
-RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
+RESPONDA SOMENTE COM ESTE JSON VÁLIDO CONTENDO AS 3 SEÇÕES:
 {
-  "topics": [
+  "generalTopics": [
     {
       "title": "Migração de Monólitos para Arquitetura Modular em Node.js com TypeScript",
       "category": "Backend & Arquitetura",
-      "summary": "Como times modernos estão abandonando o excesso de microsserviços para adotar Monólitos Modulares com isolamento por domínios.",
-      "whyTrending": "Artigos recentes de engenharia de grandes empresas mostram que a complexidade de rede de microsserviços prematuros custa caro.",
-      "suggestedAngle": "Demonstrar como criar boundaries claras em TypeScript sem a dor de cabeça de dezenas de repositórios.",
+      "summary": "Como times modernos estão adotando Monólitos Modulares com isolamento por domínios.",
+      "whyTrending": "Artigos de engenharia mostram o custo de rede de microsserviços prematuros.",
+      "suggestedAngle": "Demonstrar boundaries claras em TypeScript sem dezenas de repositórios.",
       "narrativeAngle": "BEFORE_AFTER",
       "suggestedFormat": "CAROUSEL",
-      "hookIdea": "Pare de criar microsserviços antes de atingir 1 milhão de requisições: o guia do Monólito Modular.",
-      "baseCopyPrompt": "Carrossel técnico detalhando a estrutura de pastas, inversão de dependência e comunicação interna de eventos.",
-      "baseVisualPrompt": "Dark terminal theme diagram showing modular monolith vs messy microservices structure.",
-      "relevanceScore": 95
+      "hookIdea": "Pare de criar microsserviços antes de 1 milhão de requisições.",
+      "baseCopyPrompt": "Carrossel técnico detalhando a estrutura de pastas e inversão de dependência.",
+      "baseVisualPrompt": "Dark terminal theme diagram showing modular monolith structure.",
+      "sourceLinks": [],
+      "relevanceScore": 96
+    }
+  ],
+  "trendingRepositories": [
+    {
+      "title": "shadcn-ui/ui: Novos blocos e componentes acessíveis com Tailwind CSS",
+      "category": "Repositório GitHub",
+      "summary": "Coleção de componentes reutilizáveis para copiar e colar diretamente no app.",
+      "whyTrending": "Mais de 70k stars no GitHub e atualização recente com novos blocos.",
+      "suggestedAngle": "Por que copiar código superou bibliotecas pesadas de componentes.",
+      "narrativeAngle": "SENIOR_REVIEW",
+      "suggestedFormat": "CAROUSEL",
+      "hookIdea": "Por que devs React seniores abandonaram pacotes tradicionais de UI.",
+      "baseCopyPrompt": "Carrossel dissecando o design system do shadcn/ui.",
+      "baseVisualPrompt": "Dark code editor mockup showing clean React component structure.",
+      "repoUrl": "https://github.com/shadcn-ui/ui",
+      "sourceLinks": ["https://github.com/shadcn-ui/ui"],
+      "relevanceScore": 98
+    }
+  ],
+  "techNews": [
+    {
+      "title": "Node.js 22 LTS: Suporte Nativo a TypeScript e Novo Compilador V8",
+      "category": "Notícias & Lançamentos Tech",
+      "summary": "Nova versão LTS traz execução nativa de arquivos .ts sem necessidade de ts-node.",
+      "whyTrending": "Adoção maciça em produção com ganho de velocidade e fim de builds lentos.",
+      "suggestedAngle": "O que muda na prática para o fluxo de trabalho de desenvolvedores backend.",
+      "narrativeAngle": "BREAKING_NEWS",
+      "suggestedFormat": "CAROUSEL",
+      "hookIdea": "TypeScript nativo no Node.js finalmente chegou: o que você precisa saber.",
+      "baseCopyPrompt": "Carrossel cobrindo as 4 principais mudanças do Node 22.",
+      "baseVisualPrompt": "Breaking news badge with dark Node.js green neon aesthetics.",
+      "sourceLinks": [],
+      "relevanceScore": 97
     }
   ]
 }
@@ -164,10 +416,96 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
 
   try {
     const aiResponse = await executeStructuredPrompt<GeminiTrendingResponse>(prompt);
-    const rawTopics = aiResponse.topics || [];
+    
+    // Combina as 3 seções garantindo tipagem, categorias e fallback automático
+    const rawGeneral = aiResponse.generalTopics || [];
+    const rawRepos = aiResponse.trendingRepositories || [];
+    const rawNews = aiResponse.techNews || [];
+    const rawFallback = aiResponse.topics || [];
 
-    if (rawTopics.length === 0) {
-      throw new Error("A IA não retornou temas em alta.");
+    const allRawTopics: Array<RawGeminiTrendingTopic & { finalCategory: string; finalAngle?: string }> = [];
+
+    // 1. Processa Temas Gerais & Arquitetura (Garante 10)
+    rawGeneral.slice(0, 10).forEach((t) => {
+      allRawTopics.push({ ...t, finalCategory: t.category || "Backend & Arquitetura" });
+    });
+
+    // 2. Processa Repositórios em Alta no GitHub (Garante 5)
+    rawRepos.forEach((t) => {
+      const repoUrl = t.repoUrl || (t.sourceLinks && t.sourceLinks[0]) || "";
+      const sourceLinks = repoUrl ? [repoUrl] : (t.sourceLinks || []);
+      allRawTopics.push({ ...t, finalCategory: "Repositório GitHub", sourceLinks });
+    });
+
+    // Se a IA retornou menos de 5 repositórios, complementa automaticamente com os repositórios reais do scraping
+    if (allRawTopics.filter((x) => x.finalCategory === "Repositório GitHub").length < 5 && liveGitHubRepos.length > 0) {
+      for (const r of liveGitHubRepos) {
+        if (allRawTopics.filter((x) => x.finalCategory === "Repositório GitHub").length >= 5) break;
+        const alreadyExists = allRawTopics.some((x) => x.title.toLowerCase().includes(r.name.toLowerCase()));
+        if (!alreadyExists) {
+          allRawTopics.push({
+            title: `${r.name}: ${r.description.slice(0, 80)}`,
+            category: "Repositório GitHub",
+            finalCategory: "Repositório GitHub",
+            summary: r.description || "Biblioteca open-source de alto impacto para desenvolvedores.",
+            whyTrending: `${r.stars} estrelas no GitHub com grande tração e crescimento na comunidade.`,
+            suggestedAngle: `Dissecar a arquitetura de ${r.name}, por baixo dos panos e como usar em produção.`,
+            narrativeAngle: "SENIOR_REVIEW",
+            suggestedFormat: "CAROUSEL",
+            hookIdea: `Por que este repositório (${r.name}) está ganhando centenas de estrelas no GitHub?`,
+            baseCopyPrompt: `Carrossel dissecando o repositório ${r.name} (${r.url}). OBRIGATÓRIO: link na legenda e no último slide.`,
+            baseVisualPrompt: `Dark minimalist interface showing GitHub repository header with ${r.stars} stars and syntax highlighted code.`,
+            sourceLinks: [r.url],
+            repoUrl: r.url,
+            relevanceScore: Math.min(99, 92 + Math.floor(Math.random() * 7)),
+          });
+        }
+      }
+    }
+
+    // 3. Processa Notícias & Lançamentos Tech (Garante entre 5 a 10)
+    rawNews.forEach((t) => {
+      allRawTopics.push({
+        ...t,
+        finalCategory: "Notícias & Lançamentos Tech",
+        finalAngle: t.narrativeAngle || "BREAKING_NEWS",
+      });
+    });
+
+    // Se a IA retornou menos de 5 notícias, complementa automaticamente com as notícias reais do compilador
+    if (allRawTopics.filter((x) => x.finalCategory === "Notícias & Lançamentos Tech").length < 5 && liveTechNews.length > 0) {
+      for (const n of liveTechNews) {
+        if (allRawTopics.filter((x) => x.finalCategory === "Notícias & Lançamentos Tech").length >= 8) break;
+        const alreadyExists = allRawTopics.some((x) => x.title.toLowerCase().includes(n.title.toLowerCase().slice(0, 25)));
+        if (!alreadyExists) {
+          allRawTopics.push({
+            title: n.title,
+            category: "Notícias & Lançamentos Tech",
+            finalCategory: "Notícias & Lançamentos Tech",
+            summary: `Notícia e lançamento tech reportado por ${n.source}.`,
+            whyTrending: `Destaque e repercussão no ecossistema e fóruns globais de desenvolvimento.`,
+            suggestedAngle: `O que muda na prática para o desenvolvedor e o impacto no mercado de software.`,
+            narrativeAngle: "BREAKING_NEWS",
+            suggestedFormat: "CAROUSEL",
+            hookIdea: `O que mudou no ecossistema tech esta semana e por que você precisa saber.`,
+            baseCopyPrompt: `Publicação cobrindo a notícia: ${n.title} (Fonte: ${n.source}).`,
+            baseVisualPrompt: `Breaking news badge with dark glowing neon aesthetic and tech source citation.`,
+            sourceLinks: [n.link],
+            relevanceScore: Math.min(98, 88 + Math.floor(Math.random() * 10)),
+          });
+        }
+      }
+    }
+
+    // Se a IA respondeu no formato antigo fallback
+    if (allRawTopics.length === 0 && rawFallback.length > 0) {
+      rawFallback.forEach((t) => {
+        allRawTopics.push({ ...t, finalCategory: t.category || "Backend & Arquitetura" });
+      });
+    }
+
+    if (allRawTopics.length === 0) {
+      throw new Error("A IA não retornou tendências nas seções solicitadas.");
     }
 
     // Marca tópicos ativos antigos como expirados se forçado
@@ -181,21 +519,24 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
     // Salva os novos tópicos no PostgreSQL
     const savedTopics: TrendingTopicItem[] = [];
 
-    for (let i = 0; i < rawTopics.length; i++) {
-      const rt = rawTopics[i];
+    for (let i = 0; i < allRawTopics.length; i++) {
+      const rt = allRawTopics[i];
+      const sourceLinks = Array.isArray(rt.sourceLinks) ? rt.sourceLinks : [];
+
       const created = await prisma.trendingTopic.create({
         data: {
           id: `trend-${Date.now()}-${i}`,
           title: rt.title,
-          category: rt.category || "Backend & Arquitetura",
+          category: rt.finalCategory,
           summary: rt.summary,
           whyTrending: rt.whyTrending,
           suggestedAngle: rt.suggestedAngle,
-          narrativeAngle: rt.narrativeAngle || "BEFORE_AFTER",
+          narrativeAngle: rt.finalAngle || rt.narrativeAngle || "BEFORE_AFTER",
           suggestedFormat: rt.suggestedFormat || "CAROUSEL",
           hookIdea: rt.hookIdea,
           baseCopyPrompt: rt.baseCopyPrompt,
           baseVisualPrompt: rt.baseVisualPrompt,
+          sourceLinks,
           relevanceScore: rt.relevanceScore || 90,
           status: "ACTIVE",
           expiresAt,
@@ -211,7 +552,13 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       });
     }
 
-    console.log(`[TrendingService] ${savedTopics.length} novas tendências tech salvas com sucesso no PostgreSQL!`);
+    // Atualiza timestamp nas configurações
+    try {
+      const { saveSettings } = await import("../config/settings.js");
+      await saveSettings({ lastTrendingRefreshedAt: now.toISOString() });
+    } catch {}
+
+    console.log(`[TrendingService] ${savedTopics.length} novas tendências salvas (Gerais: ${rawGeneral.length}, Repos: ${rawRepos.length}, Notícias: ${rawNews.length})!`);
     return savedTopics;
   } catch (err) {
     console.error("[TrendingService] Erro ao buscar tendências com IA:", err);

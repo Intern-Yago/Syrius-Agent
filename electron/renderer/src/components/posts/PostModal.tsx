@@ -23,6 +23,7 @@ import {
 import { ImageLightboxModal } from "../common/ImageLightboxModal";
 import { getSlotTimingInfo } from "../../utils/scheduleTiming";
 import { useActivities } from "../../context/ActivitiesContext";
+import { useModal } from "../../context/ModalContext";
 
 interface PostModalProps {
   post: Post;
@@ -43,6 +44,7 @@ export function PostModal({
   onPostUpdated,
   deleting,
 }: PostModalProps) {
+  const { showConfirm, toast } = useModal();
   const {
     isPostPublishing,
     getPostPublishingTask,
@@ -287,11 +289,15 @@ export function PostModal({
     const isDueOrOverdue = timingInfo?.isOverdue || timingInfo?.isDueNow;
 
     if (!isPublished && !isDueOrOverdue) {
-      if (
-        !window.confirm(
-          `Confirmar publicação no Instagram?\n\nO post "${post.topic}" será publicado imediatamente no perfil @${handleName}.`
-        )
-      ) {
+      const confirmed = await showConfirm({
+        title: "Confirmar Publicação no Instagram",
+        message: `Deseja publicar "${post.topic}" agora no perfil @${handleName}? A mídia e a legenda serão despachadas diretamente via Meta Graph API.`,
+        confirmText: "Publicar no Instagram",
+        cancelText: "Cancelar",
+        type: "primary",
+      });
+
+      if (!confirmed) {
         return;
       }
     }

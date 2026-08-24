@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { AnalyticsReport, LearningInsight } from "../types";
 import {
   IconChart,
@@ -21,8 +21,11 @@ import {
   IconX,
   IconSearch,
   IconChevronLeft,
+  IconChevronRight,
   IconMessageSquare,
   IconDownload,
+  IconTrash,
+  IconArrowRight,
 } from "../components/common/Icons";
 import { useActivities } from "../context/ActivitiesContext";
 import { useModal } from "../context/ModalContext";
@@ -63,6 +66,25 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [sortBy, setSortBy] = useState<"NEWEST" | "OLDEST" | "HIGHEST_SCORE" | "HIGHEST_REACH">("NEWEST");
+
+  // ESTADOS DE FILTRO E PAGINAÇÃO DA MEMÓRIA RAG
+  const [ragStatusFilter, setRagStatusFilter] = useState<"ALL" | "VALIDATED" | "HYPOTHESIS" | "REFUTED">("ALL");
+  const [ragTypeFilter, setRagTypeFilter] = useState<string>("ALL");
+  const [ragSearchQuery, setRagSearchQuery] = useState<string>("");
+  const [ragPage, setRagPage] = useState<number>(1);
+  const [ragPageSize, setRagPageSize] = useState<number>(12);
+
+  // MODAL DE LINHAGEM DE AUTO-CORREÇÃO
+  const [lineageModal, setLineageModal] = useState<{
+    refutedTitle: string;
+    refutedContent: string;
+    refutedReason?: string | null;
+    activeTitle: string;
+    activeContent: string;
+    activeConfidence?: number;
+    activeStatus?: string;
+    targetInsightId?: string;
+  } | null>(null);
 
   // Rastreamento de Pautas Recomendadas já adicionadas à Grade
   const [addedTopics, setAddedTopics] = useState<Set<string>>(() => {
@@ -1550,7 +1572,7 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
                                   {topicObj.baseCopyPrompt && (
                                     <div>
                                       <strong style={{ color: "#38bdf8", display: "block", marginBottom: "2px" }}>
-                                        💡 Roteiro Base Sugerido:
+                                        Roteiro Base Sugerido:
                                       </strong>
                                       <span style={{ color: "#d4d4d8", lineHeight: "1.4", display: "block" }}>
                                         {topicObj.baseCopyPrompt}
@@ -1560,7 +1582,7 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
                                   {topicObj.baseVisualPrompt && (
                                     <div>
                                       <strong style={{ color: "#c084fc", display: "block", marginBottom: "2px" }}>
-                                        🎨 Direção Visual da Capa:
+                                        Direção Visual da Capa:
                                       </strong>
                                       <span style={{ color: "#d4d4d8", lineHeight: "1.4", display: "block" }}>
                                         {topicObj.baseVisualPrompt}
@@ -1725,40 +1747,40 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
 
           {/* ABA 3: MEMÓRIA RAG & AUTO-CORREÇÕES */}
           {activeTab === "RAG_MEMORY" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ background: "#111114", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "14px", padding: "20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "14px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ background: "#111114", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "12px", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                 <div>
-                  <div className="section-tag" style={{ color: "#fbbf24", display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                    <IconRefreshCw size={13} />
+                  <div className="section-tag" style={{ color: "#fbbf24", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "10px" }}>
+                    <IconRefreshCw size={12} />
                     <span>MEMÓRIA VETORIAL & AUTO-CORREÇÃO</span>
                   </div>
-                  <h3 style={{ fontSize: "16px", color: "#fafafa", margin: "4px 0" }}>
+                  <h3 style={{ fontSize: "14px", color: "#fafafa", margin: "2px 0 0" }}>
                     Cérebro de Aprendizado do Gestor de IA
                   </h3>
-                  <p style={{ fontSize: "12px", color: "#71717a", margin: 0, maxWidth: "560px" }}>
-                    A IA acumula aprendizados vetorizados com Gemini text-embedding-004 e gravados no PostgreSQL. Você pode desvalidar, ajustar ou excluir qualquer tese manualmente.
+                  <p style={{ fontSize: "11px", color: "#71717a", margin: 0, maxWidth: "560px" }}>
+                    A IA acumula aprendizados vetorizados com Gemini text-embedding-004 e gravados no PostgreSQL.
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <button
                     type="button"
                     className="secondary-button"
                     onClick={handleDevalidateAll}
-                    style={{ fontSize: "11px", padding: "6px 12px", color: "#fbbf24", borderColor: "rgba(245, 158, 11, 0.35)", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                    title="Converte todas as teses validadas em hipóteses com confiança reduzida (ideal para fases iniciais)"
+                    style={{ fontSize: "10px", padding: "4px 10px", color: "#fbbf24", borderColor: "rgba(245, 158, 11, 0.35)" }}
+                    title="Converte todas as teses validadas em hipóteses com confiança reduzida"
                   >
-                    <span>🧪 Desvalidar Tudo (Mudar para Hipótese)</span>
+                    <span>Desvalidar Tudo (Hipótese)</span>
                   </button>
 
                   <button
                     type="button"
                     className="secondary-button"
                     onClick={loadRagInsights}
-                    style={{ fontSize: "11px", padding: "6px 12px" }}
+                    style={{ fontSize: "10px", padding: "4px 10px" }}
                     title="Recarregar aprendizados do banco"
                   >
-                    <IconRefreshCw size={12} />
+                    <IconRefreshCw size={11} />
                     <span>Recarregar</span>
                   </button>
                 </div>
@@ -1767,156 +1789,784 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
               {/* AVISO DE CALIBRAÇÃO PARA CONTAS INICIAIS */}
               <div
                 style={{
-                  padding: "12px 16px",
-                  borderRadius: "10px",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
                   background: "rgba(245, 158, 11, 0.08)",
                   border: "1px solid rgba(245, 158, 11, 0.25)",
                   color: "#fbbf24",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   display: "flex",
                   alignItems: "center",
-                  gap: "10px",
+                  gap: "8px",
                 }}
               >
-                <IconAlertTriangle size={16} color="#fbbf24" style={{ flexShrink: 0 }} />
+                <IconAlertTriangle size={14} color="#fbbf24" style={{ flexShrink: 0 }} />
                 <span>
-                  <strong>Calibração para Amostragem Inicial:</strong> Com base reduzida de seguidores e poucas publicações, métricas percentuais de alcance sofrem distorção de amostragem. As teses devem permanecer como <strong>Hipóteses em Teste (35% a 50% de confiança)</strong> até que a conta acumule volume estatístico relevante.
+                  <strong>Calibração para Amostragem Inicial:</strong> Com base reduzida de seguidores, as teses permanecem como <strong>Hipóteses em Teste (35% a 50% de confiança)</strong> até que a conta acumule volume estatístico relevante.
                 </span>
               </div>
 
+              {/* CARDS DE ESTATÍSTICAS RÁPIDAS DA MEMÓRIA RAG (COMPACTOS) */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
+                <div style={{ background: "#111114", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "8px 12px" }}>
+                  <span style={{ fontSize: "10px", color: "#71717a", textTransform: "uppercase", fontWeight: "700" }}>Total na Memória</span>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#fafafa", marginTop: "2px" }}>{ragInsights.length}</div>
+                </div>
+
+                <div style={{ background: "#111114", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "8px", padding: "8px 12px" }}>
+                  <span style={{ fontSize: "10px", color: "#34d399", textTransform: "uppercase", fontWeight: "700" }}>Teses Validadas</span>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#34d399", marginTop: "2px" }}>
+                    {ragInsights.filter((i) => i.status === "VALIDATED").length}
+                  </div>
+                </div>
+
+                <div style={{ background: "#111114", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "8px", padding: "8px 12px" }}>
+                  <span style={{ fontSize: "10px", color: "#38bdf8", textTransform: "uppercase", fontWeight: "700" }}>Hipóteses em Teste</span>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#38bdf8", marginTop: "2px" }}>
+                    {ragInsights.filter((i) => i.status === "HYPOTHESIS").length}
+                  </div>
+                </div>
+
+                <div style={{ background: "#111114", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "8px", padding: "8px 12px" }}>
+                  <span style={{ fontSize: "10px", color: "#f87171", textTransform: "uppercase", fontWeight: "700" }}>Refutadas / Corrigidas</span>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#f87171", marginTop: "2px" }}>
+                    {ragInsights.filter((i) => i.status === "REFUTED").length}
+                  </div>
+                </div>
+              </div>
+
+              {/* BARRA DE FILTROS & BUSCA RAG (COMPACTA) */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "#111114",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: "8px",
+                  padding: "6px 10px",
+                  flexWrap: "wrap",
+                }}
+              >
+                {/* FILTROS POR STATUS (SEM EMOJIS) */}
+                <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRagStatusFilter("ALL");
+                      setRagPage(1);
+                    }}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      fontSize: "10px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      background: ragStatusFilter === "ALL" ? "rgba(255, 255, 255, 0.12)" : "transparent",
+                      border: `1px solid ${ragStatusFilter === "ALL" ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.05)"}`,
+                      color: ragStatusFilter === "ALL" ? "#fafafa" : "#a1a1aa",
+                    }}
+                  >
+                    Todos ({ragInsights.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRagStatusFilter("VALIDATED");
+                      setRagPage(1);
+                    }}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      fontSize: "10px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      background: ragStatusFilter === "VALIDATED" ? "rgba(16, 185, 129, 0.18)" : "transparent",
+                      border: `1px solid ${ragStatusFilter === "VALIDATED" ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.05)"}`,
+                      color: ragStatusFilter === "VALIDATED" ? "#34d399" : "#a1a1aa",
+                    }}
+                  >
+                    Validadas ({ragInsights.filter((i) => i.status === "VALIDATED").length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRagStatusFilter("HYPOTHESIS");
+                      setRagPage(1);
+                    }}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      fontSize: "10px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      background: ragStatusFilter === "HYPOTHESIS" ? "rgba(56, 189, 248, 0.18)" : "transparent",
+                      border: `1px solid ${ragStatusFilter === "HYPOTHESIS" ? "rgba(56, 189, 248, 0.4)" : "rgba(255, 255, 255, 0.05)"}`,
+                      color: ragStatusFilter === "HYPOTHESIS" ? "#38bdf8" : "#a1a1aa",
+                    }}
+                  >
+                    Hipóteses ({ragInsights.filter((i) => i.status === "HYPOTHESIS").length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRagStatusFilter("REFUTED");
+                      setRagPage(1);
+                    }}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      fontSize: "10px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      background: ragStatusFilter === "REFUTED" ? "rgba(239, 68, 68, 0.18)" : "transparent",
+                      border: `1px solid ${ragStatusFilter === "REFUTED" ? "rgba(239, 68, 68, 0.4)" : "rgba(255, 255, 255, 0.05)"}`,
+                      color: ragStatusFilter === "REFUTED" ? "#f87171" : "#a1a1aa",
+                    }}
+                  >
+                    Refutadas ({ragInsights.filter((i) => i.status === "REFUTED").length})
+                  </button>
+                </div>
+
+                {/* FILTROS ADICIONAIS: TIPO, ITENS POR PÁGINA E BUSCA */}
+                <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                  <select
+                    className="settings-input"
+                    value={ragTypeFilter}
+                    onChange={(e) => {
+                      setRagTypeFilter(e.target.value);
+                      setRagPage(1);
+                    }}
+                    style={{ fontSize: "10px", padding: "4px 6px", height: "26px" }}
+                  >
+                    <option value="ALL">Todos os Tipos</option>
+                    <option value="HOOK_PERFORMANCE">Ganchos & Retenção</option>
+                    <option value="DESIGN_RETENTION">Design & Diretrizes</option>
+                    <option value="AUDIENCE_PAIN">Dores da Audiência</option>
+                    <option value="FORMAT_FATIGUE">Fadiga de Formato</option>
+                    <option value="HASHTAG_CLUSTERS">Hashtags</option>
+                  </select>
+
+                  <select
+                    className="settings-input"
+                    value={ragPageSize}
+                    onChange={(e) => {
+                      setRagPageSize(Number(e.target.value));
+                      setRagPage(1);
+                    }}
+                    style={{ fontSize: "10px", padding: "4px 6px", height: "26px" }}
+                  >
+                    <option value={6}>6 por página</option>
+                    <option value={12}>12 por página</option>
+                    <option value={24}>24 por página</option>
+                    <option value={48}>48 por página</option>
+                  </select>
+
+                  <div style={{ position: "relative", minWidth: "160px" }}>
+                    <div style={{ position: "absolute", left: "6px", top: "50%", transform: "translateY(-50%)", color: "#71717a", display: "flex" }}>
+                      <IconSearch size={11} />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Buscar aprendizado..."
+                      value={ragSearchQuery}
+                      onChange={(e) => {
+                        setRagSearchQuery(e.target.value);
+                        setRagPage(1);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "4px 6px 4px 22px",
+                        background: "rgba(0, 0, 0, 0.4)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                        borderRadius: "6px",
+                        color: "#fafafa",
+                        fontSize: "10px",
+                        outline: "none",
+                        height: "26px",
+                      }}
+                    />
+                    {ragSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRagSearchQuery("");
+                          setRagPage(1);
+                        }}
+                        style={{ position: "absolute", right: "5px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#71717a", cursor: "pointer", fontSize: "10px" }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {loadingRag && (
-                <div className="page-placeholder" style={{ padding: "30px" }}>
-                  <IconLoader size={24} className="spin" />
+                <div className="page-placeholder" style={{ padding: "20px" }}>
+                  <IconLoader size={20} className="spin" />
                   <span>Carregando memória RAG...</span>
                 </div>
               )}
 
-              {!loadingRag && ragInsights.length > 0 ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "14px" }}>
-                  {ragInsights.map((item) => {
-                    const isRefuted = item.status === "REFUTED";
-                    const isValidated = item.status === "VALIDATED";
-                    const isHypothesis = item.status === "HYPOTHESIS";
+              {/* LISTA FILTRADA E PAGINADA */}
+              {!loadingRag && ragInsights.length > 0 && (() => {
+                // Aplica filtros
+                let filtered = ragInsights;
+                if (ragStatusFilter !== "ALL") {
+                  filtered = filtered.filter((i) => i.status === ragStatusFilter);
+                }
+                if (ragTypeFilter !== "ALL") {
+                  filtered = filtered.filter((i) => i.type === ragTypeFilter);
+                }
+                if (ragSearchQuery.trim()) {
+                  const q = ragSearchQuery.toLowerCase().trim();
+                  filtered = filtered.filter(
+                    (i) =>
+                      i.title.toLowerCase().includes(q) ||
+                      i.content.toLowerCase().includes(q) ||
+                      (i.correctionReasoning && i.correctionReasoning.toLowerCase().includes(q))
+                  );
+                }
 
-                    return (
+                if (filtered.length === 0) {
+                  return (
+                    <div className="page-placeholder" style={{ padding: "30px" }}>
+                      <IconSearch size={24} />
+                      <h3>Nenhum insight encontrado</h3>
+                      <p>Nenhum aprendizado corresponde aos filtros selecionados.</p>
+                    </div>
+                  );
+                }
+
+                const totalPages = Math.max(1, Math.ceil(filtered.length / ragPageSize));
+                const currentPage = Math.min(ragPage, totalPages);
+                const startIndex = (currentPage - 1) * ragPageSize;
+                const paginatedItems = filtered.slice(startIndex, startIndex + ragPageSize);
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "10px" }}>
+                      {paginatedItems.map((item) => {
+                        const isRefuted = item.status === "REFUTED";
+                        const isValidated = item.status === "VALIDATED";
+                        const isHypothesis = item.status === "HYPOTHESIS";
+                        const hasArrow = item.content.includes(" -> ");
+
+                        // Encontra a tese de substituição / nova tese (quando refutado)
+                        const newerCorrection = isRefuted
+                          ? ragInsights.find((i) => i.id === item.supersededById) ||
+                            ragInsights.find(
+                              (i) =>
+                                i.status !== "REFUTED" &&
+                                (i.title.toLowerCase().includes(item.title.toLowerCase().slice(0, 15)) ||
+                                  i.content.toLowerCase().includes(item.title.toLowerCase().slice(0, 15)))
+                            )
+                          : null;
+
+                        // Encontra a tese original refutada (quando é uma correção ativa)
+                        const olderRefuted = !isRefuted
+                          ? ragInsights.find((i) => i.supersededById === item.id) ||
+                            ragInsights.find(
+                              (i) =>
+                                i.status === "REFUTED" &&
+                                (item.title.toLowerCase().includes(i.title.toLowerCase().slice(0, 15)) ||
+                                  item.content.toLowerCase().includes(i.title.toLowerCase().slice(0, 15)))
+                            )
+                          : null;
+
+                        let premissa = "";
+                        let novaRealidade = "";
+                        if (hasArrow) {
+                          const parts = item.content.split(" -> ");
+                          premissa = parts[0];
+                          novaRealidade = parts[1];
+                        }
+
+                        return (
+                          <div
+                            key={item.id}
+                            style={{
+                              background: isRefuted ? "rgba(239, 68, 68, 0.04)" : "#111114",
+                              border: `1px solid ${isRefuted ? "rgba(239, 68, 68, 0.3)" : isValidated ? "rgba(16, 185, 129, 0.3)" : "rgba(56, 189, 248, 0.2)"}`,
+                              borderRadius: "10px",
+                              padding: "12px 14px",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              gap: "8px",
+                              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", gap: "6px", flexWrap: "wrap" }}>
+                                <span
+                                  style={{
+                                    fontSize: "9px",
+                                    fontWeight: "700",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    background: isRefuted ? "rgba(239, 68, 68, 0.15)" : isValidated ? "rgba(16, 185, 129, 0.15)" : "rgba(56, 189, 248, 0.15)",
+                                    color: isRefuted ? "#f87171" : isValidated ? "#34d399" : "#38bdf8",
+                                    textTransform: "uppercase",
+                                  }}
+                                >
+                                  {isRefuted ? "Refutada (Corrigida)" : isValidated ? "Tese Validada" : `Hipótese (${item.evidencePostsCount || 1} posts)`}
+                                </span>
+
+                                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                  <span style={{ fontSize: "9px", padding: "1px 5px", borderRadius: "3px", background: "rgba(255, 255, 255, 0.05)", color: "#a1a1aa" }}>
+                                    {item.type}
+                                  </span>
+                                  <span style={{ fontSize: "10px", color: isHypothesis ? "#38bdf8" : "#71717a", fontWeight: "600" }}>
+                                    {(item.confidenceScore * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                              </div>
+
+                              <strong style={{ fontSize: "12px", color: isRefuted ? "#fca5a5" : "#fafafa", textDecoration: isRefuted ? "line-through" : "none", display: "block", marginBottom: "4px", lineHeight: "1.3" }}>
+                                {item.title}
+                              </strong>
+
+                              {hasArrow ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "11px", lineHeight: "1.35", marginBottom: "4px" }}>
+                                  <div style={{ color: isRefuted ? "#fca5a5" : "#a1a1aa" }}>
+                                    <strong style={{ color: isRefuted ? "#f87171" : "#71717a" }}>Premissa Anterior:</strong> {premissa}
+                                  </div>
+                                  <div style={{ color: isRefuted ? "#f87171" : "#34d399", background: isRefuted ? "transparent" : "rgba(16, 185, 129, 0.08)", padding: isRefuted ? "0" : "4px 6px", borderRadius: "4px", border: isRefuted ? "none" : "1px solid rgba(16, 185, 129, 0.2)" }}>
+                                    <strong style={{ color: isRefuted ? "#f87171" : "#34d399" }}>Nova Diretriz:</strong> {novaRealidade}
+                                  </div>
+                                </div>
+                              ) : (
+                                <p style={{ fontSize: "11px", color: isRefuted ? "#f87171" : "#a1a1aa", margin: 0, lineHeight: "1.35" }}>
+                                  {item.content}
+                                </p>
+                              )}
+
+                              {item.correctionReasoning && (
+                                <div style={{ background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.2)", borderRadius: "4px", padding: "6px", fontSize: "10px", color: "#fde68a", marginTop: "6px" }}>
+                                  <strong>Motivo:</strong> {item.correctionReasoning}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* CONTROLES MANUAIS E NAVEGAÇÃO DE LINHAGEM */}
+                            <div style={{ display: "flex", gap: "4px", alignItems: "center", borderTop: "1px solid rgba(255, 255, 255, 0.06)", paddingTop: "8px", flexWrap: "wrap" }}>
+                              {/* BOTÃO PARA VER A NOVA TESE GERADA (SE REFUTADA) */}
+                              {isRefuted && (newerCorrection || hasArrow) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    let activeContent = "";
+                                    if (newerCorrection) {
+                                      activeContent = newerCorrection.content;
+                                    } else if (hasArrow) {
+                                      activeContent = novaRealidade;
+                                    }
+                                    setLineageModal({
+                                      refutedTitle: item.title,
+                                      refutedContent: hasArrow ? premissa : item.content,
+                                      refutedReason: item.correctionReasoning,
+                                      activeTitle: newerCorrection?.title || item.title,
+                                      activeContent: activeContent || item.content,
+                                      activeConfidence: newerCorrection?.confidenceScore || 0.40,
+                                      activeStatus: newerCorrection?.status || "HYPOTHESIS",
+                                      targetInsightId: newerCorrection?.id,
+                                    });
+                                  }}
+                                  style={{
+                                    background: "rgba(16, 185, 129, 0.12)",
+                                    border: "1px solid rgba(16, 185, 129, 0.35)",
+                                    color: "#34d399",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "9px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                  title="Ver a nova tese e diretriz que substituiu esta premissa refutada"
+                                >
+                                  <IconArrowRight size={10} />
+                                  <span>Ver Nova Tese</span>
+                                </button>
+                              )}
+
+                              {/* BOTÃO PARA VER A TESE ORIGINAL REFUTADA (SE É UMA CORREÇÃO ATIVA) */}
+                              {!isRefuted && (olderRefuted || hasArrow) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    let refutedContent = "";
+                                    let refutedReason = item.correctionReasoning;
+                                    if (olderRefuted) {
+                                      refutedContent = olderRefuted.content;
+                                      refutedReason = olderRefuted.correctionReasoning || item.correctionReasoning;
+                                    } else if (hasArrow) {
+                                      refutedContent = premissa;
+                                    }
+                                    setLineageModal({
+                                      refutedTitle: olderRefuted?.title || item.title,
+                                      refutedContent: refutedContent || premissa || "Premissa inicial",
+                                      refutedReason,
+                                      activeTitle: item.title,
+                                      activeContent: hasArrow ? novaRealidade : item.content,
+                                      activeConfidence: item.confidenceScore,
+                                      activeStatus: item.status,
+                                      targetInsightId: olderRefuted?.id,
+                                    });
+                                  }}
+                                  style={{
+                                    background: "rgba(239, 68, 68, 0.1)",
+                                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                                    color: "#f87171",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "9px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                  title="Ver a premissa anterior que foi refutada para dar origem a esta tese"
+                                >
+                                  <IconRotateCcw size={10} />
+                                  <span>Ver Origem Refutada</span>
+                                </button>
+                              )}
+
+                              {isValidated && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInsightStatus(item.id, "HYPOTHESIS")}
+                                  style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", color: "#38bdf8", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: "600", cursor: "pointer" }}
+                                  title="Transformar de volta em hipótese preliminar"
+                                >
+                                  Desvalidar
+                                </button>
+                              )}
+
+                              {isHypothesis && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInsightStatus(item.id, "VALIDATED")}
+                                  style={{ background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#34d399", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: "600", cursor: "pointer" }}
+                                  title="Validar manualmente esta tese"
+                                >
+                                  Validar
+                                </button>
+                              )}
+
+                              {!isRefuted && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInsightStatus(item.id, "REFUTED")}
+                                  style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#f87171", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: "600", cursor: "pointer" }}
+                                  title="Marcar como premissa refutada/incorreta"
+                                >
+                                  Refutar
+                                </button>
+                              )}
+
+                              {isRefuted && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInsightStatus(item.id, "HYPOTHESIS")}
+                                  style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", color: "#38bdf8", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: "600", cursor: "pointer" }}
+                                  title="Reativar como hipótese de teste"
+                                >
+                                  Reativar
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteInsight(item.id)}
+                                style={{ background: "transparent", border: "1px solid rgba(255, 255, 255, 0.1)", color: "#71717a", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", cursor: "pointer", marginLeft: "auto" }}
+                                title="Excluir este insight permanentemente do PostgreSQL"
+                              >
+                                <IconTrash size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* RODAPÉ DE PAGINAÇÃO (COMPACTO) */}
+                    {totalPages > 1 && (
                       <div
-                        key={item.id}
                         style={{
-                          background: isRefuted ? "rgba(239, 68, 68, 0.04)" : "#111114",
-                          border: `1px solid ${isRefuted ? "rgba(239, 68, 68, 0.3)" : isValidated ? "rgba(16, 185, 129, 0.3)" : "rgba(56, 189, 248, 0.2)"}`,
-                          borderRadius: "12px",
-                          padding: "16px",
                           display: "flex",
-                          flexDirection: "column",
                           justifyContent: "space-between",
-                          gap: "12px",
-                          boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                          alignItems: "center",
+                          padding: "8px 12px",
+                          background: "#111114",
+                          border: "1px solid rgba(255, 255, 255, 0.08)",
+                          borderRadius: "8px",
+                          marginTop: "4px",
+                          flexWrap: "wrap",
+                          gap: "8px",
                         }}
                       >
-                        <div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                            <span
-                              style={{
-                                fontSize: "10px",
-                                fontWeight: "700",
-                                padding: "3px 8px",
-                                borderRadius: "4px",
-                                background: isRefuted ? "rgba(239, 68, 68, 0.15)" : isValidated ? "rgba(16, 185, 129, 0.15)" : "rgba(56, 189, 248, 0.15)",
-                                color: isRefuted ? "#f87171" : isValidated ? "#34d399" : "#38bdf8",
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              {isRefuted ? "❌ Refutada (Corrigida)" : isValidated ? "✅ Tese Validada" : `🧪 Hipótese (${item.evidencePostsCount || 1} posts)`}
-                            </span>
+                        <span style={{ fontSize: "11px", color: "#a1a1aa" }}>
+                          Mostrando <strong>{startIndex + 1}</strong> a <strong>{Math.min(startIndex + ragPageSize, filtered.length)}</strong> de <strong>{filtered.length}</strong> aprendizados
+                        </span>
 
-                            <span style={{ fontSize: "11px", color: isHypothesis ? "#38bdf8" : "#71717a", fontWeight: "600" }}>
-                              Confiança: {(item.confidenceScore * 100).toFixed(0)}%
-                            </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={currentPage <= 1}
+                            onClick={() => setRagPage((p) => Math.max(1, p - 1))}
+                            style={{ padding: "4px 8px", fontSize: "10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <IconChevronLeft size={11} />
+                            <span>Anterior</span>
+                          </button>
+
+                          <div style={{ display: "flex", gap: "2px" }}>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                              // Mostra páginas próximas
+                              if (totalPages > 7 && Math.abs(p - currentPage) > 2 && p !== 1 && p !== totalPages) {
+                                if (Math.abs(p - currentPage) === 3) {
+                                  return <span key={p} style={{ color: "#71717a", padding: "0 2px", fontSize: "10px" }}>...</span>;
+                                }
+                                return null;
+                              }
+
+                              return (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => setRagPage(p)}
+                                  style={{
+                                    padding: "3px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "10px",
+                                    fontWeight: "700",
+                                    cursor: "pointer",
+                                    background: currentPage === p ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.04)",
+                                    border: `1px solid ${currentPage === p ? "rgba(56, 189, 248, 0.5)" : "rgba(255, 255, 255, 0.08)"}`,
+                                    color: currentPage === p ? "#38bdf8" : "#a1a1aa",
+                                    minWidth: "24px",
+                                  }}
+                                >
+                                  {p}
+                                </button>
+                              );
+                            })}
                           </div>
-
-                          <strong style={{ fontSize: "13px", color: isRefuted ? "#fca5a5" : "#fafafa", textDecoration: isRefuted ? "line-through" : "none", display: "block", marginBottom: "6px" }}>
-                            {item.title}
-                          </strong>
-
-                          <p style={{ fontSize: "12px", color: isRefuted ? "#f87171" : "#a1a1aa", margin: 0, lineHeight: "1.4" }}>
-                            {item.content}
-                          </p>
-
-                          {item.correctionReasoning && (
-                            <div style={{ background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.2)", borderRadius: "6px", padding: "8px", fontSize: "11px", color: "#fde68a", marginTop: "8px" }}>
-                              <strong>Motivo da Correção:</strong> {item.correctionReasoning}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* CONTROLES MANUAIS DO INSIGHT */}
-                        <div style={{ display: "flex", gap: "6px", alignItems: "center", borderTop: "1px solid rgba(255, 255, 255, 0.06)", paddingTop: "10px", flexWrap: "wrap" }}>
-                          {isValidated && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateInsightStatus(item.id, "HYPOTHESIS")}
-                              style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", color: "#38bdf8", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "600", cursor: "pointer" }}
-                              title="Transformar de volta em hipótese preliminar"
-                            >
-                              🧪 Desvalidar (Hipótese)
-                            </button>
-                          )}
-
-                          {isHypothesis && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateInsightStatus(item.id, "VALIDATED")}
-                              style={{ background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#34d399", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "600", cursor: "pointer" }}
-                              title="Validar manualmente esta tese"
-                            >
-                              ✅ Validar Tese
-                            </button>
-                          )}
-
-                          {!isRefuted && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateInsightStatus(item.id, "REFUTED")}
-                              style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#f87171", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "600", cursor: "pointer" }}
-                              title="Marcar como premissa refutada/incorreta"
-                            >
-                              ❌ Refutar
-                            </button>
-                          )}
-
-                          {isRefuted && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateInsightStatus(item.id, "HYPOTHESIS")}
-                              style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", color: "#38bdf8", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "600", cursor: "pointer" }}
-                              title="Reativar como hipótese de teste"
-                            >
-                              🔄 Reativar Hipótese
-                            </button>
-                          )}
 
                           <button
                             type="button"
-                            onClick={() => handleDeleteInsight(item.id)}
-                            style={{ background: "transparent", border: "1px solid rgba(255, 255, 255, 0.1)", color: "#71717a", padding: "4px 8px", borderRadius: "6px", fontSize: "10px", cursor: "pointer", marginLeft: "auto" }}
-                            title="Excluir este insight permanentemente do PostgreSQL"
+                            className="secondary-button"
+                            disabled={currentPage >= totalPages}
+                            onClick={() => setRagPage((p) => Math.min(totalPages, p + 1))}
+                            style={{ padding: "4px 8px", fontSize: "10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                           >
-                            <IconTrash size={11} />
+                            <span>Próxima</span>
+                            <IconChevronRight size={11} />
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="page-placeholder" style={{ padding: "40px" }}>
-                  <IconRefreshCw size={28} />
+                    )}
+                  </div>
+                );
+              })()}
+
+              {!loadingRag && ragInsights.length === 0 && (
+                <div className="page-placeholder" style={{ padding: "30px" }}>
+                  <IconRefreshCw size={24} />
                   <h3>Memória RAG em construção</h3>
                   <p>Execute uma auditoria para a IA indexar os aprendizados empíricos do seu perfil no PostgreSQL.</p>
                 </div>
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* MODAL DE LINHAGEM DE AUTO-CORREÇÃO (ANTES VS DEPOIS) */}
+      {lineageModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(4px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => setLineageModal(null)}
+        >
+          <div
+            style={{
+              background: "#111114",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              borderRadius: "14px",
+              maxWidth: "680px",
+              width: "100%",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.6)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* CABEÇALHO DO MODAL */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "14px 18px",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                background: "rgba(255, 255, 255, 0.02)",
+              }}
+            >
+              <div>
+                <span style={{ fontSize: "10px", color: "#fbbf24", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Linhagem de Auto-Correção
+                </span>
+                <h3 style={{ fontSize: "14px", color: "#fafafa", margin: "2px 0 0" }}>
+                  Evolução do Aprendizado RAG
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setLineageModal(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#71717a",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  padding: "4px",
+                  display: "flex",
+                }}
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            {/* CONTEÚDO COMPARATIVO (ANTES VS DEPOIS) */}
+            <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {/* COLUNA ESQUERDA: PREMISSA REFUTADA */}
+              <div
+                style={{
+                  background: "rgba(239, 68, 68, 0.05)",
+                  border: "1px solid rgba(239, 68, 68, 0.25)",
+                  borderRadius: "10px",
+                  padding: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: "700",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    background: "rgba(239, 68, 68, 0.15)",
+                    color: "#f87171",
+                    textTransform: "uppercase",
+                    width: "fit-content",
+                  }}
+                >
+                  Tese Original (Refutada)
+                </span>
+
+                <strong style={{ fontSize: "12px", color: "#fca5a5", textDecoration: "line-through", lineHeight: "1.3" }}>
+                  {lineageModal.refutedTitle}
+                </strong>
+
+                <p style={{ fontSize: "11px", color: "#f87171", margin: 0, lineHeight: "1.4" }}>
+                  {lineageModal.refutedContent}
+                </p>
+
+                {lineageModal.refutedReason && (
+                  <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "6px", padding: "6px 8px", fontSize: "10px", color: "#fca5a5", marginTop: "auto" }}>
+                    <strong>Por que falhou nos dados reais:</strong> {lineageModal.refutedReason}
+                  </div>
+                )}
+              </div>
+
+              {/* COLUNA DIREITA: NOVA TESE ATIVA */}
+              <div
+                style={{
+                  background: "rgba(16, 185, 129, 0.05)",
+                  border: "1px solid rgba(16, 185, 129, 0.25)",
+                  borderRadius: "10px",
+                  padding: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: "700",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    background: "rgba(16, 185, 129, 0.15)",
+                    color: "#34d399",
+                    textTransform: "uppercase",
+                    width: "fit-content",
+                  }}
+                >
+                  Nova Tese Ativa ({lineageModal.activeStatus === "VALIDATED" ? "Validada" : "Hipótese"})
+                </span>
+
+                <strong style={{ fontSize: "12px", color: "#fafafa", lineHeight: "1.3" }}>
+                  {lineageModal.activeTitle}
+                </strong>
+
+                <p style={{ fontSize: "11px", color: "#a1a1aa", margin: 0, lineHeight: "1.4" }}>
+                  {lineageModal.activeContent}
+                </p>
+
+                <div style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "6px", padding: "6px 8px", fontSize: "10px", color: "#34d399", marginTop: "auto" }}>
+                  <strong>Como a IA opera agora:</strong> Esta nova diretriz foi indexada no PostgreSQL e injetada no gerador de conteúdo para evitar a reincidência do erro.
+                </div>
+              </div>
+            </div>
+
+            {/* RODAPÉ DO MODAL */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+                padding: "10px 18px",
+                borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                background: "rgba(255, 255, 255, 0.02)",
+              }}
+            >
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setLineageModal(null)}
+                style={{ fontSize: "10px", padding: "4px 12px" }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

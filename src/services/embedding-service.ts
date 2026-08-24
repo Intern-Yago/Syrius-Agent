@@ -192,7 +192,34 @@ export async function recordInsight(input: {
       });
     }
 
-    // Salva no PostgreSQL
+    // Deduplicação inteligente no RAG para evitar insights repetidos
+    const existingInsights = await getAllInsights();
+    const duplicate = existingInsights.find((e) => {
+      if (e.status !== status) return false;
+      const sim = calculateCosineSimilarity(embedding, e.embedding);
+      return sim > 0.92 || (e.title.length > 10 && input.title.length > 10 && e.title.toLowerCase().trim() === input.title.toLowerCase().trim());
+    });
+
+    if (duplicate && !input.supersededInsightId) {
+      const updatedCount = Math.max(duplicate.evidencePostsCount + 1, evidenceCount);
+      const updatedConfidence = Math.min(0.95, Math.max(duplicate.confidenceScore, confidence));
+      await prisma.learningInsightEmbedding.update({
+        where: { id: duplicate.id },
+        data: {
+          evidencePostsCount: updatedCount,
+          confidenceScore: updatedConfidence,
+          updatedAt: now,
+        },
+      });
+      return {
+        ...duplicate,
+        evidencePostsCount: updatedCount,
+        confidenceScore: updatedConfidence,
+        updatedAt: now.toISOString(),
+      };
+    }
+
+    // Salva novo insight no PostgreSQL
     await prisma.learningInsightEmbedding.create({
       data: {
         id: newInsight.id,

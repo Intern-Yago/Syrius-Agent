@@ -138,8 +138,8 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "title": "Título técnico provocativo do Carrossel",
       "hook": "Gancho do primeiro slide",
       "reasoning": "Por que este carrossel vai reter a audiência e gerar salvamentos",
-      "baseCopyPrompt": "Diretriz completa de roteiro slide a slide para o redator",
-      "baseVisualPrompt": "Diretriz de arte com estética dark glass e código syntax highlighted",
+      "baseCopyPrompt": "Carrossel técnico dissecando o repositório github.com/${owner}/${repo}. OBRIGATÓRIO: Na legenda (caption) e no último slide (CTA) incluir explicitamente o link: 'Repositório oficial: github.com/${owner}/${repo}' e instruir a salvar para consultar no próximo projeto.",
+      "baseVisualPrompt": "Diretriz de arte com estética dark glass, cabeçalho com logo/stars do GitHub e código syntax highlighted",
       "isRecommended": true
     },
     {
@@ -147,7 +147,7 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "title": "Título provocativo do Reels",
       "hook": "Primeiras palavras faladas no vídeo",
       "reasoning": "Por que este vídeo tem potencial viral de topo de funil",
-      "baseCopyPrompt": "ROTEIRO EM 4 CENAS ESPECÍFICAS DE REPOSITÓRIO GITHUB:\\n- Cena 1 [0-5s]: Apresentação do Repositório github.com/${owner}/${repo} (${repoData.stargazers_count || 0} stars) e o problema crítico que ele resolve.\\n- Cena 2 [5-15s]: Leitura da Documentação e Arquitetura: como funciona por debaixo dos panos e qual o diferencial de engenharia.\\n- Cena 3 [15-35s]: Demonstração Prática: instalação e código de exemplo rodando com a funcionalidade em ação.\\n- Cena 4 [35-45s]: Veredito Técnico e CTA de salvamento.",
+      "baseCopyPrompt": "ROTEIRO EM 4 CENAS ESPECÍFICAS DE REPOSITÓRIO GITHUB:\\n- Cena 1 [0-5s]: Apresentação do Repositório github.com/${owner}/${repo} (${repoData.stargazers_count || 0} stars) e o problema crítico que ele resolve.\\n- Cena 2 [5-15s]: Leitura da Documentação e Arquitetura: como funciona por debaixo dos panos e qual o diferencial de engenharia.\\n- Cena 3 [15-35s]: Demonstração Prática: instalação e código de exemplo rodando com a funcionalidade em ação.\\n- Cena 4 [35-45s]: Veredito Técnico, menção falada de 'Confira o código em github.com/${owner}/${repo}' e CTA de salvamento.\\nOBRIGATÓRIO: Na legenda (caption) incluir explicitamente 'Repositório oficial: github.com/${owner}/${repo}'.",
       "baseVisualPrompt": "Interface híbrida alternando entre cabeçalho do GitHub, trechos da documentação README.md e editor VS Code com código real syntax-highlighted",
       "isRecommended": false
     },
@@ -156,7 +156,7 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "title": "Título direto do Post Solo",
       "hook": "Gancho da imagem",
       "reasoning": "Por que este post solo gera compartilhamentos rápidos",
-      "baseCopyPrompt": "Legenda aprofundada dissecando o conceito do repositório ${owner}/${repo} com comando de instalação e arquitetura",
+      "baseCopyPrompt": "Legenda aprofundada dissecando o repositório github.com/${owner}/${repo}. OBRIGATÓRIO: Na legenda incluir explicitamente 'Repositório oficial: github.com/${owner}/${repo}' com comando de instalação e arquitetura.",
       "baseVisualPrompt": "Terminal dark com snippet direto e comparativo de velocidade",
       "isRecommended": false
     }

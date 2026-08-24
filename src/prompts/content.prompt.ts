@@ -8,6 +8,7 @@ export interface StrategyDecisionInput {
   suggestedSlot?: string;
   handle?: string;
   ragInsights?: string;
+  globalDirectives?: string[];
   baseCopyPrompt?: string;
   baseVisualPrompt?: string;
 }
@@ -17,11 +18,28 @@ export function buildContentGeneratorPrompt(decision: StrategyDecisionInput): st
   const narrativeAngle = decision.narrativeAngle?.toUpperCase() || "BEFORE_AFTER";
   const handle = decision.handle || "@tech_creator";
   const ragSection = decision.ragInsights ? `\nMEMÓRIA RAG (DIRETRIZES & O QUE EVITAR):\n${decision.ragInsights}\n` : "";
+  const globalDirectivesSection = (decision.globalDirectives && decision.globalDirectives.length > 0) ? `
+DIRETRIZES ESTRATÉGICAS GLOBAIS DO ANALYTICS (OBRIGATÓRIO SEGUIR NESTA PUBLICAÇÃO):
+${decision.globalDirectives.map((d, i) => `${i + 1}. ${d}`).join("\n")}
+` : "";
   const basePromptsSection = (decision.baseCopyPrompt || decision.baseVisualPrompt) ? `
 DIRETRIZES ESTRATÉGICAS BASE (SUGERIDAS PELO ANALYTICS / GESTOR IA):
 ${decision.baseCopyPrompt ? `- ROTEIRO & DIRETRIZ BASE DE CONTEÚDO: "${decision.baseCopyPrompt}"` : ""}
 ${decision.baseVisualPrompt ? `- DIRETRIZ VISUAL & ESTÉTICA BASE: "${decision.baseVisualPrompt}"` : ""}
 (Utilize estas diretrizes base como ponto de partida sólido, aprofundando os detalhes técnicos, aperfeiçoando o gancho e garantindo máxima densidade prática!)
+` : "";
+
+  const isRepoRelated = Boolean(
+    decision.topic.toLowerCase().includes("github") ||
+    decision.topic.toLowerCase().includes("repo") ||
+    (decision.baseCopyPrompt && decision.baseCopyPrompt.toLowerCase().includes("github")) ||
+    (decision.baseCopyPrompt && decision.baseCopyPrompt.toLowerCase().includes("repositório"))
+  );
+
+  const repoMandatorySection = isRepoRelated ? `
+DIRETRIZ OBRIGATÓRIA DE DIRECIONAMENTO DO REPOSITÓRIO GITHUB:
+1. NA LEGENDA (CAPTION): É 100% OBRIGATÓRIO incluir o link oficial do repositório no texto da legenda (ex: "Repositório oficial: github.com/owner/repo").
+2. NO VÍDEO / SLIDES: No último slide do Carrossel (CTA) ou na cena final do Reels (Cena 4), é 100% OBRIGATÓRIO citar o repositório e orientar o desenvolvedor a conferir o código no GitHub e salvar o post!
 ` : "";
 
   const angleGuidelines: Record<string, string> = {
@@ -50,8 +68,10 @@ DECISÃO DO ESTRATEGISTA:
 - Objetivo: ${decision.objective}
 - Hook: ${decision.hook}
 - Raciocínio: ${decision.reasoning}
+${globalDirectivesSection}
 ${ragSection}
 ${basePromptsSection}
+${repoMandatorySection}
 
 DIRETRIZ DO ÂNGULO EDITORIAL:
 ${currentAngleGuideline}
@@ -93,8 +113,10 @@ DECISÃO DO ESTRATEGISTA:
 - Objetivo: ${decision.objective}
 - Hook: ${decision.hook}
 - Raciocínio: ${decision.reasoning}
+${globalDirectivesSection}
 ${ragSection}
 ${basePromptsSection}
+${repoMandatorySection}
 
 DIRETRIZ DO ÂNGULO EDITORIAL:
 ${currentAngleGuideline}
@@ -102,7 +124,7 @@ ${currentAngleGuideline}
 ESTRUTURA DO POST SOLO:
 1. O post tem exatamente 1 slide/arte visual.
 2. A arte deve ser limpa, direta e marcante.
-3. A LEGENDA (caption) deve ser aprofundada, explicando o conceito com clareza e convidando ao debate/comentário nos últimos parágrafos.
+3. A LEGENDA (caption) deve ser aprofundada, explicando o conceito com clareza e convidando ao debate/comentário nos últimos parágrafos (incluindo perguntas provocativas e CTA de salvamento).
 4. Hashtags técnicas específicas (3 a 5).
 5. PROIBIDO emojis no texto gerado, legendas, títulos ou slides.
 
@@ -139,8 +161,10 @@ DECISÃO DO ESTRATEGISTA:
 - Objetivo: ${decision.objective}
 - Hook de abertura: ${decision.hook}
 - Raciocínio: ${decision.reasoning}
+${globalDirectivesSection}
 ${ragSection}
 ${basePromptsSection}
+${repoMandatorySection}
 
 DIRETRIZ DO ÂNGULO EDITORIAL:
 ${currentAngleGuideline}
@@ -149,7 +173,7 @@ ESTRUTURA OBRIGATÓRIA DO ROTEIRO (CENA A CENA):
 - Cena 1 (0-4s): Gancho falado magnético (primeiras palavras decisivas para reter o scroll nos 3 primeiros segundos).
 - Cena 2 (4-15s): O problema real, a dor do desenvolvedor ou o cenário anterior.
 - Cena 3 (15-35s): A solução técnica prática, o comando ou o código demonstrado na tela do VS Code / Navegador.
-- Cena 4 (35-45s): Conclusão com moral técnica e CTA direto.
+- Cena 4 (35-45s): Conclusão com moral técnica e CTA direto explícito de salvamento.
 
 DIRETRIZES DE LOCUÇÃO HUMANA (VOZ NATURAL E EXPRESSIVA):
 1. O campo "text" será lido diretamente pela IA de voz neural. Escreva EXATAMENTE como um desenvolvedor sênior conversa amigavelmente com outro.
@@ -159,6 +183,7 @@ DIRETRIZES DE LOCUÇÃO HUMANA (VOZ NATURAL E EXPRESSIVA):
 
 DIRETRIZES DE LEGENDA DO REELS (CAPTION DE ALTA RETENÇÃO E SALVAMENTOS):
 A legenda do Reels NÃO deve ser genérica! O algoritmo do Instagram valoriza Reels com legendas completas que fazem o usuário pausar o vídeo para ler.
+IMPORTANTE: Siga as diretrizes ativas: inclua uma pergunta provocativa no final para incentivar comentários e um CTA claro para salvar o Reel.
 
 FORMATO OBRIGATÓRIO (JSON):
 {
@@ -167,7 +192,7 @@ FORMATO OBRIGATÓRIO (JSON):
   "narrativeAngle": "${narrativeAngle}",
   "objective": "${decision.objective}",
   "hook": "${decision.hook}",
-  "caption": "Gancho da legenda em 1 linha\\n\\nContexto do problema explicado com clareza técnica...\\n\\nComo aplicar:\\n1. Primeiro passo ou comando\\n2. Segundo passo ou configuração\\n\\nPro-Tip de Engenharia:\\nInsight sênior de produção.\\n\\nSalve este Reel para não esquecer na hora de codar e siga ${handle}!",
+  "caption": "Gancho da legenda em 1 linha\\n\\nContexto do problema explicado com clareza técnica...\\n\\nComo aplicar:\\n1. Primeiro passo ou comando\\n2. Segundo passo ou configuração\\n\\nPro-Tip de Engenharia:\\nInsight sênior de produção.\\n\\nQual tem sido sua experiência com isso em produção?\\n\\nSalve este Reel para não esquecer na hora de codar e siga ${handle}!",
   "hashtags": ["#programacao", "#desenvolvimento", "#dev", "#softwareengineer", "#tecnologia"],
   "slides": [
     {
@@ -211,8 +236,10 @@ DECISÃO DO ESTRATEGISTA:
 - Objetivo: ${decision.objective}
 - Hook: ${decision.hook}
 - Raciocínio: ${decision.reasoning}
+${globalDirectivesSection}
 ${ragSection}
 ${basePromptsSection}
+${repoMandatorySection}
 
 DIRETRIZ DO ÂNGULO EDITORIAL:
 ${currentAngleGuideline}
@@ -220,16 +247,17 @@ ${currentAngleGuideline}
 DIRETRIZES DE ESTRUTURA DO CARROSSEL:
 - Slide 1: Hook direto e instigante. Apresenta o problema ou benefício real.
 - Slides Intermediários (Slide 2 até N-1): Desenvolvimento progressivo, didático e prático com exemplos de código, comparações 'certo vs errado' ou boas práticas seguindo a diretriz do ângulo editorial.
-- Slide Final (Slide N): Conclusão, resumo prático e CTA técnico de alto valor.
+- Slide Final (Slide N): Conclusão, resumo prático e CTA técnico explícito de salvamento (ex: comando explícito de 'Salve para consultar quando for configurar...').
 
-REGRAS:
+REGRAS OBRIGATÓRIAS:
 1. Escolha a quantidade de slides (4, 5, 6, 7 ou 8) ideal para cobrir o assunto sem enrolação.
 2. Precisão técnica máxima em comandos e conceitos.
 3. visualDirection em cada slide detalhando a composição visual e elementos de tela.
-4. Legenda (caption) complementar que contextualiza o assunto.
+4. Legenda (caption) complementar que contextualiza o assunto, terminando com uma pergunta provocativa para estimular os primeiros comentários da comunidade e um CTA de salvamento.
 5. NÃO coloque hashtags na legenda nem nos slides.
 6. Hashtags separadas (3 a 6 hashtags técnicas).
 7. PROIBIDO emojis no texto gerado, legendas, títulos ou slides. Mantenha tom técnico e minimalista.
+8. Cumpra estritamente as diretrizes estratégicas ativas do Analytics!
 
 FORMATO OBRIGATÓRIO (JSON):
 {
@@ -238,7 +266,7 @@ FORMATO OBRIGATÓRIO (JSON):
   "narrativeAngle": "${narrativeAngle}",
   "objective": "${decision.objective}",
   "hook": "${decision.hook}",
-  "caption": "legenda completa e contextualizada sem hashtags",
+  "caption": "legenda completa e contextualizada sem hashtags com pergunta provocativa no final",
   "hashtags": ["#programacao", "#tecnologia", "#desenvolvimento"],
   "slides": [
     {

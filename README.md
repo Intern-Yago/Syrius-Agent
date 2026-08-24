@@ -62,22 +62,24 @@ flowchart TD
 
 1. **⚡ Dashboard em Tempo Real**:
    - Visualização gráfica de todas as etapas com progresso dinâmico, logs em tempo real, reexecução a partir de etapas falhas (`retry`) e alertas de cota.
-2. **📈 Radar de Temas em Alta (Trending Topics)**:
-   - Varredura de tendências no ecossistema dev com persistência no PostgreSQL e **zero chamadas silenciosas de IA** na inicialização. Atualização 100% sob demanda ou semanal.
-3. **📅 Cronograma Editorial Semanal & Distribuição Balanceada**:
-   - Grade semanal por pilares com detecção de colisão, prevenção de empilhamento de posts no mesmo horário e suporte a Stories interativos e fila FIFO.
+2. **📈 Radar de Temas em Alta & Compilador Multi-Fonte**:
+   - Varredura de tendências no ecossistema dev com persistência no PostgreSQL e **zero chamadas silenciosas de IA** na inicialização.
+   - Navegação em 4 abas especializadas (Destaques, Temas Gerais, Repositórios GitHub e Notícias Tech) com scraping concorrente de 5 fontes reais (Hacker News, Dev.to, InfoQ, TecMundo e Google News) e garantia de cotas completas com fallback automatizado.
+3. **📅 Cronograma Editorial Semanal & Publicação Automática (Autoplay)**:
+   - Grade semanal por pilares com detecção de colisão, prevenção de empilhamento de posts no mesmo horário e suporte a Stories interativos.
+   - Modo Autônomo Autoplay 100% persistente e fixo que sobrevive a reinicializações do sistema.
 4. **📊 Central de Atividades em Background**:
    - Controle total sobre processos concorrentes com botões de Pausar, Retomar (Play), Parar (Cancel), Recomeçar (Retry) e log de diagnósticos com cópia rápida.
 5. **📚 Acervo de Publicações & Visualizador de Mídia**:
-   - Galeria completa de posts com visualização em alta definição, player de Reels/áudio com seeking (HTTP 206), regeneração seletiva de artes e publicação oficial no Instagram.
+   - Galeria completa de posts com visualização em alta definição, player de Reels/áudio com seeking (HTTP 206), modal dark glass para confirmação segura de publicação, regeneração seletiva de artes e publicação oficial no Instagram.
 6. **💬 Central de Interações & Respostas com IA**:
    - Monitoramento de comentários/DMs, geração de respostas com tom do criador e conversão de dúvidas em novas pautas editoriais.
-7. **🧠 Analytics, Memória RAG & Relatórios Executivos**:
-   - Auditoria profunda post a post, aprendizado contínuo vetorizado, envio de relatórios HTML por e-mail e exportação em Markdown/JSON.
+7. **🧠 Analytics, Memória RAG & Linhagem de Auto-Correção**:
+   - Auditoria profunda post a post, aprendizado contínuo vetorizado com rastreamento bidirecional entre teses refutadas e novas diretrizes (`supersededById`), comparação visual lado a lado, filtros por status, paginação compacta e envio de relatórios HTML por e-mail.
 8. **🎙️ Laboratório de Voz Neural & Detecção de Hardware**:
    - Clonagem de voz ElevenLabs, síntese offline local com Edge TTS, monitoramento de GPU/VRAM e scripts de treinamento local.
 9. **🐙 Repo-to-Post Engine (GitHub Dissector)**:
-   - Extração automática de metadados, arquitetura e READMEs do GitHub, transformando repositórios em Carrosséis, Reels ou Posts Solos em 1 clique.
+   - Extração automática de metadados, arquitetura e READMEs do GitHub, transformando repositórios em Carrosséis, Reels ou Posts Solos em 1 clique com links obrigatórios na legenda e CTA falado/escrito.
 10. **🧪 Laboratório de Testes A/B (Content Experiments)**:
     - Formulação científica de variantes contrastantes (Técnica & Pragmática vs Provocativa & Quebra de Padrão) para otimizar ganchos e capas.
 11. **🌙 Piloto Noturno Autônomo (Hands-Free Planner)**:
@@ -85,7 +87,7 @@ flowchart TD
 12. **✏️ Editor WYSIWYG de Slides & Recomposição Instantânea**:
     - Ajuste fino de títulos e textos de slides no visualizador com recomposição gráfica via Sharp em < 500ms sem custo de tokens de IA.
 13. **🎙️ Sala de Reunião com a Gestora Editorial (Clara / Estelar)**:
-    - Central de ideação conversacional por texto ou áudio do microfone, locução neural feminina, despacho autônomo, substituição inteligente de pautas com cancelamento do slot anterior e alocação distribuída na grade semanal.
+    - Central de ideação conversacional por texto ou gravação de voz com controles estilo WhatsApp (pausar, retomar, cancelar na lixeira e enviar), locução neural feminina, despacho autônomo, substituição inteligente de pautas com cancelamento do slot anterior e alocação distribuída na grade semanal.
 
 ---
 

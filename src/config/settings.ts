@@ -69,6 +69,7 @@ export interface AppSettings {
   nightlyScheduleTime?: string; // "22:00"
   nightlyAutoProduceQueue?: boolean;
   lastNightlyRunAt?: string;
+  lastActiveWeekKey?: string; // ex: "2026-W35" para controle e auto-rollover de semanas
 }
 
 const defaultSettings: AppSettings = {

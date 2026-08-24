@@ -4,6 +4,41 @@ Todas as alterações notáveis, melhorias de arquitetura, correções de bugs e
 
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [2.3.0] — 2026-08-24
+
+### 🚀 Novas Funcionalidades & Melhorias de Arquitetura
+
+- **Radar de Tendências Multi-Abas com Scraping Concorrente de 5 Fontes & Garantia de Cotas**:
+  - Nova sub-navbar categorizada com 4 abas dinâmicas:
+    - **Destaques & Top Recomendações**: Composição ponderada dos melhores temas gerais, repositórios e breaking news.
+    - **Temas Gerais & Arquitetura**: 10 pautas técnicas divididas em 6 pilares de engenharia de software.
+    - **Repositórios GitHub (Trending)**: 5 repositórios em alta com dissecação de arquitetura via Repo-to-Post em 1 clique.
+    - **Notícias & Lançamentos Tech**: 5 a 10 manchetes e releases das últimas 24h a 7 dias.
+  - **Compilador Concorrente de Notícias**: Coleta simultânea via `Promise.allSettled` de 5 fontes nacionais e globais (Hacker News API, Dev.to RSS, InfoQ Architecture, TecMundo Tech e Google News).
+  - **Algoritmo de Auto-Preenchimento e Fallback de Scraping**: Garante 100% o cumprimento das cotas exatas de repositórios e notícias, mesmo em caso de corte ou oscilação de tokens do modelo de IA.
+  - **Sincronização Reativa em Tempo Real**: Monitoramento global via `ActivitiesContext` e polling que atualiza a tela automaticamente assim que a varredura é concluída sem necessidade de recarregar a página.
+  - **Direcionamento Obrigatório de Repositórios**: Injeção obrigatória do link `github.com/owner/repo` na legenda do Instagram e do CTA direcionado no último slide e encerramento em áudio/vídeo.
+
+- **Controles de Áudio Estilo WhatsApp na Sala de Reunião com a Gestora**:
+  - Interface de gravação reformulada simulando o comportamento nativo de mensageiros:
+    - **Lixeira Vermelha (`cancelRecording`)**: Descarte imediato e cancelamento do áudio sem envio de requisições à IA.
+    - **Pausa & Retomada (`pauseRecording` / `resumeRecording`)**: Congelamento temporário do timer e do microfone com badge âmbar e retorno fluido.
+    - **Ondas Sonoras & Timer Formatado**: Cronômetro de alta precisão (`mm:ss`), barras de equalizador animadas e transcrição ao vivo por voz.
+    - **Disparo Direto (`stopRecordingAndSend`)**: Botão de envio para finalizar e despachar imediatamente para a Gestora analisar a pauta.
+
+- **Persistência Total e Fixa da Publicação Automática (Autoplay)**:
+  - Inicialização automática no daemon do Electron lendo o valor salvo em `settings.json` no boot da aplicação.
+  - Persistência dupla no frontend via `localStorage` + PostgreSQL, mantendo o Autoplay permanentemente ativado entre fechamentos e aberturas do sistema.
+
+- **Modal Customizado Dark Glass para Confirmação de Publicação**:
+  - Remoção de todos os alerts e confirmações nativas do navegador (`window.confirm`).
+  - Implementação de modal escuro com backdrop blur, validação de perfil `@handle` e ações explícitas antes de qualquer disparo para a Meta Graph API.
+
+- **Navegação Bidirecional de Linhagem & Diff Visual na Memória RAG**:
+  - Rastreabilidade relacional com campo `supersededById` conectando teses refutadas às suas novas diretrizes ativas.
+  - Botões de navegação rápida ("Ver Nova Tese" e "Ver Origem Refutada") com modal side-by-side de evolução conceitual.
+  - Filtros de status (Validadas, Hipóteses, Refutadas), busca instantânea, seletor de paginação compacta e sanitização visual completa com zero emojis.
+
 ---
 
 ## [2.2.0] — 2026-08-21

@@ -32,6 +32,16 @@ export const reviewStage: PipelineStageHandler = {
       ragContext = "";
     }
 
+    // Recupera diretrizes estratégicas ativas da última auditoria
+    let strategicDirectives: string[] = [];
+    try {
+      const { getAnalyticsHistory } = await import("../../services/analytics-engine.js");
+      const history = await getAnalyticsHistory();
+      if (history[0]?.strategicDirectives && Array.isArray(history[0].strategicDirectives)) {
+        strategicDirectives = history[0].strategicDirectives;
+      }
+    } catch {}
+
     log("Enviando conteúdo para avaliação do Content Reviewer IA e Pre-Flight Score...");
 
     const serializedContent = JSON.stringify(
@@ -51,7 +61,7 @@ export const reviewStage: PipelineStageHandler = {
       2
     );
 
-    const prompt = buildReviewerPrompt(serializedContent, post.format, ragContext);
+    const prompt = buildReviewerPrompt(serializedContent, post.format, ragContext, strategicDirectives);
     let reviewResult: QualityReviewResult;
 
     try {

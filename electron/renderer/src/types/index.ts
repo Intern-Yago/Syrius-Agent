@@ -120,6 +120,7 @@ export interface LearningInsight {
   confidenceScore: number;
   evidencePostsCount: number;
   correctionReasoning?: string | null;
+  supersededById?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -407,6 +408,7 @@ declare global {
       deleteScheduleSlot?: (slotId: string) => Promise<ScheduleSlot[]>;
       generateScheduleAI?: (weekOffset?: number) => Promise<any>;
       advanceWeek?: () => Promise<any>;
+      moveSlotWeek?: (slotId: string, targetWeekOffset: number) => Promise<any>;
       getAutoplay?: () => Promise<boolean>;
       setAutoplay?: (active: boolean) => Promise<boolean>;
       addTopicToSchedule?: (payload: any) => Promise<any>;

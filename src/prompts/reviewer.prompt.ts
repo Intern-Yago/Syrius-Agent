@@ -1,8 +1,14 @@
 export function buildReviewerPrompt(
   serializedContent: string,
   format = "CAROUSEL",
-  ragInsightsContext = ""
+  ragInsightsContext = "",
+  strategicDirectives: string[] = []
 ): string {
+  const directivesSection = strategicDirectives.length > 0 ? `
+DIRETRIZES ESTRATÉGICAS GLOBAIS ATIVAS (AUDITORIA DO ANALYTICS):
+${strategicDirectives.map((d, i) => `${i + 1}. ${d}`).join("\n")}
+` : "";
+
   return `
 Você é o QUALITY CONTROL sênior de um pipeline profissional de conteúdo técnico para redes sociais.
 
@@ -12,6 +18,7 @@ Você NÃO deve reescrever o post nem inventar novos slides/cenas. Avalie critic
 CONTEÚDO PARA REVISÃO:
 ${serializedContent}
 
+${directivesSection}
 ${ragInsightsContext ? `DIRETRIZES E APRENDIZADOS HISTÓRICOS DA MEMÓRIA RAG:\n${ragInsightsContext}\n` : ""}
 
 CRITÉRIOS DE AVALIAÇÃO (${format}):
@@ -19,9 +26,10 @@ CRITÉRIOS DE AVALIAÇÃO (${format}):
 2. Qualidade do Hook (0 a 10): O gancho inicial é atraente, específico e sem clickbait vazio?
 3. Estrutura e Fluidez (0 a 10): Progressão lógica (Hook -> Problema -> Solução -> Aplicação -> CTA)?
 4. Valor Educacional (0 a 10): O leitor/espectador aprende algo prático e aplicável?
-5. Potencial de Engajamento (0 a 10): Gera salvamentos, compartilhamentos ou comentários técnicos?
+5. Potencial de Engajamento & Salvamentos (0 a 10): O post possui CTA explícito e perguntas provocativas conforme as diretrizes ativas?
 6. Consistência Visual (0 a 10): A direção visual é condizente com o texto?
 7. Score Preditivo de Pré-Voo (0 a 10): Com base na memória RAG e nos dados históricos, qual a probabilidade deste conteúdo reter e gerar salvamentos?
+8. Aderência às Diretrizes Estratégicas: O conteúdo aplicou as diretrizes ativas do ciclo?
 
 REGRA DE APROVAÇÃO:
 - "APPROVED": Se o score geral >= 8.0 e technicalAccuracy >= 8.0 sem erros graves de código ou sintaxe.

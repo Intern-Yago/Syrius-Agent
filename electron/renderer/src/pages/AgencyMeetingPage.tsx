@@ -3,6 +3,7 @@ import {
   IconMessageSquare,
   IconSparkles,
   IconPlay,
+  IconPause,
   IconCheck,
   IconLoader,
   IconTrash,
@@ -67,6 +68,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
   });
 
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [transcribing, setTranscribing] = useState(false);
   const [currentlyPlayingAudio, setCurrentlyPlayingAudio] = useState<string | null>(null);
@@ -74,6 +76,8 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const isCanceledRef = useRef<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
@@ -204,6 +208,8 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
   const liveTranscriptRef = useRef<string>("");
 
   async function startRecording() {
+    isCanceledRef.current = false;
+    setIsPaused(false);
     liveTranscriptRef.current = "";
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -239,6 +245,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       audioChunksRef.current = [];
       const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
 
@@ -249,9 +256,18 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        stream.getTracks().forEach((track) => track.stop());
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
 
+        // Se a gravação foi cancelada pelo usuário estilo WhatsApp
+        if (isCanceledRef.current) {
+          audioChunksRef.current = [];
+          return;
+        }
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         const liveText = liveTranscriptRef.current.trim();
         if (liveText) {
           handleSendMessage(liveText);
@@ -263,8 +279,10 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
       mediaRecorder.start();
       mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
+      setIsPaused(false);
       setRecordingDuration(0);
 
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
@@ -273,7 +291,72 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
     }
   }
 
-  function stopRecording() {
+  function pauseRecording() {
+    if (mediaRecorderRef.current && isRecording && !isPaused) {
+      try {
+        if (mediaRecorderRef.current.state === "recording") {
+          mediaRecorderRef.current.pause();
+        }
+      } catch {}
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {}
+      }
+      clearInterval(recordingTimerRef.current);
+      setIsPaused(true);
+    }
+  }
+
+  function resumeRecording() {
+    if (mediaRecorderRef.current && isRecording && isPaused) {
+      try {
+        if (mediaRecorderRef.current.state === "paused") {
+          mediaRecorderRef.current.resume();
+        }
+      } catch {}
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.start();
+        } catch {}
+      }
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+      setIsPaused(false);
+    }
+  }
+
+  function cancelRecording() {
+    isCanceledRef.current = true;
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
+    if (mediaRecorderRef.current) {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    clearInterval(recordingTimerRef.current);
+    audioChunksRef.current = [];
+    liveTranscriptRef.current = "";
+    setInputText("");
+    setIsRecording(false);
+    setIsPaused(false);
+    setRecordingDuration(0);
+    toast.info("Gravação de áudio cancelada.");
+  }
+
+  function stopRecordingAndSend() {
+    isCanceledRef.current = false;
     if (speechRecognitionRef.current) {
       try {
         speechRecognitionRef.current.stop();
@@ -281,8 +364,11 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
       speechRecognitionRef.current = null;
     }
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
       setIsRecording(false);
+      setIsPaused(false);
       clearInterval(recordingTimerRef.current);
     }
   }
@@ -636,29 +722,159 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
         }}
       >
         {isRecording ? (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", gap: "12px" }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "4px 8px",
+              gap: "10px",
+              background: isPaused ? "rgba(245, 158, 11, 0.06)" : "rgba(239, 68, 68, 0.06)",
+              border: `1px solid ${isPaused ? "rgba(245, 158, 11, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+              borderRadius: "12px",
+            }}
+          >
+            {/* LADO ESQUERDO: CANCELAR + TIMER + ONDAS SONORAS */}
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
-              <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#ef4444", animation: "pulse 1s infinite", flexShrink: 0 }} />
-              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                <span style={{ fontSize: "12px", fontWeight: "700", color: "#f87171" }}>
-                  Ouvindo ({recordingDuration}s)... Fale sua ideia de pauta
+              <button
+                type="button"
+                onClick={cancelRecording}
+                style={{
+                  background: "rgba(239, 68, 68, 0.15)",
+                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                  color: "#f87171",
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "all 0.15s ease",
+                }}
+                title="Cancelar e descartar áudio (estilo WhatsApp)"
+              >
+                <IconTrash size={15} />
+              </button>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                <div
+                  style={{
+                    width: "10px",
+                    height: "10px",
+                    borderRadius: "50%",
+                    background: isPaused ? "#fbbf24" : "#ef4444",
+                    animation: isPaused ? "none" : "pulse 1s infinite",
+                  }}
+                />
+                <span style={{ fontSize: "13px", fontWeight: "700", color: isPaused ? "#fbbf24" : "#fafafa", fontFamily: "monospace" }}>
+                  {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")}
                 </span>
-                {inputText && (
-                  <span style={{ fontSize: "11px", color: "#e4e4e7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    "{inputText}"
+                {isPaused && (
+                  <span style={{ fontSize: "9px", color: "#fbbf24", fontWeight: "700", textTransform: "uppercase", background: "rgba(245, 158, 11, 0.15)", padding: "1px 5px", borderRadius: "4px" }}>
+                    Pausado
                   </span>
                 )}
               </div>
+
+              {/* BARRAS DE ONDA SONORA ANIMADAS */}
+              <div style={{ display: "flex", alignItems: "center", gap: "3px", height: "18px", flexShrink: 0 }}>
+                {[12, 20, 8, 24, 14, 18, 6, 22, 10, 16].map((h, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      width: "3px",
+                      height: isPaused ? "5px" : `${h}px`,
+                      background: isPaused ? "rgba(251, 191, 36, 0.5)" : "#f472b6",
+                      borderRadius: "2px",
+                      transition: "height 0.2s ease",
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* TRANSCRIÇÃO AO VIVO OU STATUS */}
+              {inputText ? (
+                <span style={{ fontSize: "11px", color: "#e4e4e7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+                  "{inputText}"
+                </span>
+              ) : (
+                <span style={{ fontSize: "11px", color: "#71717a", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {isPaused ? "Áudio pausado. Clique em Retomar para continuar." : "Gravando... Fale sua ideia"}
+                </span>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={stopRecording}
-              className="primary-button"
-              style={{ background: "#ef4444", borderColor: "#dc2626", padding: "6px 14px", fontSize: "12px", fontWeight: "700", flexShrink: 0 }}
-            >
-              <span>Concluir e Enviar para {managerName}</span>
-            </button>
+            {/* LADO DIREITO: PAUSAR/RETOMAR + ENVIAR */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+              {isPaused ? (
+                <button
+                  type="button"
+                  onClick={resumeRecording}
+                  style={{
+                    background: "rgba(56, 189, 248, 0.15)",
+                    border: "1px solid rgba(56, 189, 248, 0.35)",
+                    color: "#38bdf8",
+                    padding: "6px 10px",
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                  }}
+                  title="Retomar gravação de áudio"
+                >
+                  <IconPlay size={13} />
+                  <span>Retomar</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={pauseRecording}
+                  style={{
+                    background: "rgba(245, 158, 11, 0.15)",
+                    border: "1px solid rgba(245, 158, 11, 0.35)",
+                    color: "#fbbf24",
+                    padding: "6px 10px",
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                  }}
+                  title="Pausar gravação de áudio"
+                >
+                  <IconPause size={13} />
+                  <span>Pausar</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={stopRecordingAndSend}
+                className="primary-button"
+                style={{
+                  background: "#10b981",
+                  borderColor: "#059669",
+                  padding: "6px 12px",
+                  fontSize: "11px",
+                  fontWeight: "700",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+                title={`Concluir e Enviar para ${managerName}`}
+              >
+                <IconSend size={13} />
+                <span>Enviar</span>
+              </button>
+            </div>
           </div>
         ) : (
           <>

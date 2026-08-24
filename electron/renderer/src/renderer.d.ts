@@ -165,6 +165,7 @@ declare global {
       } | null;
     }>;
     advanceWeek: () => Promise<{ success: boolean; slots: ScheduleSlot[] }>;
+    moveSlotWeek: (slotId: string, targetWeekOffset: number) => Promise<{ success: boolean; slots: ScheduleSlot[] }>;
     getAutoplay: () => Promise<boolean>;
     setAutoplay: (active: boolean) => Promise<boolean>;
     addTopicToSchedule: (payload: { topic: string; suggestedFormat?: string; suggestedDay?: string; suggestedTime?: string; reason?: string; baseCopyPrompt?: string; baseVisualPrompt?: string; objective?: string }) => Promise<{ success: boolean; schedule: ScheduleSlot[]; slotId?: string; isNextWeek?: boolean; message?: string }>;

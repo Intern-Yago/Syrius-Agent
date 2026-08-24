@@ -53,7 +53,13 @@ export function SchedulePage({
   const [generatingAI, setGeneratingAI] = useState(false);
   const [aiGenerationStage, setAiGenerationStage] = useState<string>("");
   const [editingSlot, setEditingSlot] = useState<Partial<ScheduleSlot> | null>(null);
-  const [autoplay, setAutoplay] = useState(false);
+  const [autoplay, setAutoplay] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("schedule_autoplay_enabled") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [togglingAutoplay, setTogglingAutoplay] = useState(false);
   const [dismissedCompletion, setDismissedCompletion] = useState<boolean>(() => {
     try {
@@ -118,6 +124,9 @@ export function SchedulePage({
       if (window.electronAPI?.getAutoplay) {
         const auto = await window.electronAPI.getAutoplay();
         setAutoplay(auto);
+        try {
+          localStorage.setItem("schedule_autoplay_enabled", String(auto));
+        } catch {}
       }
 
       await loadPendingRecommendations();
@@ -138,7 +147,10 @@ export function SchedulePage({
       const next = !autoplay;
       const updated = await window.electronAPI.setAutoplay(next);
       setAutoplay(updated);
-      toast.info(next ? "Autoplay ativado com sucesso!" : "Autoplay pausado.");
+      try {
+        localStorage.setItem("schedule_autoplay_enabled", String(updated));
+      } catch {}
+      toast.info(updated ? "Publicação Automática (Autoplay) ATIVADA de forma fixa." : "Publicação Automática (Autoplay) DESATIVADA.");
     } catch (err) {
       toast.error(`Erro ao alterar Autoplay: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     } finally {
@@ -1402,6 +1414,30 @@ export function SchedulePage({
                       <span>{timingInfo?.isOverdue ? "Produzir Agora (Atrasado)" : "Produzir Agora"}</span>
                     </button>
                   )}
+
+                  <button
+                    className="btn-slot-edit"
+                    onClick={async () => {
+                      const targetOffset = selectedWeekOffset === 0 ? 1 : 0;
+                      const targetLabel = targetOffset === 0 ? "Semana Atual" : "Próxima Semana";
+                      try {
+                        if (window.electronAPI?.moveSlotWeek) {
+                          await window.electronAPI.moveSlotWeek(slot.id, targetOffset);
+                          await loadSchedule(selectedWeekOffset);
+                          toast.success(`Slot movido para a ${targetLabel}!`);
+                        }
+                      } catch (err) {
+                        toast.error(`Erro ao mover slot: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+                      }
+                    }}
+                    title={selectedWeekOffset === 0 ? "Mover este slot para a Próxima Semana" : "Mover este slot para a Semana Atual"}
+                    style={{
+                      color: selectedWeekOffset === 0 ? "#38bdf8" : "#a855f7",
+                      borderColor: selectedWeekOffset === 0 ? "rgba(56, 189, 248, 0.25)" : "rgba(168, 85, 247, 0.25)",
+                    }}
+                  >
+                    <IconCalendar size={13} />
+                  </button>
 
                   <button
                     className="btn-slot-edit"

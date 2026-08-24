@@ -268,6 +268,15 @@ export async function processAgencyMessage(
   const insights = await getAllInsights();
   const activeInsights = insights.filter((i) => i.status === "VALIDATED").slice(0, 5);
 
+  let activeDirectives: string[] = [];
+  try {
+    const { getAnalyticsHistory } = await import("./analytics-engine.js");
+    const historyData = await getAnalyticsHistory();
+    if (historyData[0]?.strategicDirectives && Array.isArray(historyData[0].strategicDirectives)) {
+      activeDirectives = historyData[0].strategicDirectives;
+    }
+  } catch {}
+
   const now = new Date();
   const currentDayName = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][now.getDay()];
   const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -296,7 +305,10 @@ ${slots.length > 0 ? slots.map((s) => `- [Semana ${s.weekOffset === 0 ? "Atual" 
 - SLOTS LIVRES E RECOMENDADOS PARA NOVAS PAUTAS:
 ${availableSlotsList.length > 0 ? availableSlotsList.slice(0, 8).join("\n") : "- Próxima Quinta-feira às 18:00\n- Próxima Sexta-feira às 17:30\n- Próxima Segunda-feira às 18:30"}
 
-- Diretrizes Validadas do RAG:
+- DIRETRIZES ESTRATÉGICAS ATIVAS DO ANALYTICS:
+${activeDirectives.length > 0 ? activeDirectives.map((d, i) => `${i + 1}. ${d}`).join("\n") : "Nenhuma diretriz crítica pendente."}
+
+- Aprendizados Validados do RAG:
 ${activeInsights.map((i) => `- ${i.title}: ${i.content}`).join("\n")}
 
 HISTÓRICO RECENTE DA CONVERSA:

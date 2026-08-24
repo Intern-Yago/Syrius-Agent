@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteScheduleSlot: (slotId, weekOffset) => ipcRenderer.invoke("schedule:delete-slot", slotId, weekOffset),
   generateScheduleAI: (payload) => ipcRenderer.invoke("schedule:generate-ai", payload),
   advanceWeek: () => ipcRenderer.invoke("schedule:advance-week"),
+  moveSlotWeek: (slotId, targetWeekOffset) => ipcRenderer.invoke("schedule:move-slot-week", slotId, targetWeekOffset),
   getAutoplay: () => ipcRenderer.invoke("schedule:get-autoplay"),
   setAutoplay: (active) => ipcRenderer.invoke("schedule:set-autoplay", active),
   addTopicToSchedule: (payload) => ipcRenderer.invoke("schedule:add-topic", payload),
