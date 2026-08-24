@@ -59,10 +59,36 @@ Planejamento da versão mobile para ideação ágil, acompanhamento de cronogram
 
 ---
 
-## 🎭 2. Avatar Neural & Vídeos com Rosto do Criador (HeyGen / LivePortrait)
+## 🎭 2. Motor de Imagem Âncora & Consistência Facial com IA (1 Foto → Infinitas Poses)
 
+Planejamento do motor de personal branding inteligente que transforma 1 única foto do criador em artes generativas hiper-realistas sem saturação.
+
+### 📸 Imagem Âncora & Consistência de Identidade
+- [ ] **Upload Único de Foto Âncora (Zero Fricção)**:
+  - O criador faz o upload de **1 única foto de referência nítida do seu rosto** na seção de configurações.
+  - O sistema armazena a foto como o `CreatorAvatarAnchor` local e no Cloudflare R2.
+- [ ] **Geração Generativa de Cenas & Poses (Subject-Consistent AI)**:
+  - Integração com **Recraft v3/v4 Image Reference** (Cloudflare AI Gateway) e **Flux IP-Adapter / InstantID** (Replicate API).
+  - A IA gera novas imagens fotorrealistas do criador nas mais diversas situações técnicas: sentado num setup com monitores, pensativo olhando para um erro no terminal, segurando um café ou com luz de recorte (*rim light*) neon.
+
+---
+
+### 🛡️ Regra do Gatilho Seletivo & Anti-Saturação (Engenharia Primeiro)
+- [ ] **Padrão Absoluto (*Default*): Geração Pura sem Rosto**:
+  - Por padrão (`includeCreatorFace: false`), 100% dos Carrosséis, diagramas de infraestrutura, códigos no VS Code e tutoriais são gerados **exclusivamente com artes dark tech, terminais e mockups abstratos**, exatamente como funciona hoje.
+- [ ] **Acionamento Estratégico Pontual**:
+  - A imagem âncora do rosto só é enviada para a IA quando:
+    - For uma **Capa de Reels 9:16 de Opinião Sênior / Hot Take** (*"Por que você não deve usar microsserviços"*);
+    - For um **Story Interativo** (Caixa de Perguntas, Enquete ou Bastidores de Engenharia);
+    - For marcado manualmente pelo criador no slot editorial (`[x] Usar meu rosto na capa`).
+- [ ] **Controle de Frequência em Configurações**:
+  - Seletor de densidade: `Desativado`, `Baixa (10% dos posts)`, `Moderada (20% dos posts)` ou `Apenas Manual`.
+
+---
+
+### 🎬 Vídeos com Lipsync & Picture-in-Picture (Avatar Neural)
 - [ ] **Sincronização Labial Neural (*Lipsync*)**:
-  - Integração com **HeyGen API / Replicate Serverless** para gerar vídeos verticais com a face real do criador falando o roteiro técnico.
+  - Integração com **HeyGen API / Replicate Serverless** para animar a fala da imagem gerada sobre o áudio neural ElevenLabs / Edge TTS.
 - [ ] **Layout Dinâmico Picture-in-Picture**:
   - **0 a 4s (Gancho)**: Rosto em destaque com título provocativo para alta retenção no scroll.
   - **4 a 30s (Prática)**: Rosto em moldura flutuante circular no canto superior/inferior, enquanto o centro da tela exibe digitação de código no VS Code, terminal ou diagrama.

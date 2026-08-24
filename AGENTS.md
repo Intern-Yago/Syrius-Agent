@@ -281,10 +281,11 @@ O backlog detalhado e planejamento técnico de novas fases está documentado no 
    - Notificações push em tempo real com botão de aprovação imediata para posts com Quality Control $\ge 8.5$.
    - Captura de fotos para Stories técnicos com IA e moderação de interações comunitárias.
 
-2. **🎭 Avatar Neural & Vídeos com Rosto do Criador (HeyGen / LivePortrait Híbrido)**:
-   - Suporte a vídeos verticais com a face real do criador via sincronização labial neural (*lipsync*).
-   - Layout dinâmico *Picture-in-Picture* (0-4s Gancho com rosto em destaque $\rightarrow$ 4-30s PiP flutuante com código/terminal $\rightarrow$ 30-40s Fechamento com CTA).
-   - Conexão via **HeyGen API / Replicate Serverless** e suporte opcional a **LivePortrait** local com aceleração GPU NVIDIA.
+2. **🎭 Motor de Imagem Âncora & Consistência Facial (1 Foto → Infinitas Poses)**:
+   - Upload único de 1 foto de referência do rosto do criador sem necessidade de tirar múltiplas fotos.
+   - Geração generativa de cenas hiper-realistas (setup, pensativo, iluminação neon dark tech) via **Recraft v3/v4 Image Reference** e **Flux IP-Adapter**.
+   - **Regra do Gatilho Seletivo & Anti-Saturação**: Geração 100% pura sem rosto por padrão (`includeCreatorFace: false`) em 80% da grade, ativando a imagem âncora apenas em capas de Reels de opinião técnica, Stories específicos ou quando solicitado manualmente.
+   - Suporte a vídeos verticais com sincronização labial (*lipsync*) e layout Picture-in-Picture via **HeyGen API / LivePortrait**.
 
 3. **🌐 Expansão Multi-Plataforma (Fase 2)**:
    - Despacho e adaptação automática de formatos para LinkedIn (Artigos e Carrosséis PDF), Threads, X (Twitter) e YouTube Shorts.
