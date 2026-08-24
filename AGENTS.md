@@ -271,13 +271,21 @@ npm run dev
 
 ---
 
-## 🗺️ 6. Roadmap & Futuras Atualizações
+## 📋 6. TODO & Roadmap de Evolução
 
-1. **Avatar Neural & Vídeos com Rosto do Criador (HeyGen / LivePortrait Híbrido)**:
+O backlog detalhado e planejamento técnico de novas fases está documentado no arquivo [`TODO.md`](./TODO.md).
+
+1. **📱 Syrius Mobile App (React Native / Expo & API Gateway)**:
+   - Cronograma editorial completo em timeline vertical, controle móvel de Autoplay e alternância entre semanas.
+   - Sala de Reunião com a Gestora no bolso com gravação de áudio estilo WhatsApp e locução neural feminina.
+   - Notificações push em tempo real com botão de aprovação imediata para posts com Quality Control $\ge 8.5$.
+   - Captura de fotos para Stories técnicos com IA e moderação de interações comunitárias.
+
+2. **🎭 Avatar Neural & Vídeos com Rosto do Criador (HeyGen / LivePortrait Híbrido)**:
    - Suporte a vídeos verticais com a face real do criador via sincronização labial neural (*lipsync*).
    - Layout dinâmico *Picture-in-Picture* (0-4s Gancho com rosto em destaque $\rightarrow$ 4-30s PiP flutuante com código/terminal $\rightarrow$ 30-40s Fechamento com CTA).
    - Conexão via **HeyGen API / Replicate Serverless** e suporte opcional a **LivePortrait** local com aceleração GPU NVIDIA.
 
-2. **Expansão Multi-Plataforma (Fase 2)**:
-   - Despacho e adaptação automática de formatos para LinkedIn, Threads, X (Twitter) e YouTube Shorts.
+3. **🌐 Expansão Multi-Plataforma (Fase 2)**:
+   - Despacho e adaptação automática de formatos para LinkedIn (Artigos e Carrosséis PDF), Threads, X (Twitter) e YouTube Shorts.
 

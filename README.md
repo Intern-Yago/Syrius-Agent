@@ -144,9 +144,17 @@ npm run build
 
 ---
 
-## 🗺️ Roadmap & Futuras Atualizações
+## 📋 TODO & Roadmap de Desenvolvimento
 
-1. **Avatar Neural & Vídeos com Rosto do Criador (HeyGen / LivePortrait Híbrido)**:
+O backlog completo e planejamento detalhado de novas fases está documentado no arquivo [`TODO.md`](./TODO.md).
+
+1. **📱 Syrius Mobile App (React Native / Expo & API Gateway)**:
+   - **Cronograma Completo em Timeline**: Acesso total à grade semanal, horários, troca de semanas (*Semana Atual* vs *Próxima Semana*), disparo de produção com IA e controle de Autoplay pelo celular.
+   - **Sala de Reunião com a Gestora no Bolso**: Ideação por áudio estilo WhatsApp com locução neural feminina e alocação automática de pautas.
+   - **Notificações Push & Aprovações em 1 Toque**: Notificação instantânea ao atingir QC $\ge 8.5$ com botão de aprovação rápida.
+   - **Câmera de Stories & Moderação**: Foto do celular transformada em stories técnico com IA e moderação de DMs/comentários.
+
+2. **🎭 Avatar Neural & Vídeos com Rosto do Criador (HeyGen / LivePortrait Híbrido)**:
    - Suporte a vídeos verticais com a face real do criador via sincronização labial neural (*lipsync*).
    - Layout dinâmico *Picture-in-Picture*:
      - **0 a 4s (Gancho)**: Rosto em tela cheia com título provocativo para retenção no scroll.
@@ -154,8 +162,11 @@ npm run build
      - **30 a 40s (Fechamento)**: Rosto no centro com veredito técnico e chamada para ação (CTA).
    - Integração com **HeyGen API / Replicate Serverless** e suporte opcional a **LivePortrait** local com aceleração GPU NVIDIA.
 
-2. **Expansão Multi-Plataforma (Fase 2)**:
-   - Despacho e adaptação automática de formatos para LinkedIn, Threads, X (Twitter) e YouTube Shorts.
+3. **🌐 Expansão Multi-Plataforma (Fase 2)**:
+   - Despacho e adaptação automática de formatos para LinkedIn (Artigos e Carrosséis PDF), Threads, X (Twitter) e YouTube Shorts.
+
+4. **🧠 Analytics Preditivo & Heatmap de Melhores Horários**:
+   - Predição de engajamento baseada no histórico do PostgreSQL e heatmap dinâmico de audiência ativa na Meta API.
 
 ---
 
