@@ -12,7 +12,7 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { getAppIcon, sendNativeNotification } from "./notification.js";
+import { getAppIcon, getAppIconPath, sendNativeNotification } from "./notification.js";
 
 // Desativa completamente o menu padrão (File, Edit, View, Window, Help)
 Menu.setApplicationMenu(null);
@@ -34,7 +34,7 @@ protocol.registerSchemesAsPrivileged([
 // Define nome da aplicação e App User Model ID no Windows para notificações e barra de tarefas
 app.name = "Syrius Agent";
 if (process.platform === "win32") {
-  app.setAppUserModelId("Syrius Agent");
+  app.setAppUserModelId("com.syrius.agent");
 }
 
 import {
@@ -151,12 +151,13 @@ function createTray() {
 }
 
 function createWindow() {
+  const iconPath = getAppIconPath();
   const appIcon = getAppIcon();
 
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    icon: appIcon,
+    icon: iconPath || appIcon,
     minWidth: 1100,
     minHeight: 700,
     frame: false, // Janela Frameless customizada (Adeus barra cinza feia do Windows)

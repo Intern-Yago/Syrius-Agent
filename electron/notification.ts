@@ -9,15 +9,35 @@ let cachedAppIcon: Electron.NativeImage | undefined;
 let cachedAppIconPath: string | undefined;
 
 export function getAppIconPath(): string | undefined {
-  if (cachedAppIconPath) return cachedAppIconPath;
+  if (cachedAppIconPath && fs.existsSync(cachedAppIconPath)) return cachedAppIconPath;
+
+  const appPath = app?.isPackaged ? path.dirname(app.getPath("exe")) : (app ? app.getAppPath() : process.cwd());
+
+  const isWin = process.platform === "win32";
 
   const candidates = [
-    path.join(process.cwd(), "electron", "assets", "icon.png"),
+    ...(isWin ? [
+      path.join(process.cwd(), "electron", "assets", "icon.ico"),
+      path.join(process.cwd(), "dist-electron", "assets", "icon.ico"),
+      path.join(appPath, "electron", "assets", "icon.ico"),
+      path.join(appPath, "dist-electron", "assets", "icon.ico"),
+      path.join(__dirname, "..", "assets", "icon.ico"),
+      path.join(__dirname, "assets", "icon.ico"),
+    ] : []),
     path.join(process.cwd(), "electron", "assets", "logo.png"),
-    path.join(__dirname, "..", "electron", "assets", "icon.png"),
-    path.join(__dirname, "..", "electron", "assets", "logo.png"),
-    path.join(__dirname, "assets", "icon.png"),
+    path.join(process.cwd(), "electron", "assets", "icon.png"),
+    path.join(process.cwd(), "dist-electron", "assets", "logo.png"),
+    path.join(process.cwd(), "dist-electron", "assets", "icon.png"),
+    path.join(appPath, "electron", "assets", "logo.png"),
+    path.join(appPath, "electron", "assets", "icon.png"),
+    path.join(appPath, "dist-electron", "assets", "logo.png"),
+    path.join(appPath, "dist-electron", "assets", "icon.png"),
+    path.join(__dirname, "..", "assets", "logo.png"),
+    path.join(__dirname, "..", "assets", "icon.png"),
+    path.join(__dirname, "..", "..", "electron", "assets", "logo.png"),
+    path.join(__dirname, "..", "..", "electron", "assets", "icon.png"),
     path.join(__dirname, "assets", "logo.png"),
+    path.join(__dirname, "assets", "icon.png"),
   ];
 
   for (const c of candidates) {
@@ -30,7 +50,7 @@ export function getAppIconPath(): string | undefined {
 }
 
 export function getAppIcon(): Electron.NativeImage | undefined {
-  if (cachedAppIcon) return cachedAppIcon;
+  if (cachedAppIcon && !cachedAppIcon.isEmpty()) return cachedAppIcon;
   const iconPath = getAppIconPath();
   if (iconPath) {
     cachedAppIcon = nativeImage.createFromPath(iconPath);
