@@ -258,49 +258,112 @@ export function TrendingPage({ onGeneratePost, onNavigateToPosts, onOpenRepoToPo
     }
   }
 
-  // Identificação e contagens por tipo
+  // Helpers de classificação e chave canônica de desduplicação
+  const isRepoTopic = (t: TrendingTopicItem): boolean => {
+    const cat = (t.category || "").toLowerCase();
+    return cat === "repositório github" || cat.includes("repositório");
+  };
+
+  const isNewsTopic = (t: TrendingTopicItem): boolean => {
+    if (isRepoTopic(t)) return false;
+    const cat = (t.category || "").toLowerCase();
+    return cat.includes("notícia") || cat.includes("lançamento") || t.narrativeAngle === "BREAKING_NEWS";
+  };
+
+  const getCanonicalKey = (t: TrendingTopicItem): string => {
+    if (isRepoTopic(t)) {
+      if (t.sourceLinks && t.sourceLinks.length > 0) {
+        const link = t.sourceLinks.find((l) => l.includes("github.com/"));
+        if (link) {
+          const m = link.match(/github\.com\/([^/]+\/[^/]+)/i);
+          if (m) return `repo:${m[1].toLowerCase().trim()}`;
+        }
+      }
+      const match = t.title.match(/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i);
+      if (match) return `repo:${match[1].toLowerCase().trim()}`;
+    }
+    return `item:${t.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 35)}`;
+  };
+
+  // 1. Repositórios em Alta (Desduplicados)
   const repoTopics = useMemo(() => {
-    return topics.filter(
-      (t) =>
-        t.category.toLowerCase().includes("repositório") ||
-        t.category.toLowerCase().includes("github") ||
-        (t.sourceLinks && t.sourceLinks.some((l) => l.includes("github.com")))
-    );
+    const list: TrendingTopicItem[] = [];
+    const seen = new Set<string>();
+    for (const t of topics) {
+      if (isRepoTopic(t)) {
+        const key = getCanonicalKey(t);
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push(t);
+        }
+      }
+    }
+    return list;
   }, [topics]);
 
+  // 2. Notícias Tech (Desduplicadas, NENHUM repositório)
   const newsTopics = useMemo(() => {
-    return topics.filter(
-      (t) =>
-        t.category.toLowerCase().includes("notícia") ||
-        t.category.toLowerCase().includes("lançamento") ||
-        t.narrativeAngle === "BREAKING_NEWS"
-    );
+    const list: TrendingTopicItem[] = [];
+    const seen = new Set<string>();
+    for (const t of topics) {
+      if (isNewsTopic(t)) {
+        const key = getCanonicalKey(t);
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push(t);
+        }
+      }
+    }
+    return list;
   }, [topics]);
 
+  // 3. Temas Gerais (Desduplicados, NENHUM repositório, NENHUMA notícia)
   const generalTopics = useMemo(() => {
-    return topics.filter(
-      (t) =>
-        !t.category.toLowerCase().includes("repositório") &&
-        !t.category.toLowerCase().includes("github") &&
-        !t.category.toLowerCase().includes("notícia") &&
-        t.narrativeAngle !== "BREAKING_NEWS"
-    );
+    const list: TrendingTopicItem[] = [];
+    const seen = new Set<string>();
+    for (const t of topics) {
+      if (!isRepoTopic(t) && !isNewsTopic(t)) {
+        const key = getCanonicalKey(t);
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push(t);
+        }
+      }
+    }
+    return list;
   }, [topics]);
 
+  // 4. Destaques & Top Recomendações (Zero Duplicatas!)
   const topRecommendations = useMemo(() => {
-    // Pega os 2 melhores temas gerais + 1 breaking news + os 2 melhores repositórios
-    const topGen = [...generalTopics].sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, 3);
+    const topGen = [...generalTopics].sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, 2);
     const topRepos = [...repoTopics].sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, 2);
     const topNews = [...newsTopics].sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, 1);
-    
-    const combined = [...topGen, ...topRepos, ...topNews];
-    // Se ainda tiver pouco, complementa com os com maior score
-    if (combined.length < 5) {
-      const remaining = topics.filter((t) => !combined.some((c) => c.id === t.id));
-      combined.push(...remaining.slice(0, 5 - combined.length));
+
+    const combined: TrendingTopicItem[] = [];
+    const seen = new Set<string>();
+
+    for (const item of [...topGen, ...topRepos, ...topNews]) {
+      const key = getCanonicalKey(item);
+      if (!seen.has(key)) {
+        seen.add(key);
+        combined.push(item);
+      }
     }
+
+    if (combined.length < 5) {
+      const allUnique = [...generalTopics, ...repoTopics, ...newsTopics].sort((a, b) => b.relevanceScore - a.relevanceScore);
+      for (const item of allUnique) {
+        if (combined.length >= 5) break;
+        const key = getCanonicalKey(item);
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(item);
+        }
+      }
+    }
+
     return combined.sort((a, b) => b.relevanceScore - a.relevanceScore);
-  }, [topics, generalTopics, repoTopics, newsTopics]);
+  }, [generalTopics, repoTopics, newsTopics]);
 
   // Filtragem com busca e categoria ativa
   const currentTabTopics = useMemo(() => {
@@ -648,14 +711,8 @@ export function TrendingPage({ onGeneratePost, onNavigateToPosts, onOpenRepoToPo
       {!loading && currentTabTopics.length > 0 && (
         <div className="tests-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "16px" }}>
           {currentTabTopics.map((topic) => {
-            const isRepo =
-              topic.category.toLowerCase().includes("repositório") ||
-              topic.category.toLowerCase().includes("github") ||
-              (topic.sourceLinks && topic.sourceLinks.some((l) => l.includes("github.com")));
-            const isNews =
-              topic.category.toLowerCase().includes("notícia") ||
-              topic.category.toLowerCase().includes("lançamento") ||
-              topic.narrativeAngle === "BREAKING_NEWS";
+            const isRepo = isRepoTopic(topic);
+            const isNews = isNewsTopic(topic);
             const formatBadge = getFormatBadge(topic.suggestedFormat);
             const isGenerating = generatingId === topic.id;
             const repoUrl = getRepoUrl(topic);

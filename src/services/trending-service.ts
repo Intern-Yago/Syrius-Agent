@@ -423,62 +423,105 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO CONTENDO AS 3 SEÇÕES:
     const rawNews = aiResponse.techNews || [];
     const rawFallback = aiResponse.topics || [];
 
-    const allRawTopics: Array<RawGeminiTrendingTopic & { finalCategory: string; finalAngle?: string }> = [];
+    // Helpers de extração de slug canônico para desduplicação
+    const getRepoSlug = (t: { title?: string; repoUrl?: string; sourceLinks?: string[] }): string => {
+      if (t.repoUrl && t.repoUrl.includes("github.com/")) {
+        const m = t.repoUrl.match(/github\.com\/([^/]+\/[^/]+)/i);
+        if (m) return m[1].toLowerCase().trim();
+      }
+      if (t.sourceLinks) {
+        for (const l of t.sourceLinks) {
+          if (l.includes("github.com/")) {
+            const m = l.match(/github\.com\/([^/]+\/[^/]+)/i);
+            if (m) return m[1].toLowerCase().trim();
+          }
+        }
+      }
+      if (t.title) {
+        const m = t.title.match(/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i);
+        if (m) return m[1].toLowerCase().trim();
+      }
+      return (t.title || "").toLowerCase().trim().slice(0, 30);
+    };
 
-    // 1. Processa Temas Gerais & Arquitetura (Garante 10)
-    rawGeneral.slice(0, 10).forEach((t) => {
-      allRawTopics.push({ ...t, finalCategory: t.category || "Backend & Arquitetura" });
-    });
+    const getSlug = (str?: string): string => {
+      return (str || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 35);
+    };
 
-    // 2. Processa Repositórios em Alta no GitHub (Garante 5)
-    rawRepos.forEach((t) => {
-      const repoUrl = t.repoUrl || (t.sourceLinks && t.sourceLinks[0]) || "";
-      const sourceLinks = repoUrl ? [repoUrl] : (t.sourceLinks || []);
-      allRawTopics.push({ ...t, finalCategory: "Repositório GitHub", sourceLinks });
-    });
+    // 1. Processa Repositórios em Alta no GitHub (Garante EXATAMENTE 5 itens únicos, zero duplicatas)
+    const uniqueRepos: Array<RawGeminiTrendingTopic & { finalCategory: string; finalAngle?: string }> = [];
+    const seenRepoKeys = new Set<string>();
 
-    // Se a IA retornou menos de 5 repositórios, complementa automaticamente com os repositórios reais do scraping
-    if (allRawTopics.filter((x) => x.finalCategory === "Repositório GitHub").length < 5 && liveGitHubRepos.length > 0) {
+    for (const t of rawRepos) {
+      const slug = getRepoSlug(t);
+      if (slug && !seenRepoKeys.has(slug)) {
+        seenRepoKeys.add(slug);
+        const repoUrl = t.repoUrl || (t.sourceLinks && t.sourceLinks[0]) || (slug.includes("/") ? `https://github.com/${slug}` : "");
+        uniqueRepos.push({
+          ...t,
+          finalCategory: "Repositório GitHub",
+          sourceLinks: repoUrl ? [repoUrl] : (t.sourceLinks || []),
+          repoUrl,
+        });
+      }
+      if (uniqueRepos.length >= 5) break;
+    }
+
+    // Se a IA retornou menos de 5 repositórios únicos, complementa com os repositórios reais do scraping ao vivo
+    if (uniqueRepos.length < 5 && liveGitHubRepos.length > 0) {
       for (const r of liveGitHubRepos) {
-        if (allRawTopics.filter((x) => x.finalCategory === "Repositório GitHub").length >= 5) break;
-        const alreadyExists = allRawTopics.some((x) => x.title.toLowerCase().includes(r.name.toLowerCase()));
-        if (!alreadyExists) {
-          allRawTopics.push({
+        const slug = r.name.toLowerCase().trim();
+        if (!seenRepoKeys.has(slug)) {
+          seenRepoKeys.add(slug);
+          uniqueRepos.push({
             title: `${r.name}: ${r.description.slice(0, 80)}`,
             category: "Repositório GitHub",
             finalCategory: "Repositório GitHub",
             summary: r.description || "Biblioteca open-source de alto impacto para desenvolvedores.",
-            whyTrending: `${r.stars} estrelas no GitHub com grande tração e crescimento na comunidade.`,
-            suggestedAngle: `Dissecar a arquitetura de ${r.name}, por baixo dos panos e como usar em produção.`,
+            whyTrending: `${r.stars.toLocaleString("pt-BR")} estrelas no GitHub com forte tração na comunidade dev.`,
+            suggestedAngle: `Dissecar a arquitetura de ${r.name}, o código-fonte e como aplicar em produção.`,
             narrativeAngle: "SENIOR_REVIEW",
             suggestedFormat: "CAROUSEL",
-            hookIdea: `Por que este repositório (${r.name}) está ganhando centenas de estrelas no GitHub?`,
-            baseCopyPrompt: `Carrossel dissecando o repositório ${r.name} (${r.url}). OBRIGATÓRIO: link na legenda e no último slide.`,
+            hookIdea: `Por que o repositório ${r.name} está explodindo em estrelas no GitHub?`,
+            baseCopyPrompt: `Carrossel técnico dissecando o repositório ${r.name} (${r.url}). OBRIGATÓRIO: link na legenda e último slide.`,
             baseVisualPrompt: `Dark minimalist interface showing GitHub repository header with ${r.stars} stars and syntax highlighted code.`,
             sourceLinks: [r.url],
             repoUrl: r.url,
             relevanceScore: Math.min(99, 92 + Math.floor(Math.random() * 7)),
           });
         }
+        if (uniqueRepos.length >= 5) break;
       }
     }
 
-    // 3. Processa Notícias & Lançamentos Tech (Garante entre 5 a 10)
-    rawNews.forEach((t) => {
-      allRawTopics.push({
-        ...t,
-        finalCategory: "Notícias & Lançamentos Tech",
-        finalAngle: t.narrativeAngle || "BREAKING_NEWS",
-      });
-    });
+    // 2. Processa Notícias & Lançamentos Tech (Garante entre 5 a 8 itens únicos, NENHUM repositório)
+    const uniqueNews: Array<RawGeminiTrendingTopic & { finalCategory: string; finalAngle?: string }> = [];
+    const seenNewsKeys = new Set<string>();
 
-    // Se a IA retornou menos de 5 notícias, complementa automaticamente com as notícias reais do compilador
-    if (allRawTopics.filter((x) => x.finalCategory === "Notícias & Lançamentos Tech").length < 5 && liveTechNews.length > 0) {
+    for (const t of rawNews) {
+      const repoSlug = getRepoSlug(t);
+      if (seenRepoKeys.has(repoSlug) || (t.category && t.category.toLowerCase().includes("repositório"))) {
+        continue;
+      }
+      const slug = getSlug(t.title);
+      if (slug && !seenNewsKeys.has(slug)) {
+        seenNewsKeys.add(slug);
+        uniqueNews.push({
+          ...t,
+          finalCategory: "Notícias & Lançamentos Tech",
+          finalAngle: "BREAKING_NEWS",
+        });
+      }
+      if (uniqueNews.length >= 8) break;
+    }
+
+    // Se a IA retornou menos de 5 notícias únicas, complementa com as notícias reais do compilador de 5 fontes
+    if (uniqueNews.length < 5 && liveTechNews.length > 0) {
       for (const n of liveTechNews) {
-        if (allRawTopics.filter((x) => x.finalCategory === "Notícias & Lançamentos Tech").length >= 8) break;
-        const alreadyExists = allRawTopics.some((x) => x.title.toLowerCase().includes(n.title.toLowerCase().slice(0, 25)));
-        if (!alreadyExists) {
-          allRawTopics.push({
+        const slug = getSlug(n.title);
+        if (!seenNewsKeys.has(slug)) {
+          seenNewsKeys.add(slug);
+          uniqueNews.push({
             title: n.title,
             category: "Notícias & Lançamentos Tech",
             finalCategory: "Notícias & Lançamentos Tech",
@@ -494,8 +537,36 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO CONTENDO AS 3 SEÇÕES:
             relevanceScore: Math.min(98, 88 + Math.floor(Math.random() * 10)),
           });
         }
+        if (uniqueNews.length >= 8) break;
       }
     }
+
+    // 3. Processa Temas Gerais & Arquitetura (Garante EXATAMENTE 10 itens únicos, NENHUM repositório, NENHUMA notícia)
+    const uniqueGeneral: Array<RawGeminiTrendingTopic & { finalCategory: string; finalAngle?: string }> = [];
+    const seenGeneralKeys = new Set<string>();
+
+    for (const t of rawGeneral) {
+      const repoSlug = getRepoSlug(t);
+      const newsSlug = getSlug(t.title);
+      if (
+        seenRepoKeys.has(repoSlug) ||
+        seenNewsKeys.has(newsSlug) ||
+        (t.category && (t.category.toLowerCase().includes("repositório") || t.category.toLowerCase().includes("notícia")))
+      ) {
+        continue;
+      }
+      if (newsSlug && !seenGeneralKeys.has(newsSlug)) {
+        seenGeneralKeys.add(newsSlug);
+        uniqueGeneral.push({
+          ...t,
+          finalCategory: t.category && !t.category.includes("Repositório") && !t.category.includes("Notícia") ? t.category : "Backend & Arquitetura",
+        });
+      }
+      if (uniqueGeneral.length >= 10) break;
+    }
+
+    // Combina todas as 3 seções garantindo zero duplicatas
+    const allRawTopics = [...uniqueGeneral, ...uniqueRepos, ...uniqueNews];
 
     // Se a IA respondeu no formato antigo fallback
     if (allRawTopics.length === 0 && rawFallback.length > 0) {
