@@ -642,11 +642,35 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                         </span>
                       </div>
                     ))}
+
+                    {msg.suggestedOptions.length > 1 && (
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleSendMessage(`Gostei de todas as ${msg.suggestedOptions!.length} opções! Pode aprovar e agendar todas na grade desta semana!`)}
+                          className="secondary-button"
+                          style={{
+                            padding: "6px 14px",
+                            fontSize: "11px",
+                            fontWeight: "700",
+                            color: "#34d399",
+                            borderColor: "rgba(16, 185, 129, 0.4)",
+                            background: "rgba(16, 185, 129, 0.08)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <IconCheck size={12} color="#34d399" />
+                          <span>Aprovar Todos os {msg.suggestedOptions.length} Temas</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* BANNER DE DESPACHO AUTÔNOMO EFETUADO */}
-                {msg.actionTaken && msg.actionTaken !== "NONE" && msg.dispatchedPauta && (
+                {msg.actionTaken && msg.actionTaken !== "NONE" && (msg.dispatchedPauta || (msg.dispatchedPautas && msg.dispatchedPautas.length > 0)) && (
                   <div
                     style={{
                       marginTop: "12px",
@@ -664,11 +688,17 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
                         <IconCheck size={13} color="#34d399" />
                         <strong style={{ fontSize: "12px", color: "#34d399", textTransform: "uppercase" }}>
-                          {msg.actionTaken === "REPLACED_PREVIOUS_PAUTA" ? "Pauta Substituída & Atualizada no Cronograma" : "Pauta Aprovada & Despachada para Produção"}
+                          {msg.actionTaken === "REPLACED_PREVIOUS_PAUTA"
+                            ? "Pauta Substituída & Atualizada no Cronograma"
+                            : msg.dispatchedPautas && msg.dispatchedPautas.length > 1
+                            ? `${msg.dispatchedPautas.length} Pautas Aprovadas & Alocadas na Grade`
+                            : "Pauta Aprovada & Despachada para Produção"}
                         </strong>
                       </div>
                       <span style={{ fontSize: "11px", color: "#e4e4e7" }}>
-                        {msg.dispatchedPauta.topic} • {msg.dispatchedPauta.format} ({msg.dispatchedPauta.scheduledDay || "Em breve"})
+                        {msg.dispatchedPautas && msg.dispatchedPautas.length > 1
+                          ? `${msg.dispatchedPautas.map((p) => `"${p.topic}" (${p.scheduledDay || "Em breve"})`).join(" • ")}`
+                          : `${msg.dispatchedPauta?.topic} • ${msg.dispatchedPauta?.format} (${msg.dispatchedPauta?.scheduledDay || "Em breve"})`}
                       </span>
                     </div>
 
@@ -676,7 +706,7 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
                       type="button"
                       onClick={() => onNavigateToSchedule?.()}
                       className="secondary-button"
-                      style={{ padding: "4px 10px", fontSize: "11px", color: "#34d399", borderColor: "rgba(16, 185, 129, 0.4)" }}
+                      style={{ padding: "4px 10px", fontSize: "11px", color: "#34d399", borderColor: "rgba(16, 185, 129, 0.4)", whiteSpace: "nowrap" }}
                     >
                       <span>Ver no Cronograma</span>
                     </button>

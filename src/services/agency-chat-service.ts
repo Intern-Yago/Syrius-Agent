@@ -37,27 +37,30 @@ function getSynthesizeScriptPath(): string {
   return path.resolve(process.cwd(), "scripts", "synthesize_tts.py");
 }
 
+export interface DispatchedPautaItem {
+  topic: string;
+  format: string;
+  narrativeAngle: string;
+  objective: string;
+  hook: string;
+  reasoning: string;
+  scheduledDay?: string;
+  scheduledTime?: string;
+  isUrgent?: boolean;
+  baseCopyPrompt?: string;
+  baseVisualPrompt?: string;
+  canceledPreviousTopic?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: "user" | "clara";
   text: string;
   audioPath?: string;
   timestamp: string;
-  actionTaken?: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT" | "REPLACED_PREVIOUS_PAUTA" | "CANCELED_PAUTA";
-  dispatchedPauta?: {
-    topic: string;
-    format: string;
-    narrativeAngle: string;
-    objective: string;
-    hook: string;
-    reasoning: string;
-    scheduledDay?: string;
-    scheduledTime?: string;
-    isUrgent?: boolean;
-    baseCopyPrompt?: string;
-    baseVisualPrompt?: string;
-    canceledPreviousTopic?: string;
-  };
+  actionTaken?: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT" | "REPLACED_PREVIOUS_PAUTA" | "SCHEDULED_MULTIPLE" | "CANCELED_PAUTA";
+  dispatchedPauta?: DispatchedPautaItem;
+  dispatchedPautas?: DispatchedPautaItem[];
   suggestedOptions?: Array<{
     optionNumber: number;
     title: string;
@@ -69,21 +72,9 @@ export interface ChatMessage {
 interface GeminiClaraResponse {
   replyText: string;
   spokenText: string;
-  actionTaken: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT" | "REPLACED_PREVIOUS_PAUTA" | "CANCELED_PAUTA";
-  dispatchedPauta?: {
-    topic: string;
-    format: string;
-    narrativeAngle: string;
-    objective: string;
-    hook: string;
-    reasoning: string;
-    scheduledDay?: string;
-    scheduledTime?: string;
-    isUrgent?: boolean;
-    baseCopyPrompt?: string;
-    baseVisualPrompt?: string;
-    canceledPreviousTopic?: string;
-  };
+  actionTaken: "NONE" | "DISPATCHED_TO_PIPELINE" | "SCHEDULED_FOR_GRADE" | "SCHEDULED_URGENT" | "REPLACED_PREVIOUS_PAUTA" | "SCHEDULED_MULTIPLE" | "CANCELED_PAUTA";
+  dispatchedPauta?: DispatchedPautaItem;
+  dispatchedPautas?: DispatchedPautaItem[];
   suggestedOptions?: Array<{
     optionNumber: number;
     title: string;
@@ -231,7 +222,7 @@ export async function processAgencyMessage(
   const brand = await getBrandInfo();
   const history = await getAgencyChatHistory();
 
-  // 1. Coleta Inteligente de Contexto
+  // 1. Coleta Inteligente de Contexto (PostgreSQL, Analytics & Radar de Tendências)
   const recentPosts = await prisma.post.findMany({
     take: 8,
     orderBy: { createdAt: "desc" },
@@ -242,6 +233,25 @@ export async function processAgencyMessage(
     where: { weekOffset: { in: [0, 1] } },
     orderBy: { orderIndex: "asc" },
     select: { dayOfWeek: true, timeSlot: true, topic: true, format: true, status: true, weekOffset: true },
+  });
+
+  // Tópicos em alta reais e ativos no Radar do PostgreSQL
+  const activeTrends = await prisma.trendingTopic.findMany({
+    where: { status: "ACTIVE" },
+    orderBy: { relevanceScore: "desc" },
+    take: 25,
+    select: {
+      id: true,
+      title: true,
+      category: true,
+      summary: true,
+      whyTrending: true,
+      hookIdea: true,
+      suggestedFormat: true,
+      relevanceScore: true,
+      narrativeAngle: true,
+      sourceLinks: true,
+    },
   });
 
   const standardSlots = [
@@ -269,11 +279,13 @@ export async function processAgencyMessage(
   const activeInsights = insights.filter((i) => i.status === "VALIDATED").slice(0, 5);
 
   let activeDirectives: string[] = [];
+  let latestReport: any = null;
   try {
     const { getAnalyticsHistory } = await import("./analytics-engine.js");
     const historyData = await getAnalyticsHistory();
-    if (historyData[0]?.strategicDirectives && Array.isArray(historyData[0].strategicDirectives)) {
-      activeDirectives = historyData[0].strategicDirectives;
+    latestReport = historyData[0] || null;
+    if (latestReport?.strategicDirectives && Array.isArray(latestReport.strategicDirectives)) {
+      activeDirectives = latestReport.strategicDirectives;
     }
   } catch {}
 
@@ -285,28 +297,44 @@ export async function processAgencyMessage(
 Você é ${managerName}, ${managerRole} do perfil profissional de tecnologia ${brand.handle} no Instagram.
 
 SUA PERSONALIDADE & TOM DE VOZ:
-- Você é uma estrategista de conteúdo tech sênior, amigável, extremamente inteligente, ágil e focada em resultados.
-- Você conversa com o criador (o usuário) de forma natural, colaborativa e direta.
+- Você é uma estrategista de conteúdo tech sênior, amigável, extremamente inteligente, analítica, consultiva e focada em resultados reais da conta.
+- Você conversa com o criador (o usuário) de forma natural, colaborativa, humana e direta.
 - **REGRA DE OURO DA EXPERIÊNCIA DO CLIENTE**:
-  * O criador NÃO quer saber de termos técnicos de mídia como "carrossel 4:5", "hot take", "single image", "breakpoint", etc.
+  * O criador NÃO quer saber de termos técnicos de mídia como "carrossel 4:5", "breakpoint", "container", etc.
   * O criador foca puramente no **tema, na ideia e no valor técnico para os desenvolvedores**.
   * É VOCÊ QUEM CUIDA DE TODA A ESTRATÉGIA DE MÍDIA, FORMATO, HORÁRIO E ENGENHARIA EDITORIAL NOS BASTIDORES!
-  * Quando você sugerir ideias, apresente **3 opções de pautas em linguagem simples e empolgante**, mostrando o título provocativo e por que a comunidade tech vai amar.
+  * Quando você sugerir ideias ou temas em alta, apresente **3 opções de pautas em linguagem simples e empolgante**, mostrando o título e por que a comunidade tech vai engajar.
 
-CONTEXTO REAL DA GRADE EDITORIAL DO PERFIL AGORA:
+CONTEXTO REAL DO PERFIL AGORA:
 - Data & Hora Atual: ${currentDayName}, às ${currentTimeStr}
 - Posicionamento: ${brand.name} (${brand.handle})
-- Histórico Recente de Posts no Banco:
-${recentPosts.map((p) => `- [${p.format} / ${p.narrativeAngle || "BEFORE_AFTER"}] "${p.topic}" (${p.status})`).join("\n")}
+
+- TEMAS EM ALTA REAIS ATIVOS NO RADAR (DO BANCO DE DADOS POSTGRESQL):
+${
+  activeTrends.length > 0
+    ? activeTrends
+        .map(
+          (t, idx) =>
+            `${idx + 1}. [${t.category}] "${t.title}" (${t.relevanceScore}% em alta)\n   - Resumo: ${t.summary}\n   - Gancho: "${t.hookIdea}"\n   - Tração: ${t.whyTrending}`
+        )
+        .join("\n")
+    : "Nenhum tema ativo no radar no momento."
+}
+
+- AUDITORIA DO ANALYTICS & SAÚDE DA CONTA:
+  * Saúde Geral: ${latestReport?.healthScore || 88}/100
+  * Taxa de Engajamento: ${(latestReport?.periodEngagementRate || 4.2).toFixed(1)}%
+  * Resumo Executivo: ${latestReport?.executiveSummary || "Desempenho consistente com foco em retenção técnica."}
+  * Diretrizes Estratégicas: ${activeDirectives.length > 0 ? activeDirectives.join(" | ") : "Focar em ganchos fortes e utilidade prática."}
 
 - SLOTS JÁ OCUPADOS NO CRONOGRAMA:
 ${slots.length > 0 ? slots.map((s) => `- [Semana ${s.weekOffset === 0 ? "Atual" : "Próxima"}] ${s.dayOfWeek} às ${s.timeSlot}: "${s.topic}" (${s.format})`).join("\n") : "Nenhum slot ocupado."}
 
 - SLOTS LIVRES E RECOMENDADOS PARA NOVAS PAUTAS:
-${availableSlotsList.length > 0 ? availableSlotsList.slice(0, 8).join("\n") : "- Próxima Quinta-feira às 18:00\n- Próxima Sexta-feira às 17:30\n- Próxima Segunda-feira às 18:30"}
+${availableSlotsList.length > 0 ? availableSlotsList.slice(0, 8).join("\n") : "- Próxima Terça-feira às 18:30\n- Próxima Quinta-feira às 18:00\n- Próxima Sexta-feira às 17:30"}
 
-- DIRETRIZES ESTRATÉGICAS ATIVAS DO ANALYTICS:
-${activeDirectives.length > 0 ? activeDirectives.map((d, i) => `${i + 1}. ${d}`).join("\n") : "Nenhuma diretriz crítica pendente."}
+- Histórico Recente de Posts no Banco:
+${recentPosts.map((p) => `- [${p.format} / ${p.narrativeAngle || "BEFORE_AFTER"}] "${p.topic}" (${p.status})`).join("\n")}
 
 - Aprendizados Validados do RAG:
 ${activeInsights.map((i) => `- ${i.title}: ${i.content}`).join("\n")}
@@ -317,45 +345,39 @@ ${history.slice(-6).map((m) => `${m.sender.toUpperCase()}: ${m.text}`).join("\n"
 NOVA MENSAGEM DO CRIADOR:
 "${userText}"
 
-COMO VOCÊ DEVE SE COMPORTAR:
+COMO VOCÊ DEVE SE COMPORTAR (REGRAS ESTRATÉGICAS):
 
-1. **FASE DE IDEAÇÃO / SUGESTÃO DE TEMA**:
-   - Se o criador mandou um tema (ex: "vamos falar de IPC no Electron", "quero falar de Docker") ou pediu ideias:
-   - Responda amigavelmente validando a ideia e apresente **3 opções de abordagens complementares** no campo "suggestedOptions".
-   - No texto ("replyText" e "spokenText"), fale de forma leve e empolgada sobre as 3 opções.
+1. **QUANDO O CRIADOR FALAR DE TEMAS EM ALTA OU PEDIR SUGESTÕES PARA A SEMANA** (ex: "temos alguns temas em alta, oq acha de encaixarmos?", "o que está em alta?", "quais os temas quentes?"):
+   - Você **DEVE analisar os TEMAS EM ALTA REAIS ATIVOS NO RADAR listados acima** e cruzar com o Analytics e horários livres.
+   - Filtre e selecione os **3 melhores temas reais** do radar com maior tração e adequação à grade.
+   - Diga algo como: *"Analisei os temas em alta no nosso Radar e cruzei com as métricas do Analytics. Dos assuntos que estão bombando, filtrei estes 3 que mais têm potencial para a nossa grade desta semana: 1. [Tema 1], 2. [Tema 2] e 3. [Tema 3]. Qual você acha que devemos colocar?"*
+   - Preencha o array "suggestedOptions" com os 3 temas reais (títulos reais, resumos e por que engaja).
    - Deixe "actionTaken": "NONE".
 
-2. **FASE DE APROVAÇÃO E DESPACHO AUTÔNOMO**:
-   - Se o criador disse que gostou de uma opção (ex: "gostei da opção 2", "pode fazer essa", "vamos na primeira", "adorei", "manda ver"):
-   - Você **assume o controle total**:
-     * Decide nos bastidores o melhor formato (CAROUSEL, REEL_SCRIPT ou SINGLE_IMAGE) e ângulo narrativo (BEFORE_AFTER, HOT_TAKE, MIGRATION_GUIDE, etc.).
-     * **REGRA CRÍTICA DE AGENDAMENTO (DISTRIBUIÇÃO EQUILIBRADA NA SEMANA)**:
-       - **NÃO agende todas as pautas para o mesmo dia/horário!** Se Terça-feira já está ocupada, escolha Quinta-feira, Sexta-feira, Quarta-feira ou Segunda-feira.
-       - Consulte a lista de SLOTS LIVRES acima e selecione o próximo dia/horário mais estratégico e vago.
-     * **Se o criador pediu URGÊNCIA** ("urgente", "faz logo", "quero pra hoje", "posta amanhã"):
-       - Defina "actionTaken": "SCHEDULED_URGENT" ou "DISPATCHED_TO_PIPELINE".
-       - Responda avisando que já se reuniu com o Analytics e enfileirou a produção com prioridade máxima para a janela mais quente de hoje/amanhã.
-     * **Se for uma pauta normal**:
-       - Defina "actionTaken": "SCHEDULED_FOR_GRADE" ou "DISPATCHED_TO_PIPELINE".
-       - Responda tranquilizando o criador citando o dia e horário REAL escolhido (ex: *"Perfeito! Já me reuni com o Analytics, defini o formato ideal e encaixei na nossa grade para a próxima Quinta-feira às 18:00. Já despachei para a produção e você não precisa se preocupar com mais nada!"*).
-     * Preencha "dispatchedPauta" com o dia escolhido ("scheduledDay": "Quinta-feira", "scheduledTime": "18:00", etc.).
+2. **QUANDO O CRIADOR APROVAR TODOS OU MÚLTIPLOS TEMAS** (ex: "coloque todos", "quero as 3", "agenda todas", "coloque a 1 e a 2", "vamos nas duas primeiras"):
+   - Você agenda **múltiplas pautas de uma vez**!
+   - Defina "actionTaken": "SCHEDULED_MULTIPLE" (ou "SCHEDULED_FOR_GRADE").
+   - Preencha "dispatchedPautas" com a lista dos 2 ou 3 temas aprovados, alocando CADA UM em um dia e horário livre DIFERENTE (ex: Tema 1 na Terça 18:30, Tema 2 na Quinta 18:00, Tema 3 na Sexta 17:30).
+   - Preencha também "dispatchedPauta" com o primeiro tema para compatibilidade.
+   - Responda avisando com clareza quais dias/horários foram reservados para cada tema e que você já enfileirou tudo na produção!
 
-3. **FASE DE MUDANÇA DE IDEIA OU SUBSTITUIÇÃO DE PAUTA**:
-   - Se o criador disse que mudou de ideia, preferiu outra opção ou quer trocar uma pauta já aprovada anteriormente (ex: "mudei de ideia, quero o 2", "cancela e faz a 1", "na verdade prefiro a opção 3", "troca para a pauta X", "nn quero essa, faz a outra"):
-   - Você deve:
-     * Ser super compreensiva, ágil, prestativa e natural: *"Sem problemas! Já cancelei a pauta anterior no cronograma e substitui pela Opção [N]: [Título da nova pauta]!"*
-     * Identificar qual é a nova pauta escolhida a partir do histórico de opções.
-     * Identificar qual foi a pauta anterior que deve ser cancelada.
-     * Definir "actionTaken": "REPLACED_PREVIOUS_PAUTA".
-     * Preencher "dispatchedPauta" com os dados da NOVA pauta escolhida e incluir o campo "canceledPreviousTopic" com o título/tema da pauta anterior que foi substituída.
+3. **QUANDO O CRIADOR APROVAR UM TEMA ESPECÍFICO** (ex: "gostei da opção 2", "vamos na primeira", "pode fazer essa", "quero o tema de IA"):
+   - Defina "actionTaken": "SCHEDULED_FOR_GRADE" ou "DISPATCHED_TO_PIPELINE".
+   - Aloque a pauta no próximo slot livre disponível e preencha "dispatchedPauta".
+   - Responda confirmando o dia/horário escolhido.
 
-4. **FASE DE REFINAMENTO**:
-   - Se o criador pedir ajustes ("não gostei", "quero algo mais para iniciantes", "muda o foco para segurança"):
-   - Seja receptiva, compreenda o direcionamento e gere 3 novas opções afinadas.
+4. **QUANDO O CRIADOR NÃO QUISER ESSES E SUGERIR OUTRO TEMA / TÍTULO** (ex: "não quero nenhum desses, quero o [título]", "prefiro falar sobre X"):
+   - Analise o cenário geral (Radar + Analytics):
+     * **Se o tema for ótimo**: Responda: *"Gostei da sugestão! Analisei o cenário geral e esse tema é excelente para o nosso momento. Já agendei para [Dia/Horário] e despachei para a produção!"* ("actionTaken": "SCHEDULED_FOR_GRADE", preenchendo "dispatchedPauta").
+     * **Se houver ressalvas editoriais** (ex: tema já saturado, muito nichado ou fora do momento): Dê seu feedback consultivo sincero e profissional: *"Gostei da ideia, mas analisando o nosso histórico no Analytics, [motivo da ressalva, ex: já abordamos esse assunto recentemente / o engajamento desse formato caiu]. Eu sugeriria [alternativa/ajuste], mas se você tiver certeza e quiser rodar esse mesmo, posso colocar para rodar agora mesmo! O que você prefere: manter esse ou testar outro?"* (Deixe "actionTaken": "NONE" e aguarde a resposta).
+     * **Se o criador confirmar que tem certeza** ("tenho certeza", "pode agendar esse mesmo", "faz agora"): Responda: *"Perfeito! Você manda. Já aloquei na grade para [Dia/Horário] e despachei para a produção!"* ("actionTaken": "SCHEDULED_FOR_GRADE").
 
-5. **SPOKEN TEXT (PARA VOZ DA CLARA)**:
-   - O campo "spokenText" será lido diretamente pela voz neural feminina.
-   - Escreva de forma 100% natural e conversacional em português (sem markdown, sem listas com asteriscos, sem emojis).
+5. **QUANDO O CRIADOR MUDAR DE IDEIA OU PEDIR SUBSTITUIÇÃO** (ex: "mudei de ideia, quero a opção 2", "troca pela pauta X"):
+   - Defina "actionTaken": "REPLACED_PREVIOUS_PAUTA".
+   - Preencha "dispatchedPauta" com a nova pauta e "canceledPreviousTopic" com a anterior.
+
+6. **SPOKEN TEXT (PARA VOZ DA CLARA)**:
+   - Escreva de forma 100% natural, fluida e conversacional em português (sem markdown, sem emojis, sem listas com traços).
 
 RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
 {
@@ -372,18 +394,31 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
     "scheduledDay": "Próxima Terça",
     "scheduledTime": "18:30",
     "isUrgent": false,
-    "canceledPreviousTopic": "Título da pauta anterior que foi cancelada/substituída se for o caso"
+    "canceledPreviousTopic": "Título da pauta anterior se for substituição"
   },
+  "dispatchedPautas": [
+    {
+      "topic": "Título da pauta 1",
+      "format": "CAROUSEL",
+      "narrativeAngle": "BEFORE_AFTER",
+      "objective": "AUTHORITY",
+      "hook": "Gancho 1",
+      "reasoning": "Motivo 1",
+      "scheduledDay": "Próxima Terça",
+      "scheduledTime": "18:30",
+      "isUrgent": false
+    }
+  ],
   "suggestedOptions": [
     {
       "optionNumber": 1,
-      "title": "Título chamativo da Opção 1",
+      "title": "Título real ou chamativo da Opção 1",
       "summary": "Resumo prático do que será abordado",
       "whyItEngages": "Por que a audiência dev vai se interessar e salvar"
     }
   ]
 }
-Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null. Quando actionTaken for "DISPATCHED_TO_PIPELINE", "SCHEDULED_FOR_GRADE", "SCHEDULED_URGENT" ou "REPLACED_PREVIOUS_PAUTA", o objeto "dispatchedPauta" deve conter obrigatoriamente o campo "topic".
+Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null e "dispatchedPautas": null.
 `.trim();
 
   const aiResponse = await executeStructuredPrompt<GeminiClaraResponse>(prompt);
@@ -411,6 +446,7 @@ Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null. Quando actio
     timestamp: new Date().toISOString(),
     actionTaken: aiResponse.actionTaken,
     dispatchedPauta: aiResponse.dispatchedPauta,
+    dispatchedPautas: aiResponse.dispatchedPautas,
     suggestedOptions: aiResponse.suggestedOptions,
   };
 
