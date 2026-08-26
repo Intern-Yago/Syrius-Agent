@@ -34,7 +34,7 @@ protocol.registerSchemesAsPrivileged([
 // Define nome da aplicação e App User Model ID no Windows para notificações e barra de tarefas
 app.name = "Syrius Agent";
 if (process.platform === "win32") {
-  app.setAppUserModelId("com.syrius.agent");
+  app.setAppUserModelId(app.isPackaged ? "com.syrius.agent" : process.execPath);
 }
 
 import {
@@ -157,7 +157,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    icon: iconPath || appIcon,
+    icon: (appIcon && !appIcon.isEmpty()) ? appIcon : (iconPath || undefined),
     minWidth: 1100,
     minHeight: 700,
     frame: false, // Janela Frameless customizada (Adeus barra cinza feia do Windows)

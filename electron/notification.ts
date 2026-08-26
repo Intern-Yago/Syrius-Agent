@@ -53,9 +53,32 @@ export function getAppIcon(): Electron.NativeImage | undefined {
   if (cachedAppIcon && !cachedAppIcon.isEmpty()) return cachedAppIcon;
   const iconPath = getAppIconPath();
   if (iconPath) {
-    cachedAppIcon = nativeImage.createFromPath(iconPath);
-    return cachedAppIcon;
+    const img = nativeImage.createFromPath(iconPath);
+    if (!img.isEmpty()) {
+      cachedAppIcon = img;
+      return cachedAppIcon;
+    }
   }
+
+  // Fallback direto para o PNG em disco
+  const fallbackPaths = [
+    path.join(process.cwd(), "electron", "assets", "icon.png"),
+    path.join(process.cwd(), "electron", "assets", "logo.png"),
+    path.join(process.cwd(), "dist-electron", "assets", "icon.png"),
+    path.join(__dirname, "..", "assets", "icon.png"),
+    path.join(__dirname, "assets", "icon.png"),
+  ];
+
+  for (const fp of fallbackPaths) {
+    if (fs.existsSync(fp)) {
+      const img = nativeImage.createFromPath(fp);
+      if (!img.isEmpty()) {
+        cachedAppIcon = img;
+        return cachedAppIcon;
+      }
+    }
+  }
+
   return undefined;
 }
 
