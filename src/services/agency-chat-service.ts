@@ -442,6 +442,17 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
 Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null e "dispatchedPautas": null.
 `.trim();
 
+  const userMsgId = `msg-user-${Date.now()}`;
+  const userMsg: ChatMessage = {
+    id: userMsgId,
+    sender: "user",
+    text: userText,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Salva imediatamente a mensagem do usuário no histórico persistido para garantir sincronia em navegação
+  await saveAgencyChatHistory([...history, userMsg]);
+
   const aiResponse = await executeStructuredPrompt<GeminiClaraResponse>(prompt);
 
   let audioPath: string | undefined = undefined;
@@ -449,15 +460,7 @@ Nota: Quando actionTaken for "NONE", deixe "dispatchedPauta": null e "dispatched
     audioPath = await synthesizeClaraVoice(aiResponse.spokenText);
   }
 
-  const userMsgId = `msg-user-${Date.now()}`;
   const claraMsgId = `msg-clara-${Date.now() + 1}`;
-
-  const userMsg: ChatMessage = {
-    id: userMsgId,
-    sender: "user",
-    text: userText,
-    timestamp: new Date().toISOString(),
-  };
 
   const claraMsg: ChatMessage = {
     id: claraMsgId,

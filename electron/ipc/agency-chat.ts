@@ -12,10 +12,21 @@ import { prisma } from "../../src/core/database.js";
 import { getSettings } from "../../src/config/settings.js";
 import { sendNativeNotification } from "../notification.js";
 
+let isProcessingAgencyMessage = false;
+let pendingUserText: string | null = null;
+
 export function registerAgencyChatHandlers(getMainWindow?: () => any) {
   // 1. Obter Histórico do Chat
   ipcMain.handle("agency:get-history", async (): Promise<ChatMessage[]> => {
     return getAgencyChatHistory();
+  });
+
+  // 1.1. Verificar se a Gestora está processando em background
+  ipcMain.handle("agency:is-processing", async (): Promise<{ isProcessing: boolean; userText: string | null }> => {
+    return {
+      isProcessing: isProcessingAgencyMessage,
+      userText: pendingUserText,
+    };
   });
 
   // 2. Limpar Histórico
@@ -65,11 +76,27 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
       dispatchedSlot?: any;
       error?: string;
     }> => {
-      try {
-        const { userMsg, claraMsg } = await processAgencyMessage(payload.text, payload.voiceEnabled ?? true);
+      isProcessingAgencyMessage = true;
+      pendingUserText = payload.text;
 
-        let autoDispatched = false;
-        let dispatchedSlot: any;
+      const win = getMainWindow?.();
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("agency:status-change", {
+          isProcessing: true,
+          userText: payload.text,
+        });
+      }
+
+      let userMsg: ChatMessage | undefined;
+      let claraMsg: ChatMessage | undefined;
+      let autoDispatched = false;
+      let dispatchedSlot: any;
+      let errorStr: string | undefined;
+
+      try {
+        const result = await processAgencyMessage(payload.text, payload.voiceEnabled ?? true);
+        userMsg = result.userMsg;
+        claraMsg = result.claraMsg;
         
         const isDispatchAction =
           claraMsg.actionTaken === "DISPATCHED_TO_PIPELINE" ||
@@ -294,11 +321,27 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
           dispatchedSlot,
         };
       } catch (err) {
+        errorStr = err instanceof Error ? err.message : "Erro desconhecido ao falar com a Gestora.";
         console.error("[AgencyChat] Erro no processamento:", err);
         return {
           success: false,
-          error: err instanceof Error ? err.message : "Erro desconhecido ao falar com a Gestora.",
+          error: errorStr,
         };
+      } finally {
+        isProcessingAgencyMessage = false;
+        pendingUserText = null;
+
+        const win = getMainWindow?.();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("agency:status-change", {
+            isProcessing: false,
+            userMsg,
+            claraMsg,
+            autoDispatched,
+            dispatchedSlot,
+            error: errorStr,
+          });
+        }
       }
     }
   );

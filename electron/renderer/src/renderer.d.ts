@@ -279,6 +279,7 @@ declare global {
 
     // Sala de Reunião com o Gestor Editorial
     agencyGetHistory: () => Promise<any[]>;
+    agencyIsProcessing: () => Promise<{ isProcessing: boolean; userText: string | null }>;
     agencySendMessage: (payload: { text: string; voiceEnabled?: boolean }) => Promise<{
       success: boolean;
       userMsg?: any;
@@ -290,6 +291,17 @@ declare global {
     agencyTranscribeAudio: (payload: { audioBase64: string; mimeType?: string }) => Promise<{ success: boolean; text?: string; error?: string }>;
     agencyClearHistory: () => Promise<boolean>;
     agencyPreviewVoice: (payload: { voice: string; text?: string }) => Promise<{ success: boolean; audioPath?: string; error?: string }>;
+    onAgencyStatusChange: (
+      callback: (data: {
+        isProcessing: boolean;
+        userText?: string;
+        userMsg?: any;
+        claraMsg?: any;
+        autoDispatched?: boolean;
+        dispatchedSlot?: any;
+        error?: string;
+      }) => void
+    ) => () => void;
   }
 
   interface Window {

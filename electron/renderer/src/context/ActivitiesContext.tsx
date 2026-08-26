@@ -257,6 +257,55 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
     return unsub;
   }, []);
 
+  // 4. Listener de Sala de Reunião com a Gestora Editorial via IPC
+  useEffect(() => {
+    if (!window.electronAPI?.onAgencyStatusChange) return;
+
+    const unsub = window.electronAPI.onAgencyStatusChange((data) => {
+      setActivities((prev) => {
+        const id = "agency-meeting-thinking";
+        if (data.isProcessing) {
+          const existing = prev.find((a) => a.id === id);
+          const runningTask: Activity = {
+            id,
+            type: "task",
+            title: "Sala de Reunião Editorial",
+            subtitle: data.userText ? `"${data.userText.slice(0, 60)}..."` : "Estelar está analisando métricas e elaborando a resposta...",
+            targetPage: "agency_meeting",
+            status: "running",
+            statusMessage: "Estelar está analisando métricas, histórico e elaborando a resposta...",
+            progress: 50,
+            startedAt: existing?.startedAt || Date.now(),
+            canStop: false,
+            canRetry: false,
+          };
+          return [runningTask, ...prev.filter((a) => a.id !== id)];
+        } else {
+          if (data.error) {
+            const errorTask: Activity = {
+              id,
+              type: "task",
+              title: "Sala de Reunião Editorial",
+              subtitle: "Erro no processamento da resposta",
+              targetPage: "agency_meeting",
+              status: "error",
+              statusMessage: data.error,
+              progress: 0,
+              startedAt: Date.now(),
+              errorLog: data.error,
+              canStop: false,
+              canRetry: false,
+            };
+            return [errorTask, ...prev.filter((a) => a.id !== id)];
+          }
+          return prev.filter((a) => a.id !== id);
+        }
+      });
+    });
+
+    return unsub;
+  }, []);
+
   // 4. Listener de Testes via IPC
   useEffect(() => {
     if (!window.electronAPI?.onTestStatusChange) return;

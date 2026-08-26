@@ -146,8 +146,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Sala de Reunião com o Gestor Editorial
   agencyGetHistory: () => ipcRenderer.invoke("agency:get-history"),
+  agencyIsProcessing: () => ipcRenderer.invoke("agency:is-processing"),
   agencySendMessage: (payload) => ipcRenderer.invoke("agency:send-message", payload),
   agencyTranscribeAudio: (payload) => ipcRenderer.invoke("agency:transcribe-audio", payload),
   agencyClearHistory: () => ipcRenderer.invoke("agency:clear-history"),
   agencyPreviewVoice: (payload) => ipcRenderer.invoke("agency:preview-voice", payload),
+  onAgencyStatusChange: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on("agency:status-change", listener);
+    return () => ipcRenderer.removeListener("agency:status-change", listener);
+  },
 });

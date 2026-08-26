@@ -86,6 +86,39 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
     loadManagerConfig();
   }, []);
 
+  // Sincroniza em tempo real caso o usuário troque de página enquanto a Estelar estiver processando
+  useEffect(() => {
+    if (!window.electronAPI?.onAgencyStatusChange) return;
+
+    const unsub = window.electronAPI.onAgencyStatusChange((data) => {
+      if (data.isProcessing) {
+        setLoading(true);
+        loadChatHistory();
+      } else {
+        setLoading(false);
+        loadChatHistory();
+
+        if (data.claraMsg?.audioPath && voiceEnabled) {
+          playAudio(data.claraMsg.audioPath);
+        }
+
+        if (data.autoDispatched && data.dispatchedSlot) {
+          const isReplaced = data.claraMsg?.actionTaken === "REPLACED_PREVIOUS_PAUTA";
+          toast.success(
+            isReplaced
+              ? `Pauta anterior cancelada e substituída por "${data.dispatchedSlot.topic}" no Cronograma!`
+              : `Pauta aprovada por ${managerName} e agendada com sucesso: "${data.dispatchedSlot.topic}".`
+          );
+          if (onProduceSlot && data.dispatchedSlot.isUrgent) {
+            onProduceSlot(data.dispatchedSlot);
+          }
+        }
+      }
+    });
+
+    return unsub;
+  }, [voiceEnabled, managerName]);
+
   async function loadManagerConfig() {
     try {
       if (window.electronAPI?.getSettings) {
@@ -105,6 +138,12 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
       if (window.electronAPI?.agencyGetHistory) {
         const history = await window.electronAPI.agencyGetHistory();
         setMessages(history);
+      }
+      if (window.electronAPI?.agencyIsProcessing) {
+        const proc = await window.electronAPI.agencyIsProcessing();
+        if (proc?.isProcessing) {
+          setLoading(true);
+        }
       }
     } catch (err) {
       console.error("Erro ao carregar histórico:", err);
