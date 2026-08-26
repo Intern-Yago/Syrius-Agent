@@ -359,6 +359,44 @@ export function SchedulePage({
     }
   }
 
+  async function handleUnmarkPublished(slot: ScheduleSlot) {
+    const matchingPost = getMatchingPost(slot);
+    const targetPostId = slot.postId || matchingPost?.id;
+
+    const confirmed = await showConfirm({
+      title: "Desmarcar como Publicado",
+      message: `Deseja desmarcar a publicação "${slot.topic}"? O status voltará para Pronto/Planejado no cronograma para que você possa regerar ou republicar quando desejar.`,
+      confirmText: "Sim, Desmarcar",
+      cancelText: "Manter Publicado",
+      type: "primary",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      if (targetPostId && window.electronAPI?.setPostStatus) {
+        await window.electronAPI.setPostStatus(targetPostId, "READY");
+      }
+
+      const updatedSlot: ScheduleSlot = {
+        ...slot,
+        status: matchingPost ? "READY" : "PLANNED",
+        instagramUrl: undefined,
+      };
+
+      await window.electronAPI.saveScheduleSlot(updatedSlot, currentWeekOffset);
+      setSlots((current) => current.map((s) => (s.id === slot.id ? updatedSlot : s)));
+      if (matchingPost) {
+        setPosts((current) =>
+          current.map((p) => (p.id === matchingPost.id ? { ...p, status: "READY", instagramUrl: undefined } : p))
+        );
+      }
+      toast.success("Publicação desmarcada com sucesso! Slot restaurado para a grade ativa.");
+    } catch (err) {
+      toast.error(`Erro ao desmarcar publicação: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+    }
+  }
+
   async function handleDirectPublish(slot: ScheduleSlot) {
     if (!slot.postId) {
       toast.warning("Este post ainda não possui conteúdo gerado no banco de dados. Produza primeiro.");
@@ -1143,6 +1181,7 @@ export function SchedulePage({
 
                     <div style={{ display: "flex", gap: "6px" }}>
                       <span
+                        onClick={isPublished ? () => handleUnmarkPublished(slot) : undefined}
                         style={{
                           padding: "2px 6px",
                           borderRadius: "4px",
@@ -1151,7 +1190,10 @@ export function SchedulePage({
                           background: statusBadge.bg,
                           border: `1px solid ${statusBadge.border}`,
                           color: statusBadge.color,
+                          cursor: isPublished ? "pointer" : "default",
+                          transition: "all 0.15s ease",
                         }}
+                        title={isPublished ? "Clique para desmarcar publicação" : undefined}
                       >
                         {statusBadge.label}
                       </span>
@@ -1229,25 +1271,27 @@ export function SchedulePage({
                     <div style={{ display: "flex", gap: "8px", flex: 1 }}>
                       <button
                         type="button"
-                        disabled
+                        onClick={() => handleUnmarkPublished(slot)}
                         style={{
                           flex: 1,
                           padding: "8px 12px",
                           fontSize: "12px",
                           fontWeight: "700",
-                          background: "rgba(16, 185, 129, 0.15)",
+                          background: "rgba(16, 185, 129, 0.12)",
                           border: "1px solid rgba(16, 185, 129, 0.3)",
                           color: "#34d399",
                           borderRadius: "8px",
-                          cursor: "default",
+                          cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          gap: "5px",
+                          gap: "6px",
+                          transition: "all 0.15s ease",
                         }}
+                        title="Clique para desmarcar como publicado e retornar para a grade ativa"
                       >
-                        <IconCheck size={12} />
-                        <span>Publicado</span>
+                        <IconCheck size={12} color="#34d399" />
+                        <span>Publicado (Desmarcar)</span>
                       </button>
 
                       <button
