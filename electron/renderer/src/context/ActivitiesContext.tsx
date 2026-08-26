@@ -49,10 +49,9 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
             const tasks = await window.electronAPI.getActivePublishings();
             if (Array.isArray(tasks) && tasks.length > 0) {
               setActivities((prev) => {
-                const next = [...prev];
+                let next = [...prev];
                 for (const t of tasks) {
                   const id = `publish-${t.postId}`;
-                  const idx = next.findIndex((a) => a.id === id);
                   const activityItem: Activity = {
                     id,
                     type: "publishing",
@@ -69,8 +68,11 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
                     canRetry: t.status === "error",
                     meta: { format: t.format, postId: t.postId },
                   };
-                  if (idx >= 0) next[idx] = activityItem;
-                  else next.unshift(activityItem);
+                  // Remove duplicatas anteriores com o mesmo ID ou mesmo tópico
+                  next = next.filter(
+                    (a) => a.id !== id && !(a.type === "publishing" && a.subtitle && t.topic && a.subtitle.trim().toLowerCase() === t.topic.trim().toLowerCase())
+                  );
+                  next.unshift(activityItem);
                 }
                 return next;
               });
@@ -85,11 +87,10 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
             const regTasks = await window.electronAPI.getActiveRegenerations();
             if (Array.isArray(regTasks) && regTasks.length > 0) {
               setActivities((prev) => {
-                const next = [...prev];
+                let next = [...prev];
                 for (const t of regTasks) {
                   const isVideo = t.taskId?.startsWith("regen-video") || (t.format === "REEL_SCRIPT" && t.slideNumber === 1 && t.message?.toLowerCase().includes("vídeo"));
                   const id = isVideo ? (t.taskId || `regen-video-${t.postId}`) : `regen-${t.postId}-${t.slideNumber}`;
-                  const idx = next.findIndex((a) => a.id === id);
                   const activityItem: Activity = {
                     id,
                     type: isVideo ? "video_regeneration" : "image_regeneration",
@@ -106,8 +107,8 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
                     canRetry: t.status === "error",
                     meta: { format: t.format, postId: t.postId, slideNumber: t.slideNumber },
                   };
-                  if (idx >= 0) next[idx] = activityItem;
-                  else next.unshift(activityItem);
+                  next = next.filter((a) => a.id !== id);
+                  next.unshift(activityItem);
                 }
                 return next;
               });
@@ -131,7 +132,8 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
     const unsub = window.electronAPI.onPublishProgress((data) => {
       setActivities((prev) => {
         const id = `publish-${data.postId}`;
-        const existing = prev.find((a) => a.id === id);
+        const targetTopic = data.topic ? data.topic.trim().toLowerCase() : "";
+        const existing = prev.find((a) => a.id === id || (a.type === "publishing" && a.subtitle && targetTopic && a.subtitle.trim().toLowerCase() === targetTopic));
         const updatedStatus: ActivityStatus = data.status;
 
         const updated: Activity = {
@@ -151,7 +153,10 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
           meta: { format: data.format, postId: data.postId, publishedMediaId: data.publishedMediaId },
         };
 
-        const filtered = prev.filter((a) => a.id !== id);
+        // Remove duplicatas anteriores com o mesmo ID ou mesmo tópico
+        const filtered = prev.filter(
+          (a) => a.id !== id && !(a.type === "publishing" && a.subtitle && targetTopic && a.subtitle.trim().toLowerCase() === targetTopic)
+        );
         return [updated, ...filtered];
       });
     });
