@@ -384,7 +384,7 @@ export function SchedulePage({
         instagramUrl: undefined,
       };
 
-      await window.electronAPI.saveScheduleSlot(updatedSlot, currentWeekOffset);
+      await window.electronAPI.saveScheduleSlot(updatedSlot, selectedWeekOffset);
       setSlots((current) => current.map((s) => (s.id === slot.id ? updatedSlot : s)));
       if (matchingPost) {
         setPosts((current) =>

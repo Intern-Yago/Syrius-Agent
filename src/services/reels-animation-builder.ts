@@ -43,16 +43,19 @@ ${caption ? `LEGENDA:\n${caption}` : ""}
 
 SISTEMA DE MULTI-LAYOUTS VISUAIS (ESCOLHA O LAYOUT IDEAL PARA CADA CENA):
 Você tem 5 tipos de layout disponíveis:
-1. "CODE_EDITOR": Janela VS Code escura com código syntax-highlighted (Ideal para tutoriais e refatoração).
-2. "BROWSER_MOCKUP": Janela de navegador com URL da ferramenta, botões e visual de WebUI/Doc (Ideal para ferramentas, docs e anúncios).
-3. "TERMINAL_CLI": Janela de terminal com comandos ($ npx, $ docker), logs coloridos e progresso (Ideal para DevOps, CLI e instalação).
+1. "TERMINAL_CLI": Janela de Terminal Zsh/Warp com prompts reais ($ aider, ➜ git, $ docker), logs de progresso e diffs coloridos (OBRIGATÓRIO para temas de Terminal, CLI, DevOps, Automação e Ferramentas de IA no Terminal).
+2. "CODE_EDITOR": Janela VS Code escura com código syntax-highlighted (Ideal para tutoriais de código, refatoração e Clean Code).
+3. "BROWSER_MOCKUP": Janela de navegador com URL da ferramenta, botões e visual de WebUI/Doc/GitHub (Ideal para ferramentas web, repositórios e documentações).
 4. "TECH_NEWS": Cartão de Notícia Tech com manchete impactante, métricas grandes e destaques (Ideal para lançamentos, notícias e quebras de segurança).
 5. "OUTPUT_SHOWCASE": Tela de resultado prático gerado pela ferramenta ou benchmark comparativo.
 
-REGRAS DE CONTEÚDO:
-1. NÃO use emojis nas linhas de código nem nos títulos.
-2. Cada linha de texto/código DEVE TER NO MÁXIMO 40 CARACTERES.
-3. Cada cena deve ter entre 4 e 7 linhas informativas ou de código.
+REGRAS DE CONTEÚDO PARA TERMINAL_CLI:
+- Use prompts realistas: linhas começando com "$ ", "➜ ", "❯ " ou "[AI] ".
+- Mostre comandos de ferramentas reais como Aider, Warp, Ollama, Docker, Copilot CLI, K8s, Turborepo.
+- Mostre diffs com "+ " (adição) e "- " (remoção) ou mensagens de sucesso "[✓] ".
+- Não use emojis nas linhas de código nem nos títulos.
+- Cada linha de texto/código DEVE TER NO MÁXIMO 40 CARACTERES.
+- Cada cena deve ter entre 4 e 7 linhas informativas ou de código.
 
 RETORNE EXCLUSIVAMENTE NO FORMATO JSON ABAIXO:
 {

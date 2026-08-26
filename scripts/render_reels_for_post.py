@@ -349,41 +349,60 @@ for f_idx in range(num_frames):
             draw.text((card_x + 40, ly), line, fill="#cbd5e1", font=font_code)
 
     elif layout == "TERMINAL_CLI":
-        # LAYOUT: TERMINAL CLI (Comandos reais de linha de comando)
+        # LAYOUT: TERMINAL CLI (Modern Hacker / Warp / Zsh Terminal)
         draw.rounded_rectangle(
             [card_x + 4, card_y + 8, card_x + card_w + 4, card_y + card_h + 8],
             radius=20, fill=(0, 0, 0)
         )
         draw.rounded_rectangle(
             [card_x, card_y, card_x + card_w, card_y + card_h],
-            radius=20, fill=(10, 15, 20), outline=(16, 185, 129), width=2
+            radius=20, fill=(10, 14, 22), outline=(56, 189, 248), width=2
         )
-        # Terminal top bar
+        # Terminal top bar (Warp/macOS Style)
         draw.rounded_rectangle(
-            [card_x, card_y, card_x + card_w, card_y + 55],
-            radius=20, fill=(18, 24, 32)
+            [card_x, card_y, card_x + card_w, card_y + 60],
+            radius=20, fill=(18, 24, 38)
         )
-        draw.rectangle([card_x, card_y + 35, card_x + card_w, card_y + 55], fill=(18, 24, 32))
-        draw.ellipse([card_x + 24, card_y + 18, card_x + 44, card_y + 38], fill="#ff5f56")
-        draw.ellipse([card_x + 54, card_y + 18, card_x + 74, card_y + 38], fill="#ffbd2e")
-        draw.ellipse([card_x + 84, card_y + 18, card_x + 104, card_y + 38], fill="#27c93f")
-        draw.text((card_x + 130, card_y + 18), "bash - 80x24", fill="#94a3b8", font=font_file)
+        draw.rectangle([card_x, card_y + 35, card_x + card_w, card_y + 60], fill=(18, 24, 38))
+        draw.ellipse([card_x + 24, card_y + 20, card_x + 44, card_y + 40], fill="#ff5f56")
+        draw.ellipse([card_x + 54, card_y + 20, card_x + 74, card_y + 40], fill="#ffbd2e")
+        draw.ellipse([card_x + 84, card_y + 20, card_x + 104, card_y + 40], fill="#27c93f")
+        
+        terminal_header = active_scene.get("header_title", "zsh — ~/developer/ai-tools — (main)")
+        draw.text((card_x + 130, card_y + 20), terminal_header[:40], fill="#94a3b8", font=font_file)
 
-        line_start_y = card_y + 90
-        line_h = 58
+        # Prompt directory header (Starship / Oh My Zsh style)
+        prompt_dir_y = card_y + 85
+        draw.text((card_x + 30, prompt_dir_y), "➜  ~/projects/ai-cli  git:(main) ✗", fill="#c084fc", font=font_file)
+        
+        line_start_y = card_y + 140
+        line_h = 56
         for l_idx, line in enumerate(typed_lines):
             ly = line_start_y + l_idx * line_h
-            if line.startswith("$"):
+            if line.startswith("$ ") or line.startswith("➜ ") or line.startswith("❯ "):
+                # Command prompt line in vibrant green/cyan
                 draw.text((card_x + 30, ly), line, fill="#34d399", font=font_code)
-            elif "[✓]" in line or "sucesso" in line.lower() or "pass" in line.lower():
+            elif line.startswith("+ "):
+                # Added diff line
+                draw.rectangle([card_x + 20, ly - 2, card_x + card_w - 20, ly + 36], fill=(22, 101, 52, 60))
+                draw.text((card_x + 30, ly), line, fill="#4ade80", font=font_code)
+            elif line.startswith("- "):
+                # Removed diff line
+                draw.rectangle([card_x + 20, ly - 2, card_x + card_w - 20, ly + 36], fill=(153, 27, 27, 60))
+                draw.text((card_x + 30, ly), line, fill="#f87171", font=font_code)
+            elif "[✓]" in line or "✓" in line or "pass" in line.lower() or "concluído" in line.lower() or "sucesso" in line.lower():
                 draw.text((card_x + 30, ly), line, fill="#38bdf8", font=font_code)
+            elif "[AI]" in line or "🤖" in line or "⚡" in line or "aider" in line.lower():
+                draw.text((card_x + 30, ly), line, fill="#e879f9", font=font_code)
+            elif "[!]" in line or "warn" in line.lower() or "aviso" in line.lower():
+                draw.text((card_x + 30, ly), line, fill="#fbbf24", font=font_code)
             else:
                 draw.text((card_x + 30, ly), line, fill="#cbd5e1", font=font_code)
 
             if l_idx == len(typed_lines) - 1 and cursor_visible:
                 tb = font_code.getbbox(line + " ")
                 cx = card_x + 30 + (tb[2] - tb[0])
-                draw.rectangle([cx, ly - 2, cx + 4, ly + 30], fill="#34d399")
+                draw.rectangle([cx, ly - 2, cx + 4, ly + 30], fill="#38bdf8")
 
     else:
         # LAYOUT PADRAO: CODE_EDITOR (VS Code com Syntax Highlighting)
