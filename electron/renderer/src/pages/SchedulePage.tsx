@@ -16,7 +16,7 @@ import {
   IconRefreshCw,
 } from "../components/common/Icons";
 import { EditSlotModal } from "../components/schedule/EditSlotModal";
-import { getSlotTimingInfo } from "../utils/scheduleTiming";
+import { getSlotTimingInfo, sortSlotsChronologically } from "../utils/scheduleTiming";
 import { useModal } from "../context/ModalContext";
 import { useActivities } from "../context/ActivitiesContext";
 
@@ -470,7 +470,9 @@ export function SchedulePage({
     }
   }
 
-  const unproducedSlots = slots.filter((slot) => {
+  const sortedSlots = sortSlotsChronologically(slots);
+
+  const unproducedSlots = sortedSlots.filter((slot) => {
     const match = getMatchingPost(slot);
     const postExists = Boolean(match);
     const isPublished = slot.status === "PUBLISHED" || match?.status === "PUBLISHED";
@@ -1122,9 +1124,9 @@ export function SchedulePage({
         </div>
       )}
 
-      {!loading && slots.length > 0 && (
+      {!loading && sortedSlots.length > 0 && (
         <div className="tests-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
-          {slots.map((slot) => {
+          {sortedSlots.map((slot) => {
             const matchingPost = getMatchingPost(slot);
             const postExists = Boolean(matchingPost);
             const isPublished = slot.status === "PUBLISHED" || matchingPost?.status === "PUBLISHED";

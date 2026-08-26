@@ -147,3 +147,59 @@ export function getSlotTimingInfo(slot?: ScheduleSlot | null, isPublished = fals
     formattedTiming: `${dayName} às ${slot.timeSlot}`,
   };
 }
+
+export function sortSlotsChronologically(slots: ScheduleSlot[]): ScheduleSlot[] {
+  const DAY_ORDER: Record<string, number> = {
+    "segunda-feira": 1,
+    segunda: 1,
+    seg: 1,
+    "terça-feira": 2,
+    "terca-feira": 2,
+    terça: 2,
+    terca: 2,
+    ter: 2,
+    "quarta-feira": 3,
+    quarta: 3,
+    qua: 3,
+    "quinta-feira": 4,
+    quinta: 4,
+    qui: 4,
+    "sexta-feira": 5,
+    sexta: 5,
+    sex: 5,
+    "sábado": 6,
+    sabado: 6,
+    sab: 6,
+    domingo: 7,
+    dom: 7,
+  };
+
+  const getDayNum = (dayStr?: string): number => {
+    if (!dayStr) return 99;
+    const clean = dayStr
+      .trim()
+      .toLowerCase()
+      .replace(/^pr[oó]xima\s+/i, "")
+      .trim();
+    for (const [key, num] of Object.entries(DAY_ORDER)) {
+      if (clean === key || clean.startsWith(key)) return num;
+    }
+    return 99;
+  };
+
+  const getTimeNum = (timeStr?: string): number => {
+    if (!timeStr) return 9999;
+    const [h, m] = timeStr.split(":").map(Number);
+    return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+  };
+
+  return [...slots].sort((a, b) => {
+    const dayA = getDayNum(a.dayOfWeek);
+    const dayB = getDayNum(b.dayOfWeek);
+    if (dayA !== dayB) return dayA - dayB;
+
+    const timeA = getTimeNum(a.timeSlot);
+    const timeB = getTimeNum(b.timeSlot);
+    return timeA - timeB;
+  });
+}

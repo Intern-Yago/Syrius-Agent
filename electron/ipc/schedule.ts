@@ -338,17 +338,74 @@ async function loadSchedule(weekOffset: number = 0): Promise<ScheduleSlot[]> {
       });
     }
 
-    return resultSlots;
+    return sortSlotsChronologically(resultSlots);
   } catch (err) {
     console.error("[schedule] Erro ao carregar do PostgreSQL:", err);
-    return weekOffset === 0 ? DEFAULT_SCHEDULE : [];
+    return weekOffset === 0 ? sortSlotsChronologically(DEFAULT_SCHEDULE) : [];
   }
+}
+
+const SCHEDULE_DAY_ORDER: Record<string, number> = {
+  "segunda-feira": 1,
+  segunda: 1,
+  seg: 1,
+  "terça-feira": 2,
+  "terca-feira": 2,
+  terça: 2,
+  terca: 2,
+  ter: 2,
+  "quarta-feira": 3,
+  quarta: 3,
+  qua: 3,
+  "quinta-feira": 4,
+  quinta: 4,
+  qui: 4,
+  "sexta-feira": 5,
+  sexta: 5,
+  sex: 5,
+  "sábado": 6,
+  sabado: 6,
+  sab: 6,
+  domingo: 7,
+  dom: 7,
+};
+
+function sortSlotsChronologically(slots: ScheduleSlot[]): ScheduleSlot[] {
+  const getDayNum = (dayStr?: string): number => {
+    if (!dayStr) return 99;
+    const clean = dayStr
+      .trim()
+      .toLowerCase()
+      .replace(/^pr[oó]xima\s+/i, "")
+      .trim();
+    for (const [key, num] of Object.entries(SCHEDULE_DAY_ORDER)) {
+      if (clean === key || clean.startsWith(key)) return num;
+    }
+    return 99;
+  };
+
+  const getTimeNum = (timeStr?: string): number => {
+    if (!timeStr) return 9999;
+    const [h, m] = timeStr.split(":").map(Number);
+    return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+  };
+
+  return [...slots].sort((a, b) => {
+    const dayA = getDayNum(a.dayOfWeek);
+    const dayB = getDayNum(b.dayOfWeek);
+    if (dayA !== dayB) return dayA - dayB;
+
+    const timeA = getTimeNum(a.timeSlot);
+    const timeB = getTimeNum(b.timeSlot);
+    return timeA - timeB;
+  });
 }
 
 async function saveSchedule(slots: ScheduleSlot[], weekOffset: number = 0): Promise<void> {
   try {
-    for (let i = 0; i < slots.length; i++) {
-      const s = slots[i];
+    const sorted = sortSlotsChronologically(slots);
+    for (let i = 0; i < sorted.length; i++) {
+      const s = sorted[i];
       const isStory = Boolean(
         s.isStorySlot ||
         s.format === "STORY_PHOTO" ||
