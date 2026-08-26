@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Syrius Agent",
+    "slug": "syrius-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#09090b"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "O Syrius Mobile precisa de acesso ao microfone para permitir gravação de áudio com a Gestora Editorial Estelar."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#09090b"
+      },
+      "permissions": [
+        "RECORD_AUDIO",
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Permita que o Syrius acesse o microfone para conversar com a Gestora Editorial."
+        }
+      ]
+    ]
+  }
+}

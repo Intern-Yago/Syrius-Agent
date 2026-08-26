@@ -315,6 +315,18 @@ app.whenReady().then(async () => {
   registerExperimentsIPC();
   registerAgencyChatHandlers(() => mainWindow);
 
+  // Inicia o API Gateway Server para o Syrius Mobile App
+  try {
+    const { createAPIGatewayServer } = await import("../src/server/index.js");
+    const apiServer = createAPIGatewayServer();
+    const API_PORT = Number(process.env.API_GATEWAY_PORT || 3001);
+    apiServer.listen(API_PORT, "0.0.0.0", () => {
+      console.log(`📱 [Syrius API Gateway] Servidor REST ativo em http://0.0.0.0:${API_PORT}`);
+    });
+  } catch (apiErr) {
+    console.error("[Syrius API Gateway] Erro ao iniciar servidor REST:", apiErr);
+  }
+
   // Criação do System Tray
   createTray();
 
