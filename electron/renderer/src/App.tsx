@@ -207,6 +207,16 @@ function AppContent() {
     return removeListener;
   }, []);
 
+  // Listener para evento customizado de cancelamento disparado pela Central de Atividades
+  useEffect(() => {
+    const handleStop = () => {
+      setRunning(false);
+      setRetryingStage(null);
+    };
+    window.addEventListener("syrius:stop-agent", handleStop);
+    return () => window.removeEventListener("syrius:stop-agent", handleStop);
+  }, []);
+
   // Sincronização do estado do agente com o ActivitiesContext
   useEffect(() => {
     syncAgentRunningState(running, failedStage);
@@ -241,6 +251,20 @@ function AppContent() {
 
   function processAgentLog(log: AgentLog) {
     const message = log.message;
+
+    if (
+      message.includes("Execução cancelada pelo usuário") ||
+      message.includes("Cancelamento de execução") ||
+      message.includes("🛑 Execução cancelada")
+    ) {
+      setRunning(false);
+      setRetryingStage(null);
+      setStages((current) =>
+        current.map((s) => (s.status === "running" ? { ...s, status: "pending", errorMessage: undefined } : s))
+      );
+      return;
+    }
+
     let stageId = detectStage(message);
 
     const isRetryWarning =

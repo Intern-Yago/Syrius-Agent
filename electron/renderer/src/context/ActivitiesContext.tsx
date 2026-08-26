@@ -693,8 +693,8 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const stopActivity = useCallback(async (id: string) => {
-    const task = activities.find((a) => a.id === id);
-    if (task?.type === "agent") {
+    // 1. Se for o pipeline do agente
+    if (id === "agent-pipeline" || id.startsWith("agent")) {
       try {
         if (window.electronAPI?.stopAgent) {
           await window.electronAPI.stopAgent();
@@ -702,15 +702,17 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
       } catch (err) {
         console.error("Erro ao cancelar agente:", err);
       }
-    } else if (task?.type === "tests" && task.targetId) {
+      window.dispatchEvent(new CustomEvent("syrius:stop-agent"));
+    } else if (id.startsWith("test-")) {
+      const testFile = id.replace("test-", "");
       try {
         if (window.electronAPI?.cancelTest) {
-          await window.electronAPI.cancelTest(task.targetId);
+          await window.electronAPI.cancelTest(testFile);
         }
       } catch (err) {
         console.error("Erro ao cancelar teste:", err);
       }
-    } else if (task?.type === "voice_synthesis" || task?.type === "voice_training") {
+    } else if (id.startsWith("voice-")) {
       try {
         if (window.electronAPI?.cancelVoiceTTS) {
           await window.electronAPI.cancelVoiceTTS();
@@ -733,7 +735,7 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
           : a
       )
     );
-  }, [activities]);
+  }, []);
 
   const retryActivity = useCallback(
     async (id: string, onNavigate?: (page: Page) => void) => {
