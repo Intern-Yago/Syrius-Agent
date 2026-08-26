@@ -254,24 +254,49 @@ export async function processAgencyMessage(
     },
   });
 
+  const now = new Date();
+  const currentDayIdx = now.getDay();
+  const currentHour = now.getHours();
+  const currentMin = now.getMinutes();
+  const currentDayName = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][currentDayIdx];
+  const currentTimeStr = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
+
   const standardSlots = [
-    { day: "Segunda-feira", time: "18:30", format: "CAROUSEL", label: "Segunda da Arquitetura & DevOps" },
-    { day: "Terça-feira", time: "18:30", format: "CAROUSEL", label: "Terça de Backend & Algoritmos" },
-    { day: "Quarta-feira", time: "19:00", format: "SINGLE_IMAGE", label: "Quarta de Clean Code & Boas Práticas" },
-    { day: "Quinta-feira", time: "18:00", format: "REEL_SCRIPT", label: "Quinta de Lançamentos & Notícias Tech" },
-    { day: "Sexta-feira", time: "17:30", format: "CAROUSEL", label: "Sexta de Engenharia de Software" },
-    { day: "Domingo", time: "19:30", format: "CAROUSEL", label: "Domingo de Planejamento & Carreira Dev" },
+    { day: "Segunda-feira", dayIdx: 1, time: "18:30", format: "CAROUSEL", label: "Segunda da Arquitetura & DevOps" },
+    { day: "Terça-feira", dayIdx: 2, time: "18:30", format: "CAROUSEL", label: "Terça de Backend & Algoritmos" },
+    { day: "Quarta-feira", dayIdx: 3, time: "19:00", format: "SINGLE_IMAGE", label: "Quarta de Clean Code & Boas Práticas" },
+    { day: "Quinta-feira", dayIdx: 4, time: "18:00", format: "REEL_SCRIPT", label: "Quinta de Lançamentos & Notícias Tech" },
+    { day: "Sexta-feira", dayIdx: 5, time: "17:30", format: "CAROUSEL", label: "Sexta de Engenharia de Software" },
+    { day: "Domingo", dayIdx: 0, time: "19:30", format: "CAROUSEL", label: "Domingo de Planejamento & Carreira Dev" },
   ];
 
   const occupiedSlotKeys = new Set(slots.map((s) => `${s.weekOffset === 0 ? "Semana Atual" : "Próxima Semana"} - ${s.dayOfWeek} às ${s.timeSlot}`));
 
   const availableSlotsList: string[] = [];
-  for (const weekLabel of ["Semana Atual", "Próxima Semana"]) {
-    for (const std of standardSlots) {
-      const key = `${weekLabel} - ${std.day} às ${std.time}`;
-      if (!occupiedSlotKeys.has(key)) {
-        availableSlotsList.push(`- [${weekLabel}] ${std.day} às ${std.time} (LIVRE — Ideal para ${std.format} / ${std.label})`);
+
+  // 1. Prioridade Máxima: Slots Livres AINDA NESTA SEMANA (que ainda não passaram do horário atual)
+  for (const std of standardSlots) {
+    const key = `Semana Atual - ${std.day} às ${std.time}`;
+    if (!occupiedSlotKeys.has(key)) {
+      const [h, m] = std.time.split(":").map(Number);
+      const isFutureThisWeek =
+        std.dayIdx > currentDayIdx ||
+        (std.dayIdx === currentDayIdx && (h > currentHour || (h === currentHour && m > currentMin)));
+
+      if (isFutureThisWeek) {
+        const isToday = std.dayIdx === currentDayIdx;
+        availableSlotsList.push(
+          `- [Semana Atual] ${std.day} às ${std.time} (${isToday ? "LIVRE PARA HOJE" : "LIVRE NESTA SEMANA"} — Ideal para ${std.format} / ${std.label})`
+        );
       }
+    }
+  }
+
+  // 2. Slots Livres da Próxima Semana
+  for (const std of standardSlots) {
+    const key = `Próxima Semana - ${std.day} às ${std.time}`;
+    if (!occupiedSlotKeys.has(key)) {
+      availableSlotsList.push(`- [Próxima Semana] ${std.day} às ${std.time} (LIVRE — Ideal para ${std.format} / ${std.label})`);
     }
   }
 
@@ -288,10 +313,6 @@ export async function processAgencyMessage(
       activeDirectives = latestReport.strategicDirectives;
     }
   } catch {}
-
-  const now = new Date();
-  const currentDayName = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][now.getDay()];
-  const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   const prompt = `
 Você é ${managerName}, ${managerRole} do perfil profissional de tecnologia ${brand.handle} no Instagram.

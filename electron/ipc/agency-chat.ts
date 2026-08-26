@@ -135,7 +135,6 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
             const rawDay = pauta.scheduledDay || (pauta.isUrgent ? "Hoje" : "Terça-feira");
             const lowerDay = rawDay.toLowerCase();
             const isUrgent = Boolean(pauta.isUrgent || claraMsg.actionTaken === "SCHEDULED_URGENT");
-            const isNextWeek = !isUrgent && (lowerDay.includes("próxima") || lowerDay.includes("proxima") || claraMsg.actionTaken === "SCHEDULED_FOR_GRADE" || claraMsg.actionTaken === "DISPATCHED_TO_PIPELINE" || claraMsg.actionTaken === "REPLACED_PREVIOUS_PAUTA" || claraMsg.actionTaken === "SCHEDULED_MULTIPLE");
 
             let cleanDay = "Terça-feira";
             if (lowerDay.includes("segunda")) cleanDay = "Segunda-feira";
@@ -151,16 +150,67 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
 
             let targetDay = cleanDay;
             let targetTime = pauta.scheduledTime || "18:30";
-            const weekOffset = isUrgent ? 0 : (isNextWeek ? 1 : 0);
+
+            // Calcula dinamicamente o weekOffset (Semana Atual vs Próxima Semana)
+            const DAY_INDEX_MAP: Record<string, number> = {
+              domingo: 0,
+              "segunda-feira": 1,
+              segunda: 1,
+              "terça-feira": 2,
+              terca: 2,
+              terça: 2,
+              "quarta-feira": 3,
+              quarta: 3,
+              "quinta-feira": 4,
+              quinta: 4,
+              "sexta-feira": 5,
+              sexta: 5,
+              "sábado": 6,
+              sabado: 6,
+            };
+
+            const now = new Date();
+            const currentDayIdx = now.getDay();
+            const currentHour = now.getHours();
+            const currentMin = now.getMinutes();
+
+            let targetDayIdx = 2;
+            const targetLower = targetDay.toLowerCase();
+            for (const k of Object.keys(DAY_INDEX_MAP)) {
+              if (targetLower.includes(k)) {
+                targetDayIdx = DAY_INDEX_MAP[k];
+                break;
+              }
+            }
+
+            const [targetHourStr, targetMinStr] = targetTime.split(":");
+            const targetHour = parseInt(targetHourStr || "18", 10);
+            const targetMin = parseInt(targetMinStr || "30", 10);
+
+            let weekOffset = 0;
+            if (isUrgent || targetLower.includes("hoje") || targetLower.includes("amanhã") || targetLower.includes("amanha")) {
+              weekOffset = 0;
+            } else if (lowerDay.includes("próxima") || lowerDay.includes("proxima") || lowerDay.includes("semana que vem")) {
+              weekOffset = 1;
+            } else if (targetDayIdx > currentDayIdx) {
+              // Dia ainda vai acontecer nesta semana -> Semana Atual
+              weekOffset = 0;
+            } else if (targetDayIdx === currentDayIdx) {
+              // Dia é hoje -> Se o horário ainda não passou, fica na Semana Atual
+              weekOffset = (targetHour > currentHour || (targetHour === currentHour && targetMin > currentMin)) ? 0 : 1;
+            } else {
+              // Dia já passou nesta semana -> Próxima Semana
+              weekOffset = 1;
+            }
 
             // Lista de slots padrão para distribuir pautas sem colisão
             const candidateSlots = [
-              { day: "Terça-feira", time: "18:30" },
+              { day: "Quarta-feira", time: "19:00" },
               { day: "Quinta-feira", time: "18:00" },
               { day: "Sexta-feira", time: "17:30" },
-              { day: "Segunda-feira", time: "18:30" },
-              { day: "Quarta-feira", time: "19:00" },
               { day: "Domingo", time: "19:30" },
+              { day: "Segunda-feira", time: "18:30" },
+              { day: "Terça-feira", time: "18:30" },
             ];
 
             const occupiedWeekSlots = await prisma.editorialScheduleSlot.findMany({
