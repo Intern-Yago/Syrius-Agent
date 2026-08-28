@@ -403,6 +403,8 @@ export function createAPIGatewayServer() {
           postId: body.postId,
           dailyBudget: Number(body.dailyBudget) || 6.0,
           durationDays: Number(body.durationDays) || 1,
+          durationMode: body.durationMode,
+          budgetCap: body.budgetCap ? Number(body.budgetCap) : undefined,
         });
         return sendJSON(res, 200, result);
       }

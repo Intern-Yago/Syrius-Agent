@@ -2,6 +2,7 @@ import { prisma } from "../core/database.js";
 import { executeStructuredPrompt } from "../core/gemini.js";
 import { getBrandInfo } from "../config/brand.js";
 import { getInstagramProfile, getInstagramMedia } from "../integrations/instagram/client.js";
+import { getImageUrl } from "../core/storage.js";
 import { env } from "../config/env.js";
 
 export interface BoostCampaignInput {
@@ -216,136 +217,12 @@ let cachedOpportunitiesData: {
 
 /**
  * 2. Cria ou atualiza a campanha inicial do Try/Catch com os dados reais do Instagram
+/**
+ * 2. Campanhas registradas (sem injeção de dados mockados)
  */
 export async function ensureInitialTryCatchCampaign(): Promise<void> {
-  try {
-    // Procura se tem post de try/catch no banco
-    const tryCatchPost = await prisma.post.findFirst({
-      where: {
-        topic: { contains: "try", mode: "insensitive" },
-      },
-    });
-
-    const budgetSpent = 0.00; // Marco Zero da nova conta de anúncios Syrius_Agent
-    const dailyBudget = 6.0;  // Orçamento diário configurado no Instagram
-    const followersDirect = 2; // Novos seguidores diretos do anúncio
-    const followersTotal = 11; // Total atribuído ao post no período
-    const savesCount = 3;
-    const profileVisits = 3;
-    const impressions = 172;
-    const reachTotal = 161;
-
-    const existingCampaigns = await prisma.boostCampaign.findMany({
-      where: {
-        OR: [
-          { postTopic: { contains: "try", mode: "insensitive" } },
-          { notes: { contains: "turbinada", mode: "insensitive" } },
-        ],
-      },
-      orderBy: { createdAt: "asc" },
-    });
-
-    // Se houver duplicatas, remove todas exceto a primeira
-    if (existingCampaigns.length > 1) {
-      const [first, ...duplicates] = existingCampaigns;
-      for (const dup of duplicates) {
-        await prisma.boostCampaign.delete({ where: { id: dup.id } });
-      }
-    }
-
-    const firstCampaign = existingCampaigns[0];
-
-    const campaignData = {
-      postId: tryCatchPost?.id || firstCampaign?.postId,
-      postTopic: tryCatchPost?.topic || "Tratamento de Erros Moderno: Por que você está usando Try/Catch errado (?=)",
-      postFormat: tryCatchPost?.format || "REEL_SCRIPT",
-      platform: "INSTAGRAM_BOOST",
-      budgetSpent,
-      currency: "BRL",
-      durationDays: 1, // Veiculação contínua até ser pausado (14h decorridas)
-      dailyBudget,
-      objective: "PROFILE_VISITS",
-      followersGained: followersDirect,
-      savesCount,
-      profileVisits,
-      reachTotal,
-      impressions,
-      clicksCount: profileVisits,
-      costPerFollower: 0,
-      costPerSave: 0,
-      costPerVisit: 0,
-      status: "COMPLETED",
-      targetAudience: {
-        name: "Quem viu seu anúncio (Insights Demográficos Meta Ads)",
-        placementType: "CONTINUOUS_UNTIL_PAUSED",
-        statusText: "14 horas decorridas • Veiculado até ser pausado",
-        dailyBudgetConfigured: 6.0,
-        amountSpent: 0.00,
-        adViews: 172,
-        adReach: 161,
-        placements: "Advantage+ (Instagram, Facebook)",
-        threeSecondPlays: 55,
-        initialPlays: 149,
-        costPerProfileVisit: 0.68,
-        conversionRate: {
-          viewsToVisits: "1,74% (3 visitas em 172 views)",
-          visitsToFollowers: "66,7% (2 novos seguidores em 3 visitas)",
-        },
-        ageBreakdown: [
-          { range: "25-34 anos", percentage: 33.1, label: "Devs Plenos / Sênior" },
-          { range: "35-44 anos", percentage: 33.1, label: "Líderes / Arquitetos" },
-          { range: "45-54 anos", percentage: 16.2, label: "Veteranos de Engenharia" },
-          { range: "18-24 anos", percentage: 12.3, label: "Estudantes / Júnior" },
-          { range: "55-64 anos", percentage: 3.9, label: "Seniores 55+" },
-          { range: "65+ anos", percentage: 1.3, label: "65+ anos" },
-        ],
-        genderBreakdown: {
-          men: 94.8,
-          women: 5.2,
-        },
-        topLocations: [
-          { city: "São Paulo (state)", percentage: 19.5 },
-          { city: "Ceará", percentage: 11.0 },
-          { city: "Minas Gerais", percentage: 9.7 },
-          { city: "Rio de Janeiro (state)", percentage: 6.5 },
-          { city: "Goiás", percentage: 5.8 },
-          { city: "Outros Estados", percentage: 47.5 },
-        ],
-        organicPlusPaidOverview: {
-          views: 316,
-          reach: 280,
-          interactions: 20,
-          likes: 14,
-          saves: 3,
-          shares: 2,
-          comments: 0,
-          profileActivity: 11,
-          totalFollowers: 11,
-        },
-      },
-      aiDiagnosis: "O post de Try/Catch (?=) validou excelente tração no formato Reels de código. Com R$ 2,03 consumidos em 14h (de R$ 6,00/dia em veiculação contínua), alcançou 172 visualizações do anúncio, 161 de alcance, 149 reproduções iniciais, 55 reproduções de 3s, 9 curtidas/reações de anúncio (14 curtidas totais), 3 salvamentos e 2 novos seguidores diretos do anúncio (+11 seguidores totais no post e 316 views totais). Custo por visita ao perfil de R$ 0,68 e conversão de 66,7% de visita para seguidor. A audiência foi composta por 66,2% de devs entre 25 e 44 anos (plenos/seniores/líderes) e 94,8% masculina, liderada por SP (19,5%), Ceará (11%) e MG (9,7%).",
-      recommendations: [
-        "O operador (?=) e quebras de padrão em sintaxe geram retenção imediata em Reels de código.",
-        "A taxa de conversão de visita para seguidor foi de 66,7% (2 follows em 3 visitas), comprovando excelente bio e autoridade.",
-        "Recomendado turbinar próximos Reels com foco no público 25-44 anos (SP/CE/MG/RJ) com orçamento de R$ 6/dia para fechar ciclos completos.",
-      ],
-      notes: "14 horas decorridas • Advantage+ (Instagram, Facebook). R$ 2,03 gastos de R$ 6,00/dia. 172 views anúncio (316 totais no post), 161 alcance anúncio (280 total), 9 reações anúncio (14 totais), 3 salvamentos, 3 visitas ao perfil (R$ 0,68/visita), 2 seguidores diretos e 11 seguidores globais.",
-    };
-
-    if (firstCampaign) {
-      await prisma.boostCampaign.update({
-        where: { id: firstCampaign.id },
-        data: campaignData,
-      });
-    } else {
-      await prisma.boostCampaign.create({
-        data: campaignData,
-      });
-      console.log("[TrafficAds] Campanha de referência 'Try/Catch' (R$ 2,03 gastos de R$ 6,00/dia) registrada com sucesso!");
-    }
-  } catch (err) {
-    console.warn("[TrafficAds] Aviso ao criar/atualizar campanha inicial:", err);
-  }
+  // Desativado: o sistema agora opera 100% com métricas e campanhas reais da Meta API
+  return;
 }
 
 /**
@@ -367,11 +244,79 @@ export async function listCampaigns(): Promise<{
   };
 }> {
   await ensureAudiencePresets();
-  await ensureInitialTryCatchCampaign();
 
-  const campaigns = await prisma.boostCampaign.findMany({
+  let campaigns = await prisma.boostCampaign.findMany({
     orderBy: { createdAt: "desc" },
   });
+
+  // Sincroniza status real e métricas ao vivo da Meta Marketing API (Em Análise, Ativa, Reprovada, Pausada)
+  const token = env.INSTAGRAM_ACCESS_TOKEN;
+  const adAccountId = process.env.META_AD_ACCOUNT_ID || "act_2163467940868819";
+
+  if (token && adAccountId) {
+    try {
+      const metaRes = await fetch(
+        `https://graph.facebook.com/v20.0/${adAccountId}/campaigns?fields=id,name,status,effective_status,issues_info,ads{id,name,status,effective_status,issues_info},insights{spend,impressions,reach,clicks}&limit=25&access_token=${token}`
+      );
+      const metaData: any = await metaRes.json();
+      if (Array.isArray(metaData?.data)) {
+        for (const metaCamp of metaData.data) {
+          const matchingDbCamp = campaigns.find(
+            (c) => (c.notes && c.notes.includes(metaCamp.id)) || (c.postId && metaCamp.name && metaCamp.name.includes(c.postTopic.slice(0, 30)))
+          );
+
+          let realStatus = "ACTIVE";
+          const metaAd = metaCamp.ads?.data?.[0];
+          const effStatus = metaAd?.effective_status || metaCamp.effective_status;
+          const hasIssues = (metaCamp.issues_info && metaCamp.issues_info.length > 0) || (metaAd?.issues_info && metaAd.issues_info.length > 0);
+
+          if (hasIssues || effStatus === "DISAPPROVED" || effStatus === "WITH_ISSUES") {
+            realStatus = "DISAPPROVED";
+          } else if (effStatus === "PENDING_REVIEW" || effStatus === "IN_PROCESS") {
+            realStatus = "IN_REVIEW";
+          } else if (effStatus === "PAUSED" || effStatus === "CAMPAIGN_PAUSED" || effStatus === "ADSET_PAUSED") {
+            realStatus = "PAUSED";
+          } else if (effStatus === "ARCHIVED" || effStatus === "DELETED") {
+            realStatus = "ARCHIVED";
+          } else if (effStatus === "ACTIVE") {
+            realStatus = "ACTIVE";
+          }
+
+          const insight = metaCamp.insights?.data?.[0];
+          const liveSpend = insight?.spend ? Number(Number(insight.spend).toFixed(2)) : undefined;
+          const liveImpressions = insight?.impressions ? Number(insight.impressions) : undefined;
+          const liveReach = insight?.reach ? Number(insight.reach) : undefined;
+          const liveClicks = insight?.clicks ? Number(insight.clicks) : undefined;
+
+          if (matchingDbCamp) {
+            const hasStatusChanged = matchingDbCamp.status !== realStatus;
+            const hasSpendChanged = liveSpend !== undefined && liveSpend !== matchingDbCamp.budgetSpent;
+
+            if (hasStatusChanged || hasSpendChanged) {
+              await prisma.boostCampaign.update({
+                where: { id: matchingDbCamp.id },
+                data: {
+                  status: realStatus,
+                  ...(liveSpend !== undefined && { budgetSpent: liveSpend }),
+                  ...(liveImpressions !== undefined && { impressions: liveImpressions }),
+                  ...(liveReach !== undefined && { reachTotal: liveReach }),
+                  ...(liveClicks !== undefined && { clicksCount: liveClicks }),
+                },
+              }).catch(() => {});
+
+              matchingDbCamp.status = realStatus;
+              if (liveSpend !== undefined) matchingDbCamp.budgetSpent = liveSpend;
+              if (liveImpressions !== undefined) matchingDbCamp.impressions = liveImpressions;
+              if (liveReach !== undefined) matchingDbCamp.reachTotal = liveReach;
+              if (liveClicks !== undefined) matchingDbCamp.clicksCount = liveClicks;
+            }
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.warn("[TrafficAds] Aviso ao sincronizar status ao vivo da Meta:", syncErr);
+    }
+  }
 
   let totalInvested = 0;
   let totalFollowersGained = 0;
@@ -388,7 +333,7 @@ export async function listCampaigns(): Promise<{
     totalProfileVisits += c.profileVisits || 0;
     totalReach += c.reachTotal || 0;
 
-    if (c.status === "ACTIVE") activeCampaignsCount++;
+    if (c.status === "ACTIVE" || c.status === "IN_REVIEW") activeCampaignsCount++;
     else completedCampaignsCount++;
   }
 
@@ -411,6 +356,48 @@ export async function listCampaigns(): Promise<{
       completedCampaignsCount,
     },
   };
+}
+
+/**
+ * 4b. Purga todas as campanhas de teste vazias/órfãs na Meta Ads
+ */
+export async function purgeOrphanedMetaCampaigns(): Promise<{ success: boolean; deletedCount: number; message: string }> {
+  const token = env.INSTAGRAM_ACCESS_TOKEN;
+  const adAccountId = process.env.META_AD_ACCOUNT_ID || "act_2163467940868819";
+
+  if (!token || !adAccountId) {
+    return { success: false, deletedCount: 0, message: "Token da Meta não configurado." };
+  }
+
+  try {
+    const listRes = await fetch(
+      `https://graph.facebook.com/v20.0/${adAccountId}/campaigns?fields=id,name,status,ads{id}&limit=50&access_token=${token}`
+    );
+    const listData: any = await listRes.json();
+    let deletedCount = 0;
+
+    if (Array.isArray(listData?.data)) {
+      for (const camp of listData.data) {
+        if (!camp.ads || !camp.ads.data || camp.ads.data.length === 0) {
+          console.log(`[TrafficAds] 🧹 Purgando campanha vazia na Meta: ${camp.id} (${camp.name})`);
+          await fetch(`https://graph.facebook.com/v20.0/${camp.id}?access_token=${token}`, { method: "DELETE" }).catch(() => {});
+          deletedCount++;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      deletedCount,
+      message: `${deletedCount} campanha(s) de teste vazia(s) removida(s) com sucesso da Meta!`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      deletedCount: 0,
+      message: err?.message || "Erro ao purgar campanhas na Meta.",
+    };
+  }
 }
 
 /**
@@ -703,11 +690,16 @@ export function deriveSmartAudienceForPost(topic: string, format: string) {
 /**
  * 5b. Dispara Turbinada Instantânea via Meta Marketing API (100% Autônomo pelo Apolo)
  */
-export async function dispatchAutonomousBoost(params: {
-  postId: string;
-  dailyBudget?: number;
-  durationDays?: number;
-}): Promise<{
+export async function dispatchAutonomousBoost(
+  params: {
+    postId: string;
+    dailyBudget?: number;
+    durationDays?: number;
+    durationMode?: "BUDGET_CAP" | "FIXED_DAYS" | "UNTIL_PAUSED";
+    budgetCap?: number;
+  },
+  onProgress?: (data: { step: string; progress: number; message: string }) => void
+): Promise<{
   success: boolean;
   message: string;
   campaign?: any;
@@ -715,6 +707,12 @@ export async function dispatchAutonomousBoost(params: {
   error?: string;
 }> {
   try {
+    onProgress?.({
+      step: "init",
+      progress: 10,
+      message: "Validando post e credenciais na Meta Marketing API...",
+    });
+
     const post = await prisma.post.findUnique({
       where: { id: params.postId },
     });
@@ -724,8 +722,19 @@ export async function dispatchAutonomousBoost(params: {
     }
 
     const dailyBudget = params.dailyBudget || 6.0;
-    const durationDays = params.durationDays || 1;
-    const totalBudget = Number((dailyBudget * durationDays).toFixed(2));
+    const durationMode = params.durationMode || "FIXED_DAYS";
+    const budgetCap = params.budgetCap ? Number(params.budgetCap) : undefined;
+
+    let durationDays = params.durationDays || 1;
+    if (durationMode === "BUDGET_CAP" && budgetCap) {
+      durationDays = Math.max(1, Math.ceil(budgetCap / dailyBudget));
+    } else if (durationMode === "UNTIL_PAUSED") {
+      durationDays = 30;
+    }
+
+    const totalBudget = durationMode === "BUDGET_CAP" && budgetCap
+      ? Number(budgetCap.toFixed(2))
+      : Number((dailyBudget * durationDays).toFixed(2));
 
     const token = env.INSTAGRAM_ACCESS_TOKEN;
     const adAccountId = process.env.META_AD_ACCOUNT_ID || "act_2163467940868819";
@@ -743,6 +752,14 @@ export async function dispatchAutonomousBoost(params: {
       strategicRationale: derived.strategicRationale,
       dailyBudget,
       durationDays,
+      durationMode,
+      budgetCap: durationMode === "BUDGET_CAP" ? budgetCap : undefined,
+      placementType: durationMode === "UNTIL_PAUSED" ? "CONTINUOUS_UNTIL_PAUSED" : durationMode === "BUDGET_CAP" ? "BUDGET_CAP" : "FIXED_DAYS",
+      statusText: durationMode === "UNTIL_PAUSED"
+        ? "Veiculação contínua até ser pausado"
+        : durationMode === "BUDGET_CAP"
+        ? `Teto de orçamento: R$ ${budgetCap?.toFixed(2) || totalBudget.toFixed(2)}`
+        : `${durationDays} dias de veiculação`,
     };
 
     let metaCampaignId = `meta_boost_${Date.now()}`;
@@ -764,8 +781,36 @@ export async function dispatchAutonomousBoost(params: {
     if (token && adAccountId) {
       try {
         console.log(`[TrafficAds / Meta Marketing API] Iniciando disparo de campanha para o post "${post.topic.slice(0, 40)}" (Conta: ${adAccountId})...`);
+        onProgress?.({
+          step: "cleanup",
+          progress: 20,
+          message: "Varrendo e limpando campanhas órfãs na Meta Ads...",
+        });
         
-        // 1a. Criação da Campanha
+        // 1.0. Auto-Limpeza: Deleta campanhas órfãs/incompletas anteriores deste post na Meta Ads
+        try {
+          const listCampUrl = `https://graph.facebook.com/v20.0/${adAccountId}/campaigns?fields=id,name,status,ads{id}&limit=25&access_token=${token}`;
+          const listRes = await fetch(listCampUrl);
+          const listData: any = await listRes.json();
+          if (Array.isArray(listData?.data)) {
+            const targetName = `Syrius Boost - ${post.topic.slice(0, 50)}`;
+            for (const c of listData.data) {
+              if (c.name === targetName && (!c.ads || !c.ads.data || c.ads.data.length === 0)) {
+                console.log(`[TrafficAds] 🧹 Auto-Limpeza: Deletando campanha órfã anterior na Meta (${c.id})...`);
+                await fetch(`https://graph.facebook.com/v20.0/${c.id}?access_token=${token}`, { method: "DELETE" }).catch(() => {});
+              }
+            }
+          }
+        } catch (cleanErr) {
+          console.warn("[TrafficAds] Aviso na auto-limpeza de campanhas anteriores:", cleanErr);
+        }
+
+        // 1a. Criação da Campanha de Visitas ao Perfil
+        onProgress?.({
+          step: "campaign",
+          progress: 35,
+          message: "Criando campanha de visitas ao perfil na Meta API...",
+        });
         const createCampaignUrl = `https://graph.facebook.com/v20.0/${adAccountId}/campaigns`;
         const campRes = await fetch(createCampaignUrl, {
           method: "POST",
@@ -787,7 +832,12 @@ export async function dispatchAutonomousBoost(params: {
         if (campData?.id) {
           metaCampaignId = campData.id;
 
-          // 1b. Criação do AdSet (Conjunto de Anúncios)
+          // 1b. Criação do AdSet (Conjunto de Anúncios Nativo no Instagram)
+          onProgress?.({
+            step: "adset",
+            progress: 55,
+            message: "Configurando conjunto de anúncios e segmentação tech...",
+          });
           const adSetUrl = `https://graph.facebook.com/v20.0/${adAccountId}/adsets`;
           const adSetRes = await fetch(adSetUrl, {
             method: "POST",
@@ -809,34 +859,172 @@ export async function dispatchAutonomousBoost(params: {
               },
               status: "ACTIVE",
               start_time: new Date(Date.now() + 10000).toISOString(),
+              ...(durationMode === "FIXED_DAYS" && {
+                end_time: new Date(Date.now() + (Math.max(1, durationDays) * 24 + 2) * 60 * 60 * 1000).toISOString(),
+              }),
               access_token: token,
             }),
           });
 
           const adSetData: any = await adSetRes.json();
           console.log("[TrafficAds / Meta Marketing API] Resposta da Criação de AdSet:", adSetData);
+
           if (adSetData?.id) {
             metaAdSetId = adSetData.id;
 
-            // 1c. Criação do AdCreative vinculado à mídia orgânica publicada no Instagram
+            // 1c. Criação do AdCreative (Direcionamento nativo para o perfil @syrius_tech)
             const creativeUrl = `https://graph.facebook.com/v20.0/${adAccountId}/adcreatives`;
-            const creativeRes = await fetch(creativeUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
+            let creativePayload: any = null;
+
+            const isVideoReel = post.format === "REEL_SCRIPT" || post.format === "REEL";
+            if (isVideoReel) {
+              try {
+                const videoUrl = await getImageUrl(`posts/${post.id}/video.mp4`, 86400);
+                const coverUrl = await getImageUrl(`posts/${post.id}/slide-1.png`, 86400);
+
+                if (videoUrl) {
+                  console.log(`[TrafficAds] 🎬 Enviando vídeo do Reels para a biblioteca Meta Ads (advideos)...`);
+                  onProgress?.({
+                    step: "upload_video",
+                    progress: 70,
+                    message: "Enviando vídeo do Reels para a biblioteca Meta Ads...",
+                  });
+                  const advideoRes = await fetch(`https://graph.facebook.com/v20.0/${adAccountId}/advideos`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      file_url: videoUrl,
+                      title: `Syrius Reel - ${post.topic.slice(0, 40)}`,
+                      access_token: token,
+                    }),
+                  });
+                  const advideoData: any = await advideoRes.json();
+                  console.log("[TrafficAds] Resposta advideos:", advideoData);
+
+                  if (advideoData?.id) {
+                    console.log(`[TrafficAds] ⏳ Aguardando processamento do vídeo ${advideoData.id} na Meta Ads...`);
+                    let isReady = false;
+                    for (let i = 1; i <= 10; i++) {
+                      onProgress?.({
+                        step: "encoding_video",
+                        progress: 72 + i,
+                        message: `Aguardando codificação do vídeo na Meta (${i}/10)...`,
+                      });
+                      await new Promise((r) => setTimeout(r, 2500));
+                      try {
+                        const vCheck = await fetch(`https://graph.facebook.com/v20.0/${advideoData.id}?fields=status&access_token=${token}`);
+                        const vCheckData: any = await vCheck.json();
+                        const vStatus = vCheckData?.status?.video_status;
+                        console.log(`[TrafficAds] Checagem de processamento de vídeo ${i}/10: status = ${vStatus}`);
+                        if (vStatus === "ready") {
+                          isReady = true;
+                          break;
+                        }
+                        if (vStatus === "error") {
+                          console.warn("[TrafficAds] Meta informou erro no processamento do vídeo:", vCheckData);
+                          break;
+                        }
+                      } catch (checkErr) {
+                        console.warn("[TrafficAds] Erro ao checar status do vídeo na Meta:", checkErr);
+                      }
+                    }
+
+                    if (isReady) {
+                      // Criativo nativo com chamada para acessar o perfil do Instagram
+                      creativePayload = {
+                        name: `Creative Nativo Syrius Reel - ${post.topic.slice(0, 40)}`,
+                        object_story_spec: {
+                          page_id: "105523439054627",
+                          video_data: {
+                            video_id: advideoData.id,
+                            ...(coverUrl && { image_url: coverUrl }),
+                            message: post.caption ? `${post.caption}\n\nSiga @syrius_tech no Instagram` : post.topic,
+                            call_to_action: {
+                              type: "VIEW_INSTAGRAM_PROFILE",
+                              value: {
+                                link: "https://www.instagram.com/syrius_tech/",
+                              },
+                            },
+                          },
+                        },
+                        access_token: token,
+                      };
+                    }
+                  }
+                }
+              } catch (videoUploadErr) {
+                console.warn("[TrafficAds] Aviso ao carregar advideo para Reels:", videoUploadErr);
+              }
+            }
+
+            if (!creativePayload) {
+              creativePayload = {
                 name: `Creative Syrius - ${post.topic.slice(0, 40)}`,
                 source_instagram_media_id: post.instagramMediaId,
                 access_token: token,
-              }),
+              };
+            }
+
+            onProgress?.({
+              step: "creative",
+              progress: 85,
+              message: "Criando criativo oficial com destino ao perfil (@syrius_tech)...",
+            });
+            let creativeRes = await fetch(creativeUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(creativePayload),
             });
 
-            const creativeData: any = await creativeRes.json();
+            let creativeData: any = await creativeRes.json();
             console.log("[TrafficAds / Meta Marketing API] Resposta da Criação de AdCreative:", creativeData);
+
+            // Se o erro for de vídeo ainda em processamento (error_subcode 1885252), aguarda 5s e retenta
+            if (creativeData?.error?.error_subcode === 1885252) {
+              console.log("[TrafficAds] ⏳ Vídeo ainda processando na Meta. Aguardando 5s para retentativa...");
+              onProgress?.({
+                step: "encoding_video_retry",
+                progress: 88,
+                message: "Aguardando 5s para confirmação final do vídeo na Meta...",
+              });
+              await new Promise((r) => setTimeout(r, 5000));
+              creativeRes = await fetch(creativeUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(creativePayload),
+              });
+              creativeData = await creativeRes.json();
+              console.log("[TrafficAds] Resposta da 2ª tentativa de AdCreative:", creativeData);
+
+              // Se ainda persistir erro no advideo, tenta via source_instagram_media_id (já publicado no perfil)
+              if (creativeData?.error && post.instagramMediaId) {
+                console.log("[TrafficAds] Tentando fallback para source_instagram_media_id:", post.instagramMediaId);
+                const fallbackCreativeRes = await fetch(creativeUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    name: `Creative Syrius Fallback - ${post.topic.slice(0, 40)}`,
+                    source_instagram_media_id: post.instagramMediaId,
+                    access_token: token,
+                  }),
+                });
+                const fallbackData: any = await fallbackCreativeRes.json();
+                console.log("[TrafficAds] Resposta fallback AdCreative:", fallbackData);
+                if (fallbackData?.id) {
+                  creativeData = fallbackData;
+                }
+              }
+            }
 
             if (creativeData?.id) {
               metaCreativeId = creativeData.id;
 
               // 1d. Criação do Anúncio Oficial (Ad)
+              onProgress?.({
+                step: "ad",
+                progress: 92,
+                message: "Publicando e ativando anúncio oficial na Meta Marketing API...",
+              });
               const adUrl = `https://graph.facebook.com/v20.0/${adAccountId}/ads`;
               const adRes = await fetch(adUrl, {
                 method: "POST",
@@ -878,6 +1066,12 @@ export async function dispatchAutonomousBoost(params: {
     }
 
     if (metaErrorMessage) {
+      // Se a campanha foi criada na Meta mas o anúncio final falhou, deleta a campanha órfã para não poluir
+      if (metaCampaignId && !metaAdId && !metaCampaignId.startsWith("meta_boost_") && token) {
+        console.log(`[TrafficAds] 🧹 Auto-Limpeza: Removendo campanha incompleta ${metaCampaignId} na Meta...`);
+        await fetch(`https://graph.facebook.com/v20.0/${metaCampaignId}?access_token=${token}`, { method: "DELETE" }).catch(() => {});
+      }
+
       await prisma.generationLog.create({
         data: {
           postId: post.id,
@@ -928,9 +1122,13 @@ export async function dispatchAutonomousBoost(params: {
         clicksCount: 0,
         status: "ACTIVE",
         targetAudience,
-        notes: `Turbinada ativada pelo Apolo em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} • R$ ${dailyBudget.toFixed(2)}/dia (${durationDays} dias). ID Campanha Meta: ${metaCampaignId}${metaAdSetId ? ` | ID AdSet: ${metaAdSetId}` : ""}${metaAdId ? ` | ID Ad: ${metaAdId}` : ""}`,
+        notes: durationMode === "UNTIL_PAUSED"
+          ? `Turbinada contínua ativada pelo Apolo em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} • R$ ${dailyBudget.toFixed(2)}/dia (Até ser pausado). ID Campanha Meta: ${metaCampaignId}${metaAdSetId ? ` | ID AdSet: ${metaAdSetId}` : ""}${metaAdId ? ` | ID Ad: ${metaAdId}` : ""}`
+          : durationMode === "BUDGET_CAP"
+          ? `Turbinada com teto de R$ ${(budgetCap || totalBudget).toFixed(2)} ativada pelo Apolo em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} • R$ ${dailyBudget.toFixed(2)}/dia (~${durationDays} dias). ID Campanha Meta: ${metaCampaignId}${metaAdSetId ? ` | ID AdSet: ${metaAdSetId}` : ""}${metaAdId ? ` | ID Ad: ${metaAdId}` : ""}`
+          : `Turbinada ativada pelo Apolo em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} • R$ ${dailyBudget.toFixed(2)}/dia (${durationDays} dias). ID Campanha Meta: ${metaCampaignId}${metaAdSetId ? ` | ID AdSet: ${metaAdSetId}` : ""}${metaAdId ? ` | ID Ad: ${metaAdId}` : ""}`,
         startedAt: new Date(),
-        endedAt: new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000),
+        endedAt: durationMode === "UNTIL_PAUSED" ? null : new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000),
       },
     });
 
@@ -1976,6 +2174,90 @@ export async function syncAdAccountBalanceFromMeta(): Promise<{
     };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao consultar saldo na Meta API." };
+  }
+}
+
+/**
+ * 14. Sincronização 100% Autônoma de Métricas Reais do Instagram & Meta Ads
+ * Consulta a Meta Graph API e a Meta Marketing API para atualizar automaticamente
+ * todas as campanhas ativas e posts turbinados sem intervenção manual.
+ */
+export async function syncAllLiveCampaignsAndInsights(): Promise<{
+  success: boolean;
+  syncedCount: number;
+  message: string;
+}> {
+  try {
+    const token = env.INSTAGRAM_ACCESS_TOKEN;
+    if (!token) {
+      return { success: false, syncedCount: 0, message: "INSTAGRAM_ACCESS_TOKEN não configurado." };
+    }
+
+    // 1. Sincroniza saldo da conta de anúncios
+    await syncAdAccountBalanceFromMeta();
+
+    // 2. Busca todas as campanhas no banco que possuem post vinculado
+    const activeCampaigns = await prisma.boostCampaign.findMany({
+      where: { status: { in: ["ACTIVE", "PAUSED"] } },
+    });
+
+    let synced = 0;
+    for (const camp of activeCampaigns) {
+      if (!camp.postId) continue;
+
+      const post = await prisma.post.findUnique({
+        where: { id: camp.postId },
+      });
+
+      if (!post || !post.instagramMediaId) continue;
+
+      try {
+        // Consulta métricas reais de mídia no Instagram Graph API
+        const metrics = "views,reach,saved,likes,comments,shares,total_interactions";
+        const res = await fetch(
+          `https://graph.facebook.com/v20.0/${post.instagramMediaId}/insights?metric=${metrics}&access_token=${token}`
+        );
+        const data: any = await res.json();
+
+        if (data?.data && Array.isArray(data.data)) {
+          const metricsMap: Record<string, number> = {};
+          for (const item of data.data) {
+            if (item.name && item.values?.[0]?.value !== undefined) {
+              metricsMap[item.name] = Number(item.values[0].value);
+            }
+          }
+
+          const views = metricsMap["views"] || camp.impressions || 0;
+          const reach = metricsMap["reach"] || camp.reachTotal || 0;
+          const saves = metricsMap["saved"] || camp.savesCount || 0;
+          const interactions = metricsMap["total_interactions"] || 0;
+
+          // Atualiza dados na campanha mantendo coerência
+          await prisma.boostCampaign.update({
+            where: { id: camp.id },
+            data: {
+              impressions: Math.max(camp.impressions, views),
+              reachTotal: Math.max(camp.reachTotal, reach),
+              savesCount: Math.max(camp.savesCount, saves),
+              costPerSave: camp.budgetSpent && saves > 0 ? Number((camp.budgetSpent / saves).toFixed(2)) : camp.costPerSave,
+            },
+          });
+
+          synced++;
+        }
+      } catch (mediaErr) {
+        console.warn(`[TrafficAds] Aviso ao sincronizar post ${post.id}:`, mediaErr);
+      }
+    }
+
+    return {
+      success: true,
+      syncedCount: synced,
+      message: `Sincronização autônoma concluída! ${synced} campanhas atualizadas em tempo real.`,
+    };
+  } catch (err: any) {
+    console.error("[TrafficAds] Erro na sincronização autônoma:", err);
+    return { success: false, syncedCount: 0, message: err?.message || "Falha na sincronização." };
   }
 }
 

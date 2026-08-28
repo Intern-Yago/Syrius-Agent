@@ -40,14 +40,8 @@ class CircuitBreaker {
     this.failureCount++;
     this.lastFailureTime = Date.now();
 
-    const isFatal =
-      err?.status === 429 ||
-      err?.status === 500 ||
-      err?.status === 503 ||
-      String(err?.message).includes("quota") ||
-      String(err?.message).includes("rate");
-
-    if (this.failureCount >= this.maxFailures || isFatal) {
+    // Abre apenas após falhas repetidas (permitindo chave 2 e modelos de fallback tentarem)
+    if (this.failureCount >= 3) {
       this.state = "OPEN";
       console.warn(`[CircuitBreaker] DISJUNTOR ABERTO (OPEN) após ${this.failureCount} falhas. Protegendo o sistema por ${this.resetTimeoutMs / 1000}s.`);
     }

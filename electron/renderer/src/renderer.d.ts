@@ -301,6 +301,27 @@ declare global {
         dispatchedSlot?: any;
         error?: string;
       }) => void
+    // Gestor de Tráfego AI (Apolo)
+    dispatchAutonomousBoost: (params: {
+      postId: string;
+      dailyBudget?: number;
+      durationDays?: number;
+      durationMode?: "BUDGET_CAP" | "FIXED_DAYS" | "UNTIL_PAUSED";
+      budgetCap?: number;
+    }) => Promise<{
+      success: boolean;
+      message: string;
+      campaign?: any;
+      metaCampaignId?: string;
+      error?: string;
+    }>;
+    purgeAdsOrphanedCampaigns: () => Promise<{
+      success: boolean;
+      deletedCount: number;
+      message: string;
+    }>;
+    onAdsBoostProgress: (
+      callback: (data: { postId: string; step: string; progress: number; message: string }) => void
     ) => () => void;
   }
 

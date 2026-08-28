@@ -752,19 +752,46 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
       const task = activities.find((a) => a.id === id);
       if (!task) return;
 
+      // Reseta imediatamente o estado visual do card para running com progresso inicial
+      setActivities((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? {
+                ...a,
+                status: "running" as ActivityStatus,
+                progress: 10,
+                statusMessage: "Reiniciando tarefa...",
+                error: undefined,
+                startedAt: new Date(),
+                canStop: true,
+                canPause: false,
+              }
+            : a
+        )
+      );
+
       if (task.type === "publishing" && task.targetId) {
         await publishPost(task.targetId, task.subtitle, task.meta?.format);
       } else if (task.type === "agent") {
-        if (onNavigate) onNavigate("home");
         try {
           if (window.electronAPI?.runAgent) {
             await window.electronAPI.runAgent();
           }
         } catch (err) {
           console.error("Erro ao reiniciar agente:", err);
+          setActivities((prev) =>
+            prev.map((a) =>
+              a.id === id
+                ? {
+                    ...a,
+                    status: "error" as ActivityStatus,
+                    error: err instanceof Error ? err.message : String(err),
+                  }
+                : a
+            )
+          );
         }
       } else if (task.type === "analytics") {
-        if (onNavigate) onNavigate("analytics");
         try {
           if (window.electronAPI?.runAnalyticsAudit) {
             await window.electronAPI.runAnalyticsAudit({ days: 7 });
@@ -773,7 +800,6 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
           console.error("Erro ao reiniciar analytics:", err);
         }
       } else if (task.type === "tests" && task.targetId) {
-        if (onNavigate) onNavigate("tests");
         try {
           if (window.electronAPI?.runTest) {
             await window.electronAPI.runTest(task.targetId);

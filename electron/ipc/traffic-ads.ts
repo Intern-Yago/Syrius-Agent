@@ -17,8 +17,10 @@ import {
   updateBudgetConfig,
   syncInstagramPostInsights,
   syncAdAccountBalanceFromMeta,
+  syncAllLiveCampaignsAndInsights,
   dispatchAutonomousBoost,
   scheduleAutonomousBoost,
+  purgeOrphanedMetaCampaigns,
   type BoostCampaignInput,
 } from "../../src/services/traffic-ads-service.js";
 
@@ -54,6 +56,20 @@ export function registerTrafficAdsIPC() {
     }
   });
 
+  ipcMain.handle("ads:sync-all-live-insights", async () => {
+    try {
+      const result = await syncAllLiveCampaignsAndInsights();
+      const campaignsData = await listCampaigns();
+      return { success: true, result, campaignsData };
+    } catch (err) {
+      console.error("[ads IPC] Erro ao sincronizar campanhas ao vivo:", err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Erro ao sincronizar dados da Meta API.",
+      };
+    }
+  });
+
   ipcMain.handle("ads:update-budget-config", async (_event, data: { monthlyBudget?: number; strategyMode?: any }) => {
     try {
       const summary = await updateBudgetConfig(data);
@@ -67,9 +83,10 @@ export function registerTrafficAdsIPC() {
     }
   });
 
-  // 1. Listar campanhas e sumário executivo
+  // 1. Listar campanhas e sumário executivo (Sincroniza insights ao vivo em segundo plano)
   ipcMain.handle("ads:list-campaigns", async () => {
     try {
+      await syncAllLiveCampaignsAndInsights().catch(() => {});
       return await listCampaigns();
     } catch (err) {
       console.error("[ads IPC] Erro ao listar campanhas:", err);
@@ -140,16 +157,33 @@ export function registerTrafficAdsIPC() {
   );
 
   // 3b. Disparar Turbinada Imediata pelo Apolo (Meta API)
-  ipcMain.handle("ads:dispatch-autonomous-boost", async (_event, params: { postId: string; dailyBudget?: number; durationDays?: number }) => {
-    try {
-      return await dispatchAutonomousBoost(params);
-    } catch (err) {
-      return {
-        success: false,
-        message: err instanceof Error ? err.message : "Erro ao disparar turbinada autônoma.",
-      };
+  ipcMain.handle(
+    "ads:dispatch-autonomous-boost",
+    async (
+      event,
+      params: {
+        postId: string;
+        dailyBudget?: number;
+        durationDays?: number;
+        durationMode?: "BUDGET_CAP" | "FIXED_DAYS" | "UNTIL_PAUSED";
+        budgetCap?: number;
+      }
+    ) => {
+      try {
+        return await dispatchAutonomousBoost(params, (progress) => {
+          event.sender.send("ads:boost-progress", {
+            postId: params.postId,
+            ...progress,
+          });
+        });
+      } catch (err) {
+        return {
+          success: false,
+          message: err instanceof Error ? err.message : "Erro ao disparar turbinada autônoma.",
+        };
+      }
     }
-  });
+  );
 
   // 3c. Agendar Turbinada pelo Radar do Apolo
   ipcMain.handle("ads:schedule-autonomous-boost", async (_event, params: { postId: string; scheduledDay: string; scheduledTime: string; dailyBudget?: number; durationDays?: number }) => {
@@ -159,6 +193,19 @@ export function registerTrafficAdsIPC() {
       return {
         success: false,
         message: err instanceof Error ? err.message : "Erro ao agendar turbinada.",
+      };
+    }
+  });
+
+  // 3d. Purgar Rascunhos/Campanhas Órfãs Antigas da Meta Ads
+  ipcMain.handle("ads:purge-orphaned-campaigns", async () => {
+    try {
+      return await purgeOrphanedMetaCampaigns();
+    } catch (err) {
+      return {
+        success: false,
+        deletedCount: 0,
+        message: err instanceof Error ? err.message : "Erro ao purgar campanhas órfãs na Meta.",
       };
     }
   });

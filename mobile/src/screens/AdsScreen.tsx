@@ -41,7 +41,9 @@ export function AdsScreen({ onOpenMenu, onNavigate }: AdsScreenProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string>("");
   const [dailyBudget, setDailyBudget] = useState<string>("6");
-  const [durationDays, setDurationDays] = useState<string>("1");
+  const [durationMode, setDurationMode] = useState<"BUDGET_CAP" | "FIXED_DAYS" | "UNTIL_PAUSED">("FIXED_DAYS");
+  const [durationDays, setDurationDays] = useState<string>("3");
+  const [budgetCap, setBudgetCap] = useState<string>("18");
   const [searchPostQuery, setSearchPostQuery] = useState("");
 
   useEffect(() => {
@@ -118,12 +120,21 @@ export function AdsScreen({ onOpenMenu, onNavigate }: AdsScreenProps) {
       return;
     }
 
+    const effectiveDays =
+      durationMode === "BUDGET_CAP"
+        ? Math.max(1, Math.ceil((Number(budgetCap) || 18) / (Number(dailyBudget) || 6)))
+        : durationMode === "UNTIL_PAUSED"
+        ? 30
+        : Number(durationDays) || 1;
+
     try {
       setBoostingPostId(selectedPostId);
       const res = await api.dispatchBoost({
         postId: selectedPostId,
         dailyBudget: Number(dailyBudget) || 6,
-        durationDays: Number(durationDays) || 1,
+        durationDays: effectiveDays,
+        durationMode,
+        budgetCap: durationMode === "BUDGET_CAP" ? Number(budgetCap) : undefined,
       });
 
       if (res && res.success) {
@@ -302,28 +313,130 @@ export function AdsScreen({ onOpenMenu, onNavigate }: AdsScreenProps) {
               )}
             </ScrollView>
 
-            {/* ORÇAMENTO E DURAÇÃO */}
-            <View style={styles.inputsRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Orçamento (R$/dia):</Text>
-                <TextInput
-                  style={styles.textInput}
-                  keyboardType="numeric"
-                  value={dailyBudget}
-                  onChangeText={setDailyBudget}
-                />
-              </View>
+            {/* 3 MODOS DE TÉRMINO / DURAÇÃO */}
+            <Text style={[styles.inputLabel, { marginTop: 4, marginBottom: 8 }]}>2. Orçamento & Modo de Término:</Text>
 
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Duração (Dias):</Text>
-                <TextInput
-                  style={styles.textInput}
-                  keyboardType="numeric"
-                  value={durationDays}
-                  onChangeText={setDurationDays}
-                />
+            {/* OPÇÃO 1: TETO DE ORÇAMENTO */}
+            <TouchableOpacity
+              style={[
+                styles.modeOptionCard,
+                durationMode === "BUDGET_CAP" && styles.modeOptionCardActive,
+              ]}
+              onPress={() => setDurationMode("BUDGET_CAP")}
+            >
+              <View style={styles.modeHeaderRow}>
+                <Text style={[styles.modeTitle, durationMode === "BUDGET_CAP" && styles.modeTitleActive]}>
+                  💰 Teto de Orçamento (Valor Máximo)
+                </Text>
               </View>
-            </View>
+              <Text style={styles.modeSubtitle}>
+                O anúncio roda até consumir o valor definido, independente dos dias. Apolo pausa automaticamente.
+              </Text>
+
+              {durationMode === "BUDGET_CAP" && (
+                <View style={styles.modeInputBlock}>
+                  <Text style={styles.modeInputLabel}>Valor Máximo do Teto (R$):</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    keyboardType="numeric"
+                    value={budgetCap}
+                    onChangeText={setBudgetCap}
+                  />
+                  <View style={{ flexDirection: "row", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                    {budgetSummary?.remainingBudget ? (
+                      <TouchableOpacity
+                        style={styles.modeQuickPill}
+                        onPress={() => setBudgetCap(budgetSummary.remainingBudget.toFixed(2))}
+                      >
+                        <Text style={styles.modeQuickPillText}>
+                          💡 Saldo em conta (R$ {budgetSummary.remainingBudget.toFixed(2)})
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity
+                      style={styles.modeQuickPill}
+                      onPress={() => setBudgetCap("6")}
+                    >
+                      <Text style={styles.modeQuickPillText}>💡 R$ 6,00</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modeQuickPill}
+                      onPress={() => setBudgetCap("18")}
+                    >
+                      <Text style={styles.modeQuickPillText}>💡 R$ 18,00</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* OPÇÃO 2: POR TEMPO */}
+            <TouchableOpacity
+              style={[
+                styles.modeOptionCard,
+                durationMode === "FIXED_DAYS" && styles.modeOptionCardActive,
+              ]}
+              onPress={() => setDurationMode("FIXED_DAYS")}
+            >
+              <View style={styles.modeHeaderRow}>
+                <Text style={[styles.modeTitle, durationMode === "FIXED_DAYS" && styles.modeTitleActive]}>
+                  ⏱️ Por Tempo (Duração Fixa em Dias)
+                </Text>
+              </View>
+              <Text style={styles.modeSubtitle}>
+                Define o número de dias. Encerra ao final do prazo (limite de segurança de R$ 6/dia).
+              </Text>
+
+              {durationMode === "FIXED_DAYS" && (
+                <View style={styles.modeInputBlock}>
+                  <Text style={styles.modeInputLabel}>Quantidade de Dias:</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    keyboardType="numeric"
+                    value={durationDays}
+                    onChangeText={setDurationDays}
+                  />
+                  <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
+                    <TouchableOpacity
+                      style={styles.modeQuickPill}
+                      onPress={() => setDurationDays("3")}
+                    >
+                      <Text style={styles.modeQuickPillText}>💡 Sugestão: 3 dias</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modeQuickPill}
+                      onPress={() => setDurationDays("1")}
+                    >
+                      <Text style={styles.modeQuickPillText}>💡 1 dia</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modeQuickPill}
+                      onPress={() => setDurationDays("5")}
+                    >
+                      <Text style={styles.modeQuickPillText}>💡 5 dias</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* OPÇÃO 3: ATÉ SER PAUSADO (SEM NENHUM INPUT) */}
+            <TouchableOpacity
+              style={[
+                styles.modeOptionCard,
+                durationMode === "UNTIL_PAUSED" && styles.modeOptionCardActive,
+              ]}
+              onPress={() => setDurationMode("UNTIL_PAUSED")}
+            >
+              <View style={styles.modeHeaderRow}>
+                <Text style={[styles.modeTitle, durationMode === "UNTIL_PAUSED" && styles.modeTitleActive]}>
+                  ⚡ Até ser pausado (Veiculação Contínua)
+                </Text>
+              </View>
+              <Text style={styles.modeSubtitle}>
+                Veicula continuamente no leilão com limite de R$ 6/dia até você pausar.
+              </Text>
+            </TouchableOpacity>
 
             <View style={styles.modalFooter}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setIsModalOpen(false)}>
@@ -341,7 +454,13 @@ export function AdsScreen({ onOpenMenu, onNavigate }: AdsScreenProps) {
                   <Rocket size={14} color="#ffffff" />
                 )}
                 <Text style={styles.modalSubmitText}>
-                  {boostingPostId ? "Ativando..." : `Disparar (R$ ${(Number(dailyBudget) * Number(durationDays)).toFixed(2)})`}
+                  {boostingPostId
+                    ? "Ativando..."
+                    : durationMode === "BUDGET_CAP"
+                    ? `Disparar (Teto R$ ${Number(budgetCap || 6).toFixed(2)})`
+                    : durationMode === "UNTIL_PAUSED"
+                    ? "Disparar Contínuo"
+                    : `Disparar (${durationDays}d)`}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -668,5 +787,62 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 13,
     fontWeight: "800",
+  },
+  modeOptionCard: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    marginBottom: 8,
+  },
+  modeOptionCardActive: {
+    backgroundColor: "rgba(56, 189, 248, 0.1)",
+    borderColor: colors.sky,
+  },
+  modeHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 3,
+  },
+  modeTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  modeTitleActive: {
+    color: colors.sky,
+  },
+  modeSubtitle: {
+    fontSize: 11,
+    color: colors.textMuted,
+    lineHeight: 15,
+  },
+  modeInputBlock: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.06)",
+  },
+  modeInputLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textDim,
+    marginBottom: 4,
+  },
+  modeQuickPill: {
+    marginTop: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: "rgba(56, 189, 248, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(56, 189, 248, 0.3)",
+    alignSelf: "flex-start",
+  },
+  modeQuickPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.sky,
   },
 });

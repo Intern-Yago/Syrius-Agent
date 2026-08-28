@@ -91,7 +91,8 @@ async function metaRequest<T>(endpoint: string, method = "POST", params: Record<
 /**
  * Aguarda o processamento do container de mídia pela Meta antes de publicar.
  */
-async function waitForContainer(containerId: string, maxAttempts = 10): Promise<void> {
+async function waitForContainer(containerId: string, maxAttempts = 50): Promise<void> {
+  let lastStatus = "IN_PROGRESS";
   for (let i = 1; i <= maxAttempts; i++) {
     const statusData = await metaRequest<{ status_code?: string }>(
       `/${containerId}`,
@@ -99,6 +100,7 @@ async function waitForContainer(containerId: string, maxAttempts = 10): Promise<
       { fields: "status_code" }
     );
 
+    lastStatus = statusData.status_code || "IN_PROGRESS";
     if (statusData.status_code === "FINISHED") {
       return;
     }
@@ -107,8 +109,12 @@ async function waitForContainer(containerId: string, maxAttempts = 10): Promise<
       throw new Error(`Container ${containerId} falhou no processamento com status: ${statusData.status_code}`);
     }
 
-    // Espera 2 segundos antes de checar novamente
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Espera 3 segundos antes de checar novamente
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+
+  if (lastStatus !== "FINISHED") {
+    throw new Error(`Container de vídeo ${containerId} ainda está sendo processado pela Meta (${lastStatus}). Aguarde alguns instantes.`);
   }
 }
 

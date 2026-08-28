@@ -141,7 +141,9 @@ export function AdsPage({ onNavigateToPost }: AdsPageProps = {}) {
   const [isAutonomousBoostModalOpen, setIsAutonomousBoostModalOpen] = useState(false);
   const [autoBoostPostId, setAutoBoostPostId] = useState<string>("");
   const [autoBoostDailyBudget, setAutoBoostDailyBudget] = useState<number>(6);
-  const [autoBoostDurationDays, setAutoBoostDurationDays] = useState<number>(1);
+  const [autoBoostDurationMode, setAutoBoostDurationMode] = useState<"BUDGET_CAP" | "FIXED_DAYS" | "UNTIL_PAUSED">("FIXED_DAYS");
+  const [autoBoostDurationDays, setAutoBoostDurationDays] = useState<number>(3);
+  const [autoBoostBudgetCap, setAutoBoostBudgetCap] = useState<number>(18);
   const [autoBoostSearchQuery, setAutoBoostSearchQuery] = useState("");
   const [dispatchingAutonomousBoost, setDispatchingAutonomousBoost] = useState(false);
 
@@ -160,6 +162,31 @@ export function AdsPage({ onNavigateToPost }: AdsPageProps = {}) {
     loadPosts();
     loadBudgetSummary();
   }, []);
+
+  // Escuta o progresso detalhado de cada etapa da turbinada e reflete em tempo real na Central de Atividades
+  useEffect(() => {
+    if (!window.electronAPI?.onAdsBoostProgress) return;
+    const cleanup = window.electronAPI.onAdsBoostProgress((data) => {
+      const selectedPost = postsList.find((p) => p.id === data.postId);
+      const postTitle = selectedPost?.topic || "Publicação";
+      const activityId = `boost-${data.postId}`;
+
+      registerOrUpdateActivity({
+        id: activityId,
+        type: "ads_growth",
+        title: `Turbinando Post: "${postTitle.slice(0, 35)}..."`,
+        subtitle: data.message,
+        targetPage: "ads",
+        status: data.progress === 100 ? "completed" : "running",
+        statusMessage: data.message,
+        progress: data.progress,
+      });
+    });
+
+    return () => {
+      if (typeof cleanup === "function") cleanup();
+    };
+  }, [postsList, registerOrUpdateActivity]);
 
   async function loadBudgetSummary() {
     try {
@@ -251,7 +278,14 @@ export function AdsPage({ onNavigateToPost }: AdsPageProps = {}) {
 
     const selectedPost = postsList.find((p) => p.id === autoBoostPostId);
     const postTitle = selectedPost?.topic || "Publicação";
-    const activityId = `boost-${autoBoostPostId}-${Date.now()}`;
+    const activityId = `boost-${autoBoostPostId}`;
+
+    const effectiveDurationDays =
+      autoBoostDurationMode === "BUDGET_CAP"
+        ? Math.max(1, Math.ceil(Number(autoBoostBudgetCap) / (Number(autoBoostDailyBudget) || 6.0)))
+        : autoBoostDurationMode === "UNTIL_PAUSED"
+        ? 30
+        : Number(autoBoostDurationDays) || 1;
 
     try {
       setDispatchingAutonomousBoost(true);
@@ -260,18 +294,20 @@ export function AdsPage({ onNavigateToPost }: AdsPageProps = {}) {
         id: activityId,
         type: "ads_growth",
         title: `Turbinando Post: "${postTitle.slice(0, 35)}..."`,
-        subtitle: `Apolo está configurando campanha e segmentação na Meta Marketing API...`,
+        subtitle: "Iniciando configuração autônoma na Meta Marketing API...",
         targetPage: "ads",
         status: "running",
-        statusMessage: "Configurando campanha, segmentação tech e orçamento na Meta API...",
-        progress: 35,
+        statusMessage: "Iniciando configuração autônoma na Meta Marketing API...",
+        progress: 10,
         startedAt: Date.now(),
       });
 
       const res = await window.electronAPI?.dispatchAutonomousBoost?.({
         postId: autoBoostPostId,
         dailyBudget: Number(autoBoostDailyBudget) || 6.0,
-        durationDays: Number(autoBoostDurationDays) || 1,
+        durationDays: effectiveDurationDays,
+        durationMode: autoBoostDurationMode,
+        budgetCap: autoBoostDurationMode === "BUDGET_CAP" ? Number(autoBoostBudgetCap) : undefined,
       });
 
       if (res?.success) {
@@ -1610,14 +1646,55 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
       {/* ABA 2: TURBINADAS REALIZADAS */}
       {activeTab === "campaigns" && (
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
             <div>
-              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#fafafa", margin: "0 0 2px 0" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#fafafa", margin: "0 0 4px 0" }}>
                 Histórico de Turbinadas & Pós-Morte
-              </h2>
+              </h3>
               <p style={{ fontSize: "12px", color: "#a1a1aa", margin: 0 }}>
-                Auditoria de campanhas com cálculo de custo por seguidor, salvamento e diagnósticos de conversão.
+                Auditoria de campanhas com sincronização em tempo real da Meta API (status, gastos, seguidores e diagnósticos).
               </p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={async () => {
+                  if (!window.confirm("Deseja buscar e excluir todas as campanhas de teste vazias (sem anúncios) na sua conta da Meta?")) return;
+                  try {
+                    toast.info("Varrendo e limpando rascunhos vazios na Meta...");
+                    const res = await window.electronAPI?.purgeAdsOrphanedCampaigns?.();
+                    if (res?.success) {
+                      toast.success(res.message || "Rascunhos vazios excluídos com sucesso!");
+                      loadCampaigns();
+                      loadBudgetSummary();
+                    } else {
+                      toast.error(res?.message || "Erro ao limpar rascunhos.");
+                    }
+                  } catch {
+                    toast.error("Falha ao comunicar com a Meta API.");
+                  }
+                }}
+                style={{ fontSize: "12px", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                title="Deleta campanhas antigas de teste que ficaram sem anúncios na conta Meta"
+              >
+                <IconTrash2 size={13} color="#f87171" />
+                <span>Limpar Rascunhos Vazios na Meta</span>
+              </button>
+
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  resetModalForm();
+                  setIsModalOpen(true);
+                }}
+                style={{ fontSize: "12px", padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <IconPlus size={13} />
+                <span>Registrar Turbinada Manual</span>
+              </button>
             </div>
           </div>
 
@@ -1657,12 +1734,24 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                   key={camp.id}
                   style={{
                     background: "#18181b",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    border: `1px solid ${
+                      camp.status === "DISAPPROVED"
+                        ? "rgba(239, 68, 68, 0.4)"
+                        : camp.status === "IN_REVIEW"
+                        ? "rgba(56, 189, 248, 0.3)"
+                        : "rgba(255, 255, 255, 0.08)"
+                    }`,
                     borderRadius: "12px",
                     padding: "18px 20px",
                     display: "flex",
                     flexDirection: "column",
                     gap: "14px",
+                    boxShadow:
+                      camp.status === "DISAPPROVED"
+                        ? "0 0 20px rgba(239, 68, 68, 0.15)"
+                        : camp.status === "IN_REVIEW"
+                        ? "0 0 20px rgba(56, 189, 248, 0.1)"
+                        : "none",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
@@ -1690,7 +1779,7 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                      {/* BADGE DE STATUS EM TEMPO REAL */}
+                      {/* BADGE DE STATUS EM TEMPO REAL (META MARKETING API) */}
                       <span
                         style={{
                           fontSize: "11px",
@@ -1701,7 +1790,11 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                           alignItems: "center",
                           gap: "4px",
                           background:
-                            camp.status === "PAUSED"
+                            camp.status === "DISAPPROVED"
+                              ? "rgba(239, 68, 68, 0.2)"
+                              : camp.status === "IN_REVIEW"
+                              ? "rgba(56, 189, 248, 0.18)"
+                              : camp.status === "PAUSED"
                               ? "rgba(245, 158, 11, 0.15)"
                               : camp.status === "COMPLETED"
                               ? "rgba(56, 189, 248, 0.15)"
@@ -1709,7 +1802,11 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                               ? "rgba(148, 163, 184, 0.15)"
                               : "rgba(16, 185, 129, 0.15)",
                           color:
-                            camp.status === "PAUSED"
+                            camp.status === "DISAPPROVED"
+                              ? "#ef4444"
+                              : camp.status === "IN_REVIEW"
+                              ? "#38bdf8"
+                              : camp.status === "PAUSED"
                               ? "#fbbf24"
                               : camp.status === "COMPLETED"
                               ? "#38bdf8"
@@ -1717,7 +1814,11 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                               ? "#94a3b8"
                               : "#34d399",
                           border: `1px solid ${
-                            camp.status === "PAUSED"
+                            camp.status === "DISAPPROVED"
+                              ? "rgba(239, 68, 68, 0.5)"
+                              : camp.status === "IN_REVIEW"
+                              ? "rgba(56, 189, 248, 0.4)"
+                              : camp.status === "PAUSED"
                               ? "rgba(245, 158, 11, 0.3)"
                               : camp.status === "COMPLETED"
                               ? "rgba(56, 189, 248, 0.3)"
@@ -1727,13 +1828,28 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                           }`,
                         }}
                       >
-                        {camp.status === "PAUSED"
-                          ? "⏸️ Pausada"
-                          : camp.status === "COMPLETED"
-                          ? "✅ Concluída"
-                          : camp.status === "ARCHIVED"
-                          ? "🗑️ Arquivada"
-                          : "🟢 Veiculando (Ativa)"}
+                        {camp.status === "DISAPPROVED" ? (
+                          <>
+                            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ef4444" }} />
+                            Reprovado pela Meta (Ajuste Requerido)
+                          </>
+                        ) : camp.status === "IN_REVIEW" ? (
+                          <>
+                            <IconEye size={12} color="#38bdf8" />
+                            Em Análise (Meta Review)
+                          </>
+                        ) : camp.status === "PAUSED" ? (
+                          "Pausada"
+                        ) : camp.status === "COMPLETED" ? (
+                          "Concluída"
+                        ) : camp.status === "ARCHIVED" ? (
+                          "Arquivada"
+                        ) : (
+                          <>
+                            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#34d399" }} />
+                            Veiculando (Ativa)
+                          </>
+                        )}
                       </span>
 
                       <span
@@ -1750,8 +1866,8 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                         R$ {camp.budgetSpent.toFixed(2)} consumidos
                       </span>
 
-                      {/* BOTÃO PAUSAR OU RETOMAR */}
-                      {camp.status === "PAUSED" ? (
+                      {/* BOTÃO PAUSAR OU RETOMAR (APENAS PARA CAMPANHAS ATIVAS OU PAUSADAS) */}
+                      {camp.status === "PAUSED" && (
                         <button
                           type="button"
                           onClick={() => handleToggleCampaignStatus(camp.id, "PAUSED")}
@@ -1770,9 +1886,11 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                             gap: "4px",
                           }}
                         >
-                          <span>▶️ Retomar</span>
+                          <span>Retomar</span>
                         </button>
-                      ) : (
+                      )}
+
+                      {camp.status === "ACTIVE" && (
                         <button
                           type="button"
                           onClick={() => handleToggleCampaignStatus(camp.id, "ACTIVE")}
@@ -1791,7 +1909,7 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                             gap: "4px",
                           }}
                         >
-                          <span>⏸️ Pausar</span>
+                          <span>Pausar</span>
                         </button>
                       )}
 
@@ -2828,53 +2946,340 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                     )}
                   </div>
 
-                  {/* 2. ORÇAMENTO DIÁRIO E DURAÇÃO */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
-                    <div>
-                      <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa", display: "block", marginBottom: "6px" }}>
-                        Orçamento Diário (R$/dia)
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={budgetSummary?.remainingBudget || 50}
-                        step={1}
-                        required
-                        value={autoBoostDailyBudget}
-                        onChange={(e) => setAutoBoostDailyBudget(Number(e.target.value))}
-                        style={{
-                          width: "100%",
-                          background: "#09090b",
-                          border: "1px solid rgba(255, 255, 255, 0.15)",
-                          padding: "9px 12px",
-                          borderRadius: "8px",
-                          color: "#fafafa",
-                          fontSize: "13px",
-                        }}
-                      />
-                    </div>
+                  {/* 2. ORÇAMENTO & MODO DE TÉRMINO DA TURBINADA (3 MODOS) */}
+                  <div style={{ marginBottom: "18px", background: "#09090b", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "10px", padding: "16px" }}>
+                    <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa", display: "block", marginBottom: "4px" }}>
+                      2. Orçamento & Modo de Término (Escolha 1 modo)
+                    </label>
+                    <p style={{ fontSize: "11px", color: "#a1a1aa", margin: "0 0 12px 0" }}>
+                      A Meta consome centavos no leilão conforme pessoas reais visualizam seu post.
+                    </p>
 
-                    <div>
-                      <label style={{ fontSize: "12px", fontWeight: "700", color: "#fafafa", display: "block", marginBottom: "6px" }}>
-                        Duração da Turbinada
-                      </label>
-                      <select
-                        value={autoBoostDurationDays}
-                        onChange={(e) => setAutoBoostDurationDays(Number(e.target.value))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      {/* OPÇÃO 1: TETO DE ORÇAMENTO */}
+                      <div
+                        onClick={() => setAutoBoostDurationMode("BUDGET_CAP")}
                         style={{
-                          width: "100%",
-                          background: "#09090b",
-                          border: "1px solid rgba(255, 255, 255, 0.15)",
-                          padding: "9px 12px",
+                          padding: "12px 14px",
                           borderRadius: "8px",
-                          color: "#fafafa",
-                          fontSize: "13px",
+                          background: autoBoostDurationMode === "BUDGET_CAP" ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.02)",
+                          border: `1px solid ${autoBoostDurationMode === "BUDGET_CAP" ? "#38bdf8" : "rgba(255, 255, 255, 0.08)"}`,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        <option value={1}>1 dia (R$ {autoBoostDailyBudget * 1},00)</option>
-                        <option value={2}>2 dias (R$ {autoBoostDailyBudget * 2},00)</option>
-                        <option value={3}>3 dias (R$ {autoBoostDailyBudget * 3},00)</option>
-                      </select>
+                        <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", margin: 0 }}>
+                          <input
+                            type="radio"
+                            name="boostDurationMode"
+                            value="BUDGET_CAP"
+                            checked={autoBoostDurationMode === "BUDGET_CAP"}
+                            onChange={() => setAutoBoostDurationMode("BUDGET_CAP")}
+                            style={{ marginTop: "3px", accentColor: "#38bdf8", cursor: "pointer" }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                              <strong style={{ color: autoBoostDurationMode === "BUDGET_CAP" ? "#38bdf8" : "#fafafa", fontSize: "13px" }}>
+                                💰 Teto de Orçamento (Valor Máximo a Gastar)
+                              </strong>
+                            </div>
+                            <span style={{ fontSize: "11px", color: "#a1a1aa", display: "block", lineHeight: "1.4" }}>
+                              O anúncio roda até consumir exatamente o valor total definido, independente de levar 1, 2 ou mais dias. O Apolo pausa automaticamente.
+                            </span>
+
+                            {/* INPUT E SUGESTÕES DO APOLO QUANDO ESTA OPÇÃO ESTIVER ATIVA */}
+                            {autoBoostDurationMode === "BUDGET_CAP" && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  marginTop: "10px",
+                                  padding: "12px",
+                                  background: "#18181b",
+                                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                                  borderRadius: "8px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "8px",
+                                }}
+                              >
+                                <label style={{ fontSize: "11px", fontWeight: "700", color: "#d4d4d8" }}>
+                                  Defina o Valor Máximo do Teto (R$):
+                                </label>
+                                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                                  <div style={{ position: "relative", width: "160px" }}>
+                                    <span style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "12px", color: "#a1a1aa", fontWeight: "700" }}>
+                                      R$
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      step={0.5}
+                                      value={autoBoostBudgetCap}
+                                      onChange={(e) => setAutoBoostBudgetCap(Math.max(1, Number(e.target.value)))}
+                                      style={{
+                                        width: "100%",
+                                        background: "#09090b",
+                                        border: "1px solid rgba(255, 255, 255, 0.2)",
+                                        padding: "7px 12px 7px 32px",
+                                        borderRadius: "6px",
+                                        color: "#38bdf8",
+                                        fontSize: "13px",
+                                        fontWeight: "700",
+                                      }}
+                                    />
+                                  </div>
+
+                                  {/* SUGESTÕES INTELIGENTES DO APOLO BASEADAS NA VERBA DA CONTA */}
+                                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                    {budgetSummary?.remainingBudget && budgetSummary.remainingBudget > 0 ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setAutoBoostBudgetCap(Number(budgetSummary.remainingBudget.toFixed(2)))}
+                                        style={{
+                                          padding: "5px 9px",
+                                          borderRadius: "6px",
+                                          background: "rgba(52, 211, 153, 0.12)",
+                                          border: "1px solid rgba(52, 211, 153, 0.3)",
+                                          color: "#34d399",
+                                          fontSize: "11px",
+                                          fontWeight: "700",
+                                          cursor: "pointer",
+                                        }}
+                                        title="Usa exatamente o saldo livre disponível na carteira do Instagram"
+                                      >
+                                        💡 Usar saldo em conta (R$ {budgetSummary.remainingBudget.toFixed(2)})
+                                      </button>
+                                    ) : null}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setAutoBoostBudgetCap(6)}
+                                      style={{
+                                        padding: "5px 9px",
+                                        borderRadius: "6px",
+                                        background: autoBoostBudgetCap === 6 ? "rgba(56, 189, 248, 0.2)" : "rgba(56, 189, 248, 0.08)",
+                                        border: `1px solid ${autoBoostBudgetCap === 6 ? "#38bdf8" : "rgba(56, 189, 248, 0.25)"}`,
+                                        color: "#38bdf8",
+                                        fontSize: "11px",
+                                        fontWeight: "700",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      💡 R$ 6,00 (Validação)
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setAutoBoostBudgetCap(18)}
+                                      style={{
+                                        padding: "5px 9px",
+                                        borderRadius: "6px",
+                                        background: autoBoostBudgetCap === 18 ? "rgba(56, 189, 248, 0.2)" : "rgba(56, 189, 248, 0.08)",
+                                        border: `1px solid ${autoBoostBudgetCap === 18 ? "#38bdf8" : "rgba(56, 189, 248, 0.25)"}`,
+                                        color: "#38bdf8",
+                                        fontSize: "11px",
+                                        fontWeight: "700",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      💡 R$ 18,00 (Escala)
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <span style={{ fontSize: "11px", color: "#38bdf8", display: "block" }}>
+                                  📊 O anúncio consumirá centavos no leilão do Instagram e encerrará automaticamente assim que atingir <strong>R$ {autoBoostBudgetCap.toFixed(2)}</strong> gastos.
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* OPÇÃO 2: POR TEMPO / DURAÇÃO FIXA */}
+                      <div
+                        onClick={() => setAutoBoostDurationMode("FIXED_DAYS")}
+                        style={{
+                          padding: "12px 14px",
+                          borderRadius: "8px",
+                          background: autoBoostDurationMode === "FIXED_DAYS" ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.02)",
+                          border: `1px solid ${autoBoostDurationMode === "FIXED_DAYS" ? "#38bdf8" : "rgba(255, 255, 255, 0.08)"}`,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", margin: 0 }}>
+                          <input
+                            type="radio"
+                            name="boostDurationMode"
+                            value="FIXED_DAYS"
+                            checked={autoBoostDurationMode === "FIXED_DAYS"}
+                            onChange={() => setAutoBoostDurationMode("FIXED_DAYS")}
+                            style={{ marginTop: "3px", accentColor: "#38bdf8", cursor: "pointer" }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                              <strong style={{ color: autoBoostDurationMode === "FIXED_DAYS" ? "#38bdf8" : "#fafafa", fontSize: "13px" }}>
+                                ⏱️ Por Tempo (Duração Fixa em Dias)
+                              </strong>
+                            </div>
+                            <span style={{ fontSize: "11px", color: "#a1a1aa", display: "block", lineHeight: "1.4" }}>
+                              O anúncio veicula pelo período de dias escolhido e encerra ao final do prazo (com limite de segurança diário de R$ 6,00/dia).
+                            </span>
+
+                            {/* INPUT E SUGESTÕES QUANDO ESTA OPÇÃO ESTIVER ATIVA */}
+                            {autoBoostDurationMode === "FIXED_DAYS" && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  marginTop: "10px",
+                                  padding: "12px",
+                                  background: "#18181b",
+                                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                                  borderRadius: "8px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "8px",
+                                }}
+                              >
+                                <label style={{ fontSize: "11px", fontWeight: "700", color: "#d4d4d8" }}>
+                                  Defina a Quantidade de Dias de Veiculação:
+                                </label>
+                                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                                  <div style={{ width: "120px" }}>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={30}
+                                      step={1}
+                                      value={autoBoostDurationDays}
+                                      onChange={(e) => setAutoBoostDurationDays(Math.max(1, Number(e.target.value)))}
+                                      style={{
+                                        width: "100%",
+                                        background: "#09090b",
+                                        border: "1px solid rgba(255, 255, 255, 0.2)",
+                                        padding: "7px 12px",
+                                        borderRadius: "6px",
+                                        color: "#38bdf8",
+                                        fontSize: "13px",
+                                        fontWeight: "700",
+                                      }}
+                                    />
+                                  </div>
+
+                                  {/* SUGESTÕES DO APOLO EM DIAS */}
+                                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAutoBoostDurationDays(3)}
+                                      style={{
+                                        padding: "5px 9px",
+                                        borderRadius: "6px",
+                                        background: autoBoostDurationDays === 3 ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                                        border: `1px solid ${autoBoostDurationDays === 3 ? "#38bdf8" : "rgba(255, 255, 255, 0.1)"}`,
+                                        color: autoBoostDurationDays === 3 ? "#38bdf8" : "#d4d4d8",
+                                        fontSize: "11px",
+                                        fontWeight: "700",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      💡 Apolo sugere: 3 dias (Janela Ideal)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAutoBoostDurationDays(1)}
+                                      style={{
+                                        padding: "5px 9px",
+                                        borderRadius: "6px",
+                                        background: autoBoostDurationDays === 1 ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                                        border: `1px solid ${autoBoostDurationDays === 1 ? "#38bdf8" : "rgba(255, 255, 255, 0.1)"}`,
+                                        color: autoBoostDurationDays === 1 ? "#38bdf8" : "#d4d4d8",
+                                        fontSize: "11px",
+                                        fontWeight: "700",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      💡 1 dia (Teste Rápido)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAutoBoostDurationDays(5)}
+                                      style={{
+                                        padding: "5px 9px",
+                                        borderRadius: "6px",
+                                        background: autoBoostDurationDays === 5 ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                                        border: `1px solid ${autoBoostDurationDays === 5 ? "#38bdf8" : "rgba(255, 255, 255, 0.1)"}`,
+                                        color: autoBoostDurationDays === 5 ? "#38bdf8" : "#d4d4d8",
+                                        fontSize: "11px",
+                                        fontWeight: "700",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      💡 5 dias (Escala)
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <span style={{ fontSize: "11px", color: "#38bdf8", display: "block" }}>
+                                  📊 O anúncio rodará por <strong>{autoBoostDurationDays} {autoBoostDurationDays === 1 ? "dia" : "dias"}</strong> com limite diário de segurança de R$ 6,00/dia.
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* OPÇÃO 3: ATÉ SER PAUSADO (SEM NENHUM INPUT ADICIONAL) */}
+                      <div
+                        onClick={() => setAutoBoostDurationMode("UNTIL_PAUSED")}
+                        style={{
+                          padding: "12px 14px",
+                          borderRadius: "8px",
+                          background: autoBoostDurationMode === "UNTIL_PAUSED" ? "rgba(56, 189, 248, 0.12)" : "rgba(255, 255, 255, 0.02)",
+                          border: `1px solid ${autoBoostDurationMode === "UNTIL_PAUSED" ? "#38bdf8" : "rgba(255, 255, 255, 0.08)"}`,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", margin: 0 }}>
+                          <input
+                            type="radio"
+                            name="boostDurationMode"
+                            value="UNTIL_PAUSED"
+                            checked={autoBoostDurationMode === "UNTIL_PAUSED"}
+                            onChange={() => setAutoBoostDurationMode("UNTIL_PAUSED")}
+                            style={{ marginTop: "3px", accentColor: "#38bdf8", cursor: "pointer" }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                              <strong style={{ color: autoBoostDurationMode === "UNTIL_PAUSED" ? "#38bdf8" : "#fafafa", fontSize: "13px" }}>
+                                ⚡ Até ser pausado (Veiculação Contínua)
+                              </strong>
+                            </div>
+                            <span style={{ fontSize: "11px", color: "#a1a1aa", display: "block", lineHeight: "1.4" }}>
+                              Roda continuamente no leilão do Instagram com limite de segurança de R$ 6,00/dia até você pausar manualmente.
+                            </span>
+
+                            {/* QUANDO ATIVO: NENHUM INPUT, APENAS CARD INFORMATIVO */}
+                            {autoBoostDurationMode === "UNTIL_PAUSED" && (
+                              <div
+                                style={{
+                                  marginTop: "10px",
+                                  padding: "10px 12px",
+                                  background: "rgba(56, 189, 248, 0.08)",
+                                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                                  borderRadius: "8px",
+                                  fontSize: "11px",
+                                  color: "#38bdf8",
+                                  lineHeight: "1.45",
+                                }}
+                              >
+                                ⚡ <strong>Veiculação Contínua Ativa:</strong> O anúncio consumirá centavos conforme devs visualizam seu post (com teto de segurança de R$ 6,00/dia) e continuará ativo até você pausá-lo no Syrius ou no app do Instagram.
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
                     </div>
                   </div>
 
@@ -2930,8 +3335,16 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                         boxShadow: "0 4px 15px rgba(2, 132, 199, 0.35)",
                       }}
                     >
-                      {dispatchingAutonomousBoost ? <IconLoader size={14} /> : <IconRocket size={14} />}
-                      <span>{dispatchingAutonomousBoost ? "Ativando na Meta API..." : `Disparar Turbinada no Instagram (R$ ${(autoBoostDailyBudget * autoBoostDurationDays).toFixed(2)})`}</span>
+                      {dispatchingAutonomousBoost ? <IconLoader size={14} className="spin" /> : <IconRocket size={14} />}
+                      <span>
+                        {dispatchingAutonomousBoost
+                          ? "Ativando na Meta API..."
+                          : autoBoostDurationMode === "BUDGET_CAP"
+                          ? `Disparar Turbinada com Teto de R$ ${autoBoostBudgetCap.toFixed(2)}`
+                          : autoBoostDurationMode === "UNTIL_PAUSED"
+                          ? `Disparar Turbinada Contínua (R$ ${autoBoostDailyBudget.toFixed(2)}/dia)`
+                          : `Disparar Turbinada por ${autoBoostDurationDays} ${autoBoostDurationDays === 1 ? "dia" : "dias"} (R$ ${(autoBoostDailyBudget * autoBoostDurationDays).toFixed(2)})`}
+                      </span>
                     </button>
                   </div>
                 </form>
@@ -3422,45 +3835,52 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
 
             {/* FUNIL DE CONVERSÃO DO ANÚNCIO */}
             <div>
-              <h3 style={{ fontSize: "13px", fontWeight: "700", color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 10px 0" }}>
-                Funil de Conversão do Anúncio (Meta Insights)
+              <h3 style={{ fontSize: "13px", fontWeight: "700", color: "#fafafa", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                <IconZap size={15} color="#38bdf8" />
+                <span>Funil de Conversão do Anúncio (Meta Insights)</span>
               </h3>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px" }}>
                 <div style={{ background: "#09090b", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
                   <span style={{ fontSize: "10px", color: "#a1a1aa", display: "block" }}>Visualizações Anúncio</span>
-                  <strong style={{ fontSize: "16px", color: "#fafafa" }}>{selectedCampaignDetails.reachTotal || selectedCampaignDetails.impressions || 165}</strong>
+                  <strong style={{ fontSize: "16px", color: "#fafafa" }}>{selectedCampaignDetails.reachTotal || selectedCampaignDetails.impressions || 0}</strong>
                   <span style={{ fontSize: "10px", color: "#71717a", display: "block" }}>
-                    {selectedCampaignDetails.targetAudience?.initialPlays || 149} reproduções iniciais
+                    {selectedCampaignDetails.impressions || 0} impressões totais
                   </span>
                 </div>
 
                 <div style={{ background: "#09090b", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
                   <span style={{ fontSize: "10px", color: "#a1a1aa", display: "block" }}>Visitas ao Perfil</span>
-                  <strong style={{ fontSize: "16px", color: "#fbbf24" }}>+{selectedCampaignDetails.profileVisits || 3}</strong>
+                  <strong style={{ fontSize: "16px", color: "#fbbf24" }}>+{selectedCampaignDetails.profileVisits || 0}</strong>
                   <span style={{ fontSize: "10px", color: "#38bdf8", display: "block" }}>
-                    R$ {selectedCampaignDetails.costPerVisit?.toFixed(2) || "0.68"} por visita
+                    {selectedCampaignDetails.profileVisits > 0
+                      ? `R$ ${((selectedCampaignDetails.budgetSpent || 0) / selectedCampaignDetails.profileVisits).toFixed(2)} por visita`
+                      : "R$ 0.00 por visita"}
                   </span>
                 </div>
 
                 <div style={{ background: "#09090b", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(52, 211, 153, 0.25)" }}>
                   <span style={{ fontSize: "10px", color: "#34d399", display: "block" }}>Seguidores (Anúncio)</span>
-                  <strong style={{ fontSize: "16px", color: "#34d399" }}>+{selectedCampaignDetails.followersGained || 2}</strong>
+                  <strong style={{ fontSize: "16px", color: "#34d399" }}>+{selectedCampaignDetails.followersGained || 0}</strong>
                   <span style={{ fontSize: "10px", color: "#34d399", display: "block" }}>
-                    {selectedCampaignDetails.targetAudience?.conversionRate?.visitsToFollowers || "66,7% conversão visita/follow"}
+                    {selectedCampaignDetails.profileVisits > 0 && selectedCampaignDetails.followersGained > 0
+                      ? `${(((selectedCampaignDetails.followersGained || 0) / selectedCampaignDetails.profileVisits) * 100).toFixed(1)}% conversão visita/follow`
+                      : "0.0% conversão visita/follow"}
                   </span>
                 </div>
 
                 <div style={{ background: "#09090b", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(192, 132, 252, 0.2)" }}>
                   <span style={{ fontSize: "10px", color: "#c084fc", display: "block" }}>Salvamentos Anúncio</span>
-                  <strong style={{ fontSize: "16px", color: "#c084fc" }}>+{selectedCampaignDetails.savesCount || 3}</strong>
+                  <strong style={{ fontSize: "16px", color: "#c084fc" }}>+{selectedCampaignDetails.savesCount || 0}</strong>
                   <span style={{ fontSize: "10px", color: "#71717a", display: "block" }}>
-                    R$ {selectedCampaignDetails.costPerSave?.toFixed(2) || "0.68"} por save
+                    {selectedCampaignDetails.savesCount > 0
+                      ? `R$ ${((selectedCampaignDetails.budgetSpent || 0) / selectedCampaignDetails.savesCount).toFixed(2)} por save`
+                      : "R$ 0.00 por save"}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* VISÃO GERAL TOTAL DO POST (ORGÂNICO + ANÚNCIO) */}
+            {/* VISÃO GERAL TOTAL DO POST (ORGÂNICO + ANÚNCIO) SE DISPONÍVEL */}
             {selectedCampaignDetails.targetAudience?.organicPlusPaidOverview && (
               <div style={{ background: "#09090b", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "10px", padding: "14px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
@@ -3468,29 +3888,29 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                     Desempenho Global do Post (Orgânico + Turbinado)
                   </span>
                   <span style={{ fontSize: "11px", color: "#34d399", fontWeight: "700" }}>
-                    +{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.totalFollowers || 11} novos seguidores globais
+                    +{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.totalFollowers || 0} novos seguidores globais
                   </span>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "8px", fontSize: "11px" }}>
                   <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "8px", borderRadius: "6px" }}>
                     <span style={{ color: "#a1a1aa", display: "block" }}>Views Totais</span>
-                    <strong style={{ color: "#fafafa", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.views || 316}</strong>
+                    <strong style={{ color: "#fafafa", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.views || 0}</strong>
                   </div>
                   <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "8px", borderRadius: "6px" }}>
                     <span style={{ color: "#a1a1aa", display: "block" }}>Alcance Total</span>
-                    <strong style={{ color: "#fafafa", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.reach || 280}</strong>
+                    <strong style={{ color: "#fafafa", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.reach || 0}</strong>
                   </div>
                   <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "8px", borderRadius: "6px" }}>
                     <span style={{ color: "#a1a1aa", display: "block" }}>Interações</span>
-                    <strong style={{ color: "#38bdf8", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.interactions || 20}</strong>
+                    <strong style={{ color: "#38bdf8", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.interactions || 0}</strong>
                   </div>
                   <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "8px", borderRadius: "6px" }}>
                     <span style={{ color: "#a1a1aa", display: "block" }}>Curtidas</span>
-                    <strong style={{ color: "#f43f5e", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.likes || 14}</strong>
+                    <strong style={{ color: "#f43f5e", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.likes || 0}</strong>
                   </div>
                   <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "8px", borderRadius: "6px" }}>
                     <span style={{ color: "#a1a1aa", display: "block" }}>Salvamentos</span>
-                    <strong style={{ color: "#c084fc", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.saves || 3}</strong>
+                    <strong style={{ color: "#c084fc", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.saves || 0}</strong>
                   </div>
                   <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "8px", borderRadius: "6px" }}>
                     <span style={{ color: "#a1a1aa", display: "block" }}>Comentários</span>
@@ -3498,11 +3918,11 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                   </div>
                   <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "8px", borderRadius: "6px" }}>
                     <span style={{ color: "#a1a1aa", display: "block" }}>Compartilhamentos</span>
-                    <strong style={{ color: "#a855f7", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.shares || 2}</strong>
+                    <strong style={{ color: "#a855f7", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.shares || 0}</strong>
                   </div>
                   <div style={{ background: "rgba(255, 255, 255, 0.03)", padding: "8px", borderRadius: "6px" }}>
                     <span style={{ color: "#a1a1aa", display: "block" }}>Atividade Perfil</span>
-                    <strong style={{ color: "#34d399", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.profileActivity || 11}</strong>
+                    <strong style={{ color: "#34d399", fontSize: "14px" }}>{selectedCampaignDetails.targetAudience.organicPlusPaidOverview.profileActivity || 0}</strong>
                   </div>
                 </div>
               </div>
@@ -3516,71 +3936,73 @@ Dica do Gestor: ${preset.suggestedAction || "Turbinar com R$ 6 a R$ 12/dia por 3
                   <span>Quem viu seu anúncio (Perfil Demográfico Meta Ads)</span>
                 </h3>
                 <span style={{ fontSize: "11px", color: "#a1a1aa" }}>
-                  Base: {selectedCampaignDetails.reachTotal || 165} visualizações
+                  Base: {selectedCampaignDetails.reachTotal || selectedCampaignDetails.impressions || 0} visualizações reais
                 </span>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-                {/* FAIXA ETÁRIA */}
-                <div>
-                  <h4 style={{ fontSize: "11px", color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>
-                    Faixa Etária
-                  </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {(selectedCampaignDetails.targetAudience?.ageBreakdown || [
-                      { range: "25-34 anos", percentage: 33.1, label: "Devs Plenos / Sênior" },
-                      { range: "35-44 anos", percentage: 33.1, label: "Líderes / Arquitetos" },
-                      { range: "45-54 anos", percentage: 16.2, label: "Veteranos de Engenharia" },
-                      { range: "18-24 anos", percentage: 12.3, label: "Estudantes / Júnior" },
-                      { range: "55-64 anos", percentage: 3.9, label: "Seniores 55+" },
-                      { range: "65+ anos", percentage: 1.3, label: "65+ anos" },
-                    ]).map((age: any, idx: number) => (
-                      <div key={idx}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "2px" }}>
-                          <span style={{ color: "#fafafa" }}>{age.range} {age.label ? `(${age.label})` : ""}</span>
-                          <strong style={{ color: idx < 2 ? "#38bdf8" : "#e4e4e7" }}>{age.percentage}%</strong>
+              {selectedCampaignDetails.targetAudience?.ageBreakdown?.length > 0 ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                  {/* FAIXA ETÁRIA */}
+                  <div>
+                    <h4 style={{ fontSize: "11px", color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>
+                      Faixa Etária
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {selectedCampaignDetails.targetAudience.ageBreakdown.map((age: any, idx: number) => (
+                        <div key={idx}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "2px" }}>
+                            <span style={{ color: "#fafafa" }}>{age.range} {age.label ? `(${age.label})` : ""}</span>
+                            <strong style={{ color: idx < 2 ? "#38bdf8" : "#e4e4e7" }}>{age.percentage}%</strong>
+                          </div>
+                          <div style={{ height: "6px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "3px", overflow: "hidden" }}>
+                            <div style={{ width: `${age.percentage}%`, height: "100%", background: idx < 2 ? "#38bdf8" : idx === 2 ? "#a855f7" : "#60a5fa" }} />
+                          </div>
                         </div>
-                        <div style={{ height: "6px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "3px", overflow: "hidden" }}>
-                          <div style={{ width: `${age.percentage}%`, height: "100%", background: idx < 2 ? "#38bdf8" : idx === 2 ? "#a855f7" : "#60a5fa" }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* GÊNERO & LOCALIZAÇÃO */}
-                <div>
-                  <h4 style={{ fontSize: "11px", color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>
-                    Gênero & Principais Polos
-                  </h4>
-                  
-                  <div style={{ marginBottom: "12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "4px" }}>
-                      <span style={{ color: "#38bdf8" }}>{selectedCampaignDetails.targetAudience?.genderBreakdown?.men || 94.8}% Homens</span>
-                      <span style={{ color: "#f472b6" }}>{selectedCampaignDetails.targetAudience?.genderBreakdown?.women || 5.2}% Mulheres</span>
-                    </div>
-                    <div style={{ height: "6px", background: "#f472b6", borderRadius: "3px", overflow: "hidden", display: "flex" }}>
-                      <div style={{ width: `${selectedCampaignDetails.targetAudience?.genderBreakdown?.men || 94.8}%`, height: "100%", background: "#38bdf8" }} />
+                      ))}
                     </div>
                   </div>
 
-                  <div style={{ fontSize: "11px", color: "#a1a1aa", display: "flex", flexDirection: "column", gap: "4px" }}>
-                    {(selectedCampaignDetails.targetAudience?.topLocations || [
-                      { city: "São Paulo (state)", percentage: 19.5 },
-                      { city: "Ceará", percentage: 11.0 },
-                      { city: "Minas Gerais", percentage: 9.7 },
-                      { city: "Rio de Janeiro (state)", percentage: 6.5 },
-                      { city: "Goiás", percentage: 5.8 },
-                      { city: "Outros Estados", percentage: 47.5 },
-                    ]).map((loc: any, idx: number) => (
-                      <div key={idx} style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "#fafafa" }}>{loc.city}</span>
-                        <strong style={{ color: "#38bdf8" }}>{loc.percentage}%</strong>
+                  {/* GÊNERO & LOCALIZAÇÃO */}
+                  <div>
+                    <h4 style={{ fontSize: "11px", color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>
+                      Gênero & Principais Polos
+                    </h4>
+                    
+                    {selectedCampaignDetails.targetAudience?.genderBreakdown && (
+                      <div style={{ marginBottom: "12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "4px" }}>
+                          <span style={{ color: "#38bdf8" }}>{selectedCampaignDetails.targetAudience.genderBreakdown.men || 0}% Homens</span>
+                          <span style={{ color: "#f472b6" }}>{selectedCampaignDetails.targetAudience.genderBreakdown.women || 0}% Mulheres</span>
+                        </div>
+                        <div style={{ height: "6px", background: "#f472b6", borderRadius: "3px", overflow: "hidden", display: "flex" }}>
+                          <div style={{ width: `${selectedCampaignDetails.targetAudience.genderBreakdown.men || 0}%`, height: "100%", background: "#38bdf8" }} />
+                        </div>
                       </div>
-                    ))}
+                    )}
+
+                    {selectedCampaignDetails.targetAudience?.topLocations?.length > 0 && (
+                      <div style={{ fontSize: "11px", color: "#a1a1aa", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {selectedCampaignDetails.targetAudience.topLocations.map((loc: any, idx: number) => (
+                          <div key={idx} style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "#fafafa" }}>{loc.city || loc.name}</span>
+                            <strong style={{ color: "#38bdf8" }}>{loc.percentage}%</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px dashed rgba(255, 255, 255, 0.1)", borderRadius: "8px", padding: "24px 16px", textAlign: "center" }}>
+                  <IconClock size={20} color="#38bdf8" style={{ marginBottom: "8px" }} />
+                  <div style={{ fontSize: "13px", fontWeight: "600", color: "#fafafa", marginBottom: "4px" }}>
+                    Aguardando Primeiras Impressões na Meta Ads
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#71717a", maxWidth: "420px", margin: "0 auto", lineHeight: "1.4" }}>
+                    A Meta Marketing API consolida dados de gênero, faixa etária e estados após o anúncio atingir um volume mínimo de entrega no leilão.
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* DIAGNÓSTICO DO APOLO */}

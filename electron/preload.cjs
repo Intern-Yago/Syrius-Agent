@@ -181,4 +181,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   syncAdsInstagramInsights: (postId) => ipcRenderer.invoke("ads:sync-instagram-insights", postId),
   dispatchAutonomousBoost: (params) => ipcRenderer.invoke("ads:dispatch-autonomous-boost", params),
   scheduleAutonomousBoost: (params) => ipcRenderer.invoke("ads:schedule-autonomous-boost", params),
+  purgeAdsOrphanedCampaigns: () => ipcRenderer.invoke("ads:purge-orphaned-campaigns"),
+  onAdsBoostProgress: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on("ads:boost-progress", handler);
+    return () => ipcRenderer.removeListener("ads:boost-progress", handler);
+  },
 });
