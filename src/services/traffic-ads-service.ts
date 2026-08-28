@@ -292,6 +292,18 @@ export async function listCampaigns(): Promise<{
             const hasStatusChanged = matchingDbCamp.status !== realStatus;
             const hasSpendChanged = liveSpend !== undefined && liveSpend !== matchingDbCamp.budgetSpent;
 
+            // Trava Inteligente de Teto: Se o gasto atingir o orçamento configurado (ex: R$ 6,00), pausa automaticamente na Meta
+            const budgetCap = matchingDbCamp.dailyBudget || 6.0;
+            if (liveSpend !== undefined && liveSpend >= budgetCap && matchingDbCamp.status === "ACTIVE") {
+              console.log(`[TrafficAds] 🎯 Teto de orçamento atingido (R$ ${liveSpend} >= R$ ${budgetCap})! Pausando campanha ${metaCamp.id} na Meta...`);
+              await fetch(`https://graph.facebook.com/v20.0/${metaCamp.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "PAUSED", access_token: token }),
+              }).catch(() => {});
+              realStatus = "COMPLETED";
+            }
+
             if (hasStatusChanged || hasSpendChanged) {
               await prisma.boostCampaign.update({
                 where: { id: matchingDbCamp.id },
