@@ -671,3 +671,5 @@ export async function markTrendingAsGenerated(id: string, postId: string): Promi
     return false;
   }
 }
+
+export const scanTrendingTopics = refreshTrendingTopics;

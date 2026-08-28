@@ -12,6 +12,7 @@ import {
   Platform,
 } from "react-native";
 import { Audio } from "expo-av";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Header } from "../components/Header";
 import { AgencyMessage } from "../types";
 import { api } from "../services/api";
@@ -30,7 +31,15 @@ import {
   CheckCircle2,
 } from "lucide-react-native";
 
-export function AgencyMeetingScreen() {
+import { LogBox } from "react-native";
+LogBox.ignoreLogs(["Expo AV has been deprecated", "[expo-av]"]);
+
+interface AgencyMeetingScreenProps {
+  onOpenMenu?: () => void;
+}
+
+export function AgencyMeetingScreen({ onOpenMenu }: AgencyMeetingScreenProps) {
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<AgencyMessage[]>([]);
   const [inputText, setInputText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
@@ -59,11 +68,28 @@ export function AgencyMeetingScreen() {
   const fetchHistory = async () => {
     try {
       const res = await api.getAgencyMessages();
-      if (res && res.history) {
+      if (res && res.history && res.history.length > 0) {
         setMessages(res.history);
+      } else {
+        setMessages([
+          {
+            id: "estelar-welcome",
+            role: "assistant",
+            content: "Olá! Sou a Estelar, sua Head Editorial no Syrius. O que você gostaria de criar ou planejar hoje? Pode me mandar um áudio com ideias técnicas ou escrever aqui!",
+            timestamp: new Date().toISOString(),
+          },
+        ]);
       }
     } catch (err) {
       console.error("Erro ao carregar mensagens da Estelar:", err);
+      setMessages([
+        {
+          id: "estelar-welcome",
+          role: "assistant",
+          content: "Olá! Sou a Estelar, sua Head Editorial no Syrius. O que você gostaria de criar ou planejar hoje? Pode me mandar um áudio com ideias técnicas ou escrever aqui!",
+          timestamp: new Date().toISOString(),
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -85,21 +111,29 @@ export function AgencyMeetingScreen() {
     };
 
     setMessages((prev) => [...prev, optimisticMsg]);
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
 
     try {
       const res = await api.sendAgencyMessage(content);
       if (res && res.reply) {
         setMessages((prev) => [...prev, res.reply]);
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
 
         // Se a resposta vier com áudio, reproduz automaticamente
         if (res.reply.audioUrl) {
           playAudio(res.reply.id, res.reply.audioUrl);
         }
       }
-    } catch (err) {
-      Alert.alert("Erro", "Falha ao enviar mensagem para a Estelar.");
+    } catch (err: any) {
+      console.error("Falha ao enviar mensagem para a Estelar:", err);
+      const errorBubble: AgencyMessage = {
+        id: `err-${Date.now()}`,
+        role: "assistant",
+        content: `⚠️ Não foi possível processar a mensagem (${err?.message || "falha de conexão"}). Certifique-se de que o app desktop está em execução na mesma rede local.`,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorBubble]);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
     } finally {
       setSending(false);
     }
@@ -206,12 +240,13 @@ export function AgencyMeetingScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
     >
       <Header
         title="Estelar (Head Editorial)"
         subtitle="Sala de Reunião & Ideação por Voz"
         badge="REUNIÃO ESTRATÉGICA"
+        onOpenMenu={onOpenMenu}
       />
 
       {loading ? (
@@ -223,15 +258,17 @@ export function AgencyMeetingScreen() {
         <ScrollView
           ref={scrollViewRef}
           style={styles.chatScroll}
-          contentContainerStyle={styles.chatContent}
+          contentContainerStyle={[styles.chatContent, { flexGrow: 1, paddingBottom: 20 }]}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
         >
-          {messages.map((msg) => {
+          {messages.map((msg, index) => {
             const isUser = msg.role === "user";
             const isPlaying = playingAudioId === msg.id;
 
             return (
               <View
-                key={msg.id}
+                key={msg.id ? `${msg.id}-${index}` : `msg-${index}`}
                 style={[
                   styles.messageRow,
                   isUser ? styles.messageRowUser : styles.messageRowBot,
@@ -273,9 +310,9 @@ export function AgencyMeetingScreen() {
                   {/* Opções Interativas de Pauta */}
                   {msg.options && msg.options.length > 0 ? (
                     <View style={styles.optionsContainer}>
-                      {msg.options.map((opt) => (
+                      {msg.options.map((opt, optIdx) => (
                         <TouchableOpacity
-                          key={opt.id}
+                          key={opt.id ? `${opt.id}-${index}-${optIdx}` : `opt-${index}-${optIdx}`}
                           style={styles.optionCard}
                           onPress={() =>
                             handleSendMessage(`Gostei da Opção: "${opt.title}". Pode aprovar e agendar!`)
@@ -310,7 +347,7 @@ export function AgencyMeetingScreen() {
       )}
 
       {/* Barra de Entrada Estilo WhatsApp */}
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 12) + 6 }]}>
         {isRecording ? (
           <View style={styles.recordingRow}>
             <TouchableOpacity style={styles.cancelBtn} onPress={cancelRecording}>
@@ -334,6 +371,9 @@ export function AgencyMeetingScreen() {
               placeholderTextColor={colors.textDim}
               value={inputText}
               onChangeText={setInputText}
+              onFocus={() => {
+                setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150);
+              }}
               multiline
               maxLength={500}
             />

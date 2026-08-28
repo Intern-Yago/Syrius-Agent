@@ -227,6 +227,17 @@ flowchart TD
 
 ---
 
+### 📢 17. Gestor de Tráfego AI & Radar de Turbinamento (Apolo — Growth & Ads Specialist)
+- **Responsabilidade**: Auditoria de retorno sobre investimento (ROI), pós-morte analítico de posts turbinados, classificação de posts candidatos a turbinamento com Opportunity Score (0 a 100) e geração de públicos-alvo hiper-segmentados no Meta Ads.
+- **Capacidades**:
+  - **Radar de Candidatos a Turbinar**: Varredura contínua de posts publicados identificando temas com alto potencial de conversão de novos seguidores e salvamentos com baixo orçamento (ex: R$ 6 a R$ 20).
+  - **Análise Post-Mortem de Turbinadas**: Cálculo automático de Custo por Seguidor (CPS), Custo por Salvamento (CPSave), Custo por Visita (CPV) e diagnóstico qualitativo do que fez o post converter.
+  - **Construtor de Públicos-Alvo Meta Ads**: Geração e cópia com 1 clique de segmentações técnicas reais (faixa etária, localização, interesses Meta, cargos, comportamentos e exclusões).
+  - **Simulador de Orçamento & ROI**: Projeção estatística instantânea com sliders de R$/dia e duração.
+  - **Consultor de Tráfego AI (Apolo)**: Chat consultivo para orientações em tempo real sobre criativos, escala e orçamentos.
+
+---
+
 ## 🗄️ 3. Modelo de Dados Relacional (PostgreSQL / Prisma)
 
 | Tabela | Função Principal |
@@ -242,6 +253,8 @@ flowchart TD
 | `PendingRecommendedTopic` | Fila FIFO de recomendações geradas pelo Analytics para a próxima semana. |
 | `ContentExperiment` | Registro de testes A/B estruturados (variável de teste, hipótese e resultado). |
 | `TrendingTopic` | Radar de tendências em alta ativas com pontuação de relevância e expiração. |
+| `BoostCampaign` | Registro de posts turbinados (orçamento, duração, seguidores, saves, visitas, CPS, CPSave, diagnósticos da IA). |
+| `TargetAudiencePreset` | Biblioteca de segmentações de público tech para Meta Ads / Instagram Boost. |
 
 ---
 

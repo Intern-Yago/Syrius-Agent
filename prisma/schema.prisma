@@ -319,3 +319,74 @@ model TrendingTopic {
   @@index([expiresAt])
   @@index([relevanceScore])
 }
+
+model BoostCampaign {
+  id              String    @id @default(cuid())
+  postId          String?
+  postTopic       String
+  postFormat      String?   // "CAROUSEL", "REEL_SCRIPT", "SINGLE_IMAGE", "STORY_PHOTO"
+  platform        String    @default("INSTAGRAM_BOOST") // "INSTAGRAM_BOOST", "META_ADS_MANAGER"
+  budgetSpent     Float     // Valor total gasto em R$ (ex: 6.00)
+  currency        String    @default("BRL")
+  durationDays    Int       @default(3)
+  dailyBudget     Float?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  objective       String    @default("PROFILE_VISITS") // "PROFILE_VISITS", "MORE_MESSAGES", "POST_ENGAGEMENT", "WEBSITE_CLICKS"
+  followersGained Int       @default(0)
+  savesCount      Int       @default(0)
+  profileVisits   Int       @default(0)
+  reachTotal      Int       @default(0)
+  impressions     Int       @default(0)
+  clicksCount     Int       @default(0)
+  costPerFollower Float?    // R$ por seguidor
+  costPerSave     Float?    // R$ por salvamento
+  costPerVisit    Float?    // R$ por visita
+  targetAudience  Json?     // { age: "20-40", locations: [...], interests: [...], jobTitles: [...] }
+  aiDiagnosis     String?   // Diagnóstico detalhado do Gestor de Tráfego AI
+  recommendations Json?     // Lista de próximos passos recomendados
+  status          String    @default("ACTIVE") // "ACTIVE", "COMPLETED", "PLANNED"
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([postId])
+  @@index([createdAt])
+}
+
+model TargetAudiencePreset {
+  id              String   @id @default(cuid())
+  name            String   // Ex: "Devs Brasil - Clean Code & TypeScript"
+  category        String   @default("GERAL") // "FULLSTACK", "BACKEND", "FRONTEND", "DEVOPS", "IA_DATA", "JUNIOR_INICIANTE"
+  description     String
+  objective       String   @default("PROFILE_VISITS") // "PROFILE_VISITS", "MESSAGES", "ENGAGEMENT"
+  minAge          Int      @default(20)
+  maxAge          Int      @default(45)
+  genders         String   @default("ALL") // "ALL", "MEN", "WOMEN"
+  locations       String[] @default(["Brasil"])
+  interests       String[] @default([])
+  jobTitles       String[] @default([])
+  behaviors       String[] @default([])
+  exclusions      String[] @default([])
+  suggestedAction String?
+  isSystemDefault Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category])
+  @@index([createdAt])
+}
+
+model TrafficBudgetConfig {
+  id                    String    @id @default("default_budget_config")
+  monthlyBudget         Float     @default(6.0) // Orçamento mensal / verba colocada (ex: R$ 6,00)
+  strategyMode          String    @default("OPPORTUNISTIC") // "CONSERVATIVE", "OPPORTUNISTIC", "AGGRESSIVE"
+  autoBoostEnabled      Boolean   @default(false) // Auto-Turbinar autônomo (Piloto Automático do Apolo)
+  autoBoostMinScore     Int       @default(90) // Score mínimo de oportunidade para disparar auto-turbinada (ex: >= 90)
+  autoBoostDailyBudget  Float     @default(6.0) // Orçamento diário para auto-turbinar (ex: R$ 6,00)
+  notifyEmailOnSchedule Boolean   @default(true) // Notificar por e-mail no melhor horário e se atrasar
+  currency              String    @default("BRL")
+  notes                 String?
+  updatedAt             DateTime  @updatedAt
+}

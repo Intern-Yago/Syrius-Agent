@@ -523,17 +523,22 @@ export function ActivitiesProvider({ children }: { children: React.ReactNode }) 
   // Helper para verificar se um determinado post está em processo de publicação
   const isPostPublishing = useCallback(
     (postId: string): boolean => {
-      const id = `publish-${postId}`;
-      const task = activities.find((a) => a.id === id);
-      return Boolean(task && task.status === "running");
+      if (!postId) return false;
+      return activities.some((a) => {
+        const isMatch = a.id === `publish-${postId}` || a.targetId === postId || a.meta?.postId === postId;
+        return isMatch && a.type === "publishing" && (a.status === "running" || a.status === "paused");
+      });
     },
     [activities]
   );
 
   const getPostPublishingTask = useCallback(
     (postId: string): Activity | undefined => {
-      const id = `publish-${postId}`;
-      return activities.find((a) => a.id === id);
+      if (!postId) return undefined;
+      return activities.find((a) => {
+        const isMatch = a.id === `publish-${postId}` || a.targetId === postId || a.meta?.postId === postId;
+        return isMatch && a.type === "publishing";
+      });
     },
     [activities]
   );

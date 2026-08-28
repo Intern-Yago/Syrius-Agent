@@ -17,7 +17,11 @@ import { api } from "../services/api";
 import { colors } from "../theme/colors";
 import { Calendar, ChevronLeft, ChevronRight, Zap, Sparkles, RefreshCw } from "lucide-react-native";
 
-export function ScheduleScreen() {
+interface ScheduleScreenProps {
+  onOpenMenu?: () => void;
+}
+
+export function ScheduleScreen({ onOpenMenu }: ScheduleScreenProps) {
   const [slots, setSlots] = useState<ScheduleSlot[]>([]);
   const [weekOffset, setWeekOffset] = useState<number>(0);
   const [autoPublish, setAutoPublish] = useState<boolean>(false);
@@ -123,6 +127,7 @@ export function ScheduleScreen() {
         title="Cronograma Editorial"
         subtitle="Grade balanceada para autoridade e engajamento"
         badge="TIMELINE EDITORIAL"
+        onOpenMenu={onOpenMenu}
       />
 
       {/* Barra de Controles: Seletor de Semana e Autoplay */}

@@ -88,6 +88,12 @@ flowchart TD
     - Ajuste fino de títulos e textos de slides no visualizador com recomposição gráfica via Sharp em < 500ms sem custo de tokens de IA.
 13. **🎙️ Sala de Reunião com a Gestora Editorial (Clara / Estelar)**:
     - Central de ideação conversacional por texto ou gravação de voz com controles estilo WhatsApp (pausar, retomar, cancelar na lixeira e enviar), locução neural feminina, despacho autônomo, substituição inteligente de pautas com cancelamento do slot anterior e alocação distribuída na grade semanal.
+14. **📢 Gestor de Tráfego AI & Motor de Turbinada Autônoma (Apolo)**:
+    - Sincronização direta da carteira da Meta Marketing API (`act_2163467940868819`) com leitura de saldo pré-pago em tempo real e cálculo de ritmo ideal.
+    - Motor de Turbinada em 2 modos: **Disparo Imediato** em 1 clique (segmentação automática para devs 20-44 anos, Brasil / Hubs Tech, Feed + Reels) e **Agendamento pelo Radar** para os picos de tráfego de desenvolvedores.
+    - Análise post-mortem de turbinadas com cálculo de CPS (Custo por Seguidor), CPSave e CPV.
+15. **📱 Syrius Mobile App (React Native / Expo SDK 54)**:
+    - Companion móvel com arquitetura Bridgeless Hermes, auto-descoberta de IP local (`192.168.0.104:3001`), insets dinâmicos de notch/barra inferior, controles de voz na Sala de Reunião e gestão de teclado sem sobreposição.
 
 ---
 
@@ -112,35 +118,38 @@ flowchart TD
 - Python 3.10+ (opcional para renderização local de Reels com animação de código)
 - Chave de API Google Gemini
 - Credenciais Cloudflare (Account ID, API Token com Workers AI e R2)
-- Credenciais Meta Graph API (Token de Acesso e Instagram Account ID)
+## 🔒 Conformidade Legal & Políticas da Meta (Live Mode)
 
-### 2. Instalação
+As páginas oficiais de conformidade pública exigidas para o modo **Ao Vivo (Live)** da Meta Graph & Marketing API estão disponíveis publicamente em:
+
+* 🛡️ **[Política de Privacidade](https://intern-yago.github.io/Syrius-Agent/privacy-policy.html)**
+* 📜 **[Termos de Serviço](https://intern-yago.github.io/Syrius-Agent/terms-of-service.html)**
+* 🗑️ **[Instruções de Exclusão de Dados](https://intern-yago.github.io/Syrius-Agent/data-deletion.html)**
+* 🌐 **[Landing Page Oficial](https://intern-yago.github.io/Syrius-Agent/)**
+
+---
+
+## 🚀 Como Iniciar
+
 ```bash
-# Clone o repositório
-git clone https://github.com/Intern-Yago/Syrius-Agent.git
-cd Syrius-Agent
-
-# Instale as dependências Node.js
+# 1. Instale as dependências do desktop e backend
 npm install
 
-# Configure as variáveis de ambiente
-cp .env.example .env
+# 2. Configure as variáveis de ambiente no arquivo .env (PostgreSQL, Gemini, Cloudflare, Meta Graph API)
 
-# Execute as migrações do banco no PostgreSQL
+# 3. Aplique as migrações do banco de dados relacional
 npx prisma db push
 npx prisma generate
-```
 
-### 3. Rodando o Aplicativo Desktop
-```bash
-# Inicia o Vite e o Electron em modo concorrente
+# 4. Inicie o sistema em modo de desenvolvimento
 npm run dev
 ```
 
-### 4. Build de Produção
-```bash
-npm run build
-```
+---
+
+## 📄 Licença
+
+Distribuído sob a licença **ISC**. Desenvolvido com foco em engenharia de software de alta fidelidade e automação autônoma de conteúdo tech.
 
 ---
 

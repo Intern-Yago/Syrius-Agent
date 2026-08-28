@@ -37,6 +37,38 @@ export interface SelfCorrectionItem {
   supersededInsightId?: string;
 }
 
+export interface BoostCampaignSummaryItem {
+  id?: string;
+  postId?: string | null;
+  postTopic: string;
+  postFormat: string;
+  startedAt?: string | null;
+  status: string; // ACTIVE, PAUSED, COMPLETED, ARCHIVED
+  budgetSpent: number;
+  reachTotal: number;
+  followersGained: number;
+  savesCount: number;
+  profileVisits: number;
+  costPerFollower: number;
+  costPerVisit: number;
+  costPerSave: number;
+  aiDiagnosis?: string | null;
+  recommendations?: string[];
+}
+
+export interface BoostedCampaignsAudit {
+  totalInvested: number;
+  campaignsCount: number;
+  activeCampaignsCount: number;
+  totalFollowersGained: number;
+  totalProfileVisits: number;
+  totalSaves: number;
+  averageCps: number;
+  averageCpv: number;
+  executiveDiagnosis: string;
+  campaigns: BoostCampaignSummaryItem[];
+}
+
 export interface AnalyticsReport {
   id: string;
   createdAt: string;
@@ -66,6 +98,7 @@ export interface AnalyticsReport {
   }>;
   individualPostsBreakdown?: IndividualPostAudit[];
   selfCorrectionsApplied?: SelfCorrectionItem[];
+  boostedCampaignsSummary?: BoostedCampaignsAudit;
 }
 
 /**
@@ -190,7 +223,7 @@ export async function runAnalyticsAudit(params?: { days?: number }): Promise<{
     dbPosts = [];
   }
 
-  // 3. Recupera a Memória RAG existente e Experimentos A/B pendentes
+  // 3. Recupera a Memória RAG existente, Experimentos A/B e Posts Turbinados (Meta Ads)
   const existingInsights = await getAllInsights();
 
   let activeExperiments: any[] = [];
@@ -200,6 +233,16 @@ export async function runAnalyticsAudit(params?: { days?: number }): Promise<{
     });
   } catch {
     activeExperiments = [];
+  }
+
+  let boostCampaigns: any[] = [];
+  try {
+    boostCampaigns = await prisma.boostCampaign.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+  } catch {
+    boostCampaigns = [];
   }
 
   // 4. Compilação de Métricas Quantitativas 100% REAIS (SEM ESTIMATIVAS OU MOCKS)
@@ -344,11 +387,35 @@ ${JSON.stringify(
   null,
   2
 )}
-DIRETRIZ DE AVALIAÇÃO DE EXPERIMENTOS:
-- Se qualquer post analisado corresponder a um dos experimentos A/B ativos listados acima, avalie usando exatamente o ID correspondente se os dados reais confirmam a hipótese ('VALIDATED'), a refutam ('REFUTED') ou se os dados ainda são insuficientes ('INCONCLUSIVE').
-- Se nenhum post analisado corresponder aos experimentos ativos, retorne "evaluatedExperiments": [].
+` : ""}
+
+${boostCampaigns.length > 0 ? `
+POSTS TURBINADOS & META ADS NO PERÍODO (APOLO ADS):
+${JSON.stringify(
+  boostCampaigns.map((c) => ({
+    id: c.id,
+    topic: c.postTopic,
+    format: c.postFormat,
+    status: c.status,
+    budgetSpent: c.budgetSpent,
+    dailyBudget: c.dailyBudget,
+    durationDays: c.durationDays,
+    startedAt: c.startedAt ? new Date(c.startedAt).toISOString().split("T")[0] : null,
+    reachTotal: c.reachTotal,
+    impressions: c.impressions,
+    followersGained: c.followersGained,
+    savesCount: c.savesCount,
+    profileVisits: c.profileVisits,
+    costPerFollower: c.costPerFollower,
+    costPerVisit: c.costPerVisit,
+    costPerSave: c.costPerSave,
+    notes: c.notes,
+  })),
+  null,
+  2
+)}
 ` : `
-ATENÇÃO: Não existem experimentos A/B ativos pendentes no momento. Retorne "evaluatedExperiments": [].
+Nenhum post turbinado registrado no período. Retorne "boostedCampaignsSummary": null.
 `}
 
 RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
@@ -403,6 +470,38 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       "baseVisualPrompt": "Dark terminal VS Code mockup with red disk full warning transforming to glowing cyan cleaned storage metrics"
     }
   ],
+  "boostedCampaignsSummary": {
+    "totalInvested": 6.00,
+    "campaignsCount": 1,
+    "activeCampaignsCount": 1,
+    "totalFollowersGained": 2,
+    "totalProfileVisits": 3,
+    "totalSaves": 2,
+    "averageCps": 3.00,
+    "averageCpv": 2.00,
+    "executiveDiagnosis": "A turbinada inicial validou o público dev com bom CPS. Recomendado manter investimento controlado.",
+    "campaigns": [
+      {
+        "postTopic": "Pare de usar try/catch para tudo: O novo operador do ECMAScript (?=)",
+        "postFormat": "REEL_SCRIPT",
+        "startedAt": "2026-08-20",
+        "status": "ACTIVE",
+        "budgetSpent": 6.00,
+        "reachTotal": 142,
+        "followersGained": 2,
+        "savesCount": 2,
+        "profileVisits": 3,
+        "costPerFollower": 3.00,
+        "costPerVisit": 2.00,
+        "costPerSave": 3.00,
+        "aiDiagnosis": "Boa conversão de novos seguidores com baixo investimento.",
+        "recommendations": [
+          "Manter a campanha ativa por mais 2 dias",
+          "Testar segmento de desenvolvedores TypeScript"
+        ]
+      }
+    ]
+  },
   "individualPostsBreakdown": [
     {
       "postTopic": "Pare de usar SELECT * em produção",
@@ -468,6 +567,66 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
     const reportId = `report-${Date.now()}`;
     const calculatedFollowersGained = realFollowersGained > 0 ? realFollowersGained : (typeof aiAudit.followersGained === "number" ? aiAudit.followersGained : 0);
 
+    // Mapeia o sumário de posts turbinados
+    let boostedSummary: BoostedCampaignsAudit | undefined = undefined;
+    if (boostCampaigns.length > 0) {
+      let totInvested = 0;
+      let totFollowers = 0;
+      let totVisits = 0;
+      let totSaves = 0;
+      let activeCount = 0;
+
+      for (const c of boostCampaigns) {
+        totInvested += c.budgetSpent || 0;
+        totFollowers += c.followersGained || 0;
+        totVisits += c.profileVisits || 0;
+        totSaves += c.savesCount || 0;
+        if (c.status === "ACTIVE") activeCount++;
+      }
+
+      const avgCps = totFollowers > 0 ? Number((totInvested / totFollowers).toFixed(2)) : 0;
+      const avgCpv = totVisits > 0 ? Number((totInvested / totVisits).toFixed(2)) : 0;
+
+      const aiBoostSummary = aiAudit?.boostedCampaignsSummary;
+
+      boostedSummary = {
+        totalInvested: Number(totInvested.toFixed(2)),
+        campaignsCount: boostCampaigns.length,
+        activeCampaignsCount: activeCount,
+        totalFollowersGained: totFollowers,
+        totalProfileVisits: totVisits,
+        totalSaves: totSaves,
+        averageCps: avgCps,
+        averageCpv: avgCpv,
+        executiveDiagnosis:
+          aiBoostSummary?.executiveDiagnosis ||
+          (totInvested > 0
+            ? `Investimento de R$ ${totInvested.toFixed(2)} gerou +${totFollowers} seguidores qualificados e +${totVisits} visitas ao perfil com CPS médio de R$ ${avgCps.toFixed(2)}.`
+            : "Nenhum investimento pago ativo no momento."),
+        campaigns: boostCampaigns.map((c) => {
+          const aiCamp = aiBoostSummary?.campaigns?.find((ac: any) => ac.postTopic && c.postTopic.toLowerCase().includes(ac.postTopic.toLowerCase().slice(0, 20)));
+          return {
+            id: c.id,
+            postId: c.postId,
+            postTopic: c.postTopic,
+            postFormat: c.postFormat || "CAROUSEL",
+            startedAt: c.startedAt ? c.startedAt.toISOString() : null,
+            status: c.status || "ACTIVE",
+            budgetSpent: c.budgetSpent || 0,
+            reachTotal: c.reachTotal || 0,
+            followersGained: c.followersGained || 0,
+            savesCount: c.savesCount || 0,
+            profileVisits: c.profileVisits || 0,
+            costPerFollower: c.costPerFollower || 0,
+            costPerVisit: c.costPerVisit || 0,
+            costPerSave: c.costPerSave || 0,
+            aiDiagnosis: aiCamp?.aiDiagnosis || c.aiDiagnosis || "Desempenho estável no público programador.",
+            recommendations: aiCamp?.recommendations || (Array.isArray(c.recommendations) ? (c.recommendations as any) : ["Manter veiculação controlada"]),
+          };
+        }),
+      };
+    }
+
     const report: AnalyticsReport = {
       id: reportId,
       createdAt: now.toISOString(),
@@ -488,6 +647,7 @@ RESPONDA SOMENTE COM ESTE JSON VÁLIDO:
       recommendedTopicsForNextCycle: aiAudit.recommendedTopicsForNextCycle || [],
       individualPostsBreakdown: aiAudit.individualPostsBreakdown || [],
       selfCorrectionsApplied: aiAudit.selfCorrectionsApplied || [],
+      boostedCampaignsSummary: boostedSummary,
     };
 
     // 6. Gravação no PostgreSQL via Prisma

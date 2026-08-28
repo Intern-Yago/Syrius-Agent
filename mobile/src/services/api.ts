@@ -1,16 +1,31 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import { ScheduleSlot, Post, AgencyMessage } from "../types";
 
 const SERVER_HOST_KEY = "@syrius_server_host";
-// Padrão: Porta 3001 no localhost/emulador ou IP local
-const DEFAULT_HOST = "http://10.0.2.2:3001"; // 10.0.2.2 para emulador Android, ou IP local para celular real
+
+export function getAutoDetectedHost(): string {
+  try {
+    const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoClient?.hostUri || "";
+    if (hostUri) {
+      const ip = hostUri.split(":")[0];
+      if (ip && ip !== "localhost" && ip !== "127.0.0.1") {
+        return `http://${ip}:3001`;
+      }
+    }
+  } catch {}
+  return "http://192.168.0.104:3001";
+}
 
 export async function getServerHost(): Promise<string> {
   try {
     const saved = await AsyncStorage.getItem(SERVER_HOST_KEY);
-    return saved || DEFAULT_HOST;
+    if (saved && saved !== "http://10.0.2.2:3001" && saved !== "http://localhost:3001") {
+      return saved;
+    }
+    return getAutoDetectedHost();
   } catch {
-    return DEFAULT_HOST;
+    return getAutoDetectedHost();
   }
 }
 
@@ -121,6 +136,79 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     });
+  },
+
+  // Execução do Pipeline Autônomo Completo
+  runPipeline: async () => {
+    return request("/api/pipeline/run", {
+      method: "POST",
+    });
+  },
+
+  // Dashboard Stats
+  getDashboardStats: async () => {
+    return request("/api/dashboard");
+  },
+
+  // Temas em Alta (Trending)
+  getTrending: async () => {
+    return request("/api/trending");
+  },
+
+  scanTrending: async () => {
+    return request("/api/trending/scan", {
+      method: "POST",
+    });
+  },
+
+  produceTrendingPost: async (params: { topic: string; format?: string; category?: string }) => {
+    return request("/api/trending/produce", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+
+  // Interações da Comunidade
+  getInteractions: async () => {
+    return request("/api/interactions");
+  },
+
+  // Central de Testes & Health Check
+  getTestsHealth: async () => {
+    return request("/api/tests/health");
+  },
+
+  // Gestor de Tráfego AI (Apolo)
+  getAdsOpportunities: async () => {
+    return request("/api/ads/opportunities");
+  },
+
+  getAdsBudget: async () => {
+    return request("/api/ads/budget");
+  },
+
+  dispatchBoost: async (params: { postId: string; dailyBudget?: number; durationDays?: number }) => {
+    return request("/api/ads/boost", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+
+  // Atividades & Monitor
+  getActivities: async () => {
+    return request("/api/activities");
+  },
+
+  // Demo Publish
+  publishDemoPost: async () => {
+    return request("/api/posts/demo-publish", {
+      method: "POST",
+    });
+  },
+
+  // Analytics Resumo
+  getAnalyticsSummary: async () => {
+    return request("/api/analytics");
   },
 
   // Mídia

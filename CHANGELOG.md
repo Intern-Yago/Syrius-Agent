@@ -4,6 +4,49 @@ Todas as alterações notáveis, melhorias de arquitetura, correções de bugs e
 
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [2.4.1] — 2026-08-28
+
+### 🚀 Novas Funcionalidades & Arquitetura
+
+- **Screenplay & Motion Storyboard Director AI (Agente 05b — Reels Video Engine)**:
+  - **Decupagem Cinematográfica Contextual**: O Diretor de Cena analisa o roteiro e decupa automaticamente entre 6 formatos (`ALT_TAB_SWITCHING`, `TECH_NEWS`, `BROWSER_MOCKUP`, `TERMINAL_CLI`, `CODE_EDITOR`, `OUTPUT_SHOWCASE`).
+  - **Regra de Ouro de Continuidade de Tutoriais**: Vídeos de refatoração pura e Clean Code (ex: Try-Catch, Testes) mantêm 100% o layout `CODE_EDITOR` no VS Code sem cortes de tela.
+  - **Simulação Realista de Navegador & Alt-Tab Dinâmico**: Abas que realmente trocam o corpo da página entre ChatGPT, Stack Overflow e GitHub Docs com indicador de perda de contexto e cards de chat.
+  - **Wallpaper Aurora Studio & Gráficos Vetoriais**: Substituição do fundo rígido por degradê suave navy/slate, dot-grid moderno e ícones vetoriais sem glifos quebrados.
+
+- **Nova Assinatura Oficial Syrius Tech (Dynamic Outro Engine)**:
+  - Card de encerramento com badge `⚡ VEREDITO SYRIUS TECH`, 2 KPIs contextuais do tema, checklist dinâmico com ícones `✓` e botão oficial de CTA (`🔖 Salve este Reel • Siga @syrius_tech`).
+
+- **Correção Fonética do Sintetizador de Voz**:
+  - Normalizador fonético que converte `@syrius_tech` para `"Sírius Ték"`, `try/catch` para `"try catch"` e `CLI` para `"C-L-I"`, eliminando pronúncias soletradas e truncadas.
+
+- **Páginas Oficiais de Conformidade Meta (Live Mode & App Review)**:
+  - Criação e publicação de `privacy-policy.html`, `terms-of-service.html` e `data-deletion.html` em conformidade com a LGPD e Meta Platform Policies em `https://intern-yago.github.io/Syrius-Agent/`.
+  - Links integrados no rodapé da landing page oficial.
+
+---
+
+## [2.4.0] — 2026-08-27
+
+### 🚀 Novas Funcionalidades & Arquitetura
+
+- **Gestor de Tráfego AI (Apolo) & Meta Marketing API Oficial (`act_2163467940868819`)**:
+  - **Sincronização Direta da Carteira de Anúncios**: Leitura em tempo real do saldo pré-pago disponível (Pix/Carteira) e histórico de despesas direto dos servidores da Meta via endpoint `/v20.0/act_2163467940868819`.
+  - **Marco Zero Estabelecido**: Limpeza de métricas residuais de contas antigas e início limpo com controle exato de progresso de consumo e ritmo diário de investimento.
+  - **Motor de Turbinada Autônoma em 2 Modos**:
+    - **Disparo Instantâneo (`Turbinar Agora com Apolo`)**: Lançamento em 1 clique que monta o público-alvo de devs (20-44 anos, Brasil / Top Estados Tech, Feed + Reels), define o objetivo para Mais Visitas ao Perfil e dispara a campanha na Meta Marketing API na mesma hora.
+    - **Agendamento pelo Radar de Oportunidades**: O botão no card agenda a turbinada para a janela de pico de programadores online (ex: Terça-feira 18:30 / Domingo 19:30), acionando a veiculação no momento ideal.
+  - **Filtro Rigoroso de Oportunidades**: O Radar avalia exclusivamente publicações que já foram postadas no Instagram (`status: "PUBLISHED"`).
+  - **Inteligência Anti-Canibalização**: Detecção de campanhas ativas com orientação estratégica que desaconselha paralelismo quando a verba for econômica para concentrar toda a tração.
+
+- **Syrius Mobile App (Expo SDK 54 & Bridgeless Architecture)**:
+  - **Upgrade para Expo SDK 54**: Suporte nativo ao React 19.1.0 e React Native 0.81.5 com novo engine Hermes e arquitetura Bridgeless.
+  - **Auto-Descoberta de Host Local**: Identificação automática do IP do computador na rede local (`http://192.168.0.104:3001`), eliminando erros de conexão `Network request failed`.
+  - **Layout Seguro & Gestão de Teclado**: Insets seguros dinâmicos no notch e barra inferior, com listener de teclado e redimensionamento nativo (`"softwareKeyboardLayoutMode": "resize"`), mantendo o campo de digitação sempre visível.
+  - **Limpeza de Avisos**: Chaves compostas únicas para o chat da Estelar e supressão limpa de logs de desenvolvimento.
+
+---
+
 ## [2.3.0] — 2026-08-24
 
 ### 🚀 Novas Funcionalidades & Melhorias de Arquitetura

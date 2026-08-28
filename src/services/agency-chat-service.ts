@@ -267,6 +267,7 @@ export async function processAgencyMessage(
     { day: "Quarta-feira", dayIdx: 3, time: "19:00", format: "SINGLE_IMAGE", label: "Quarta de Clean Code & Boas Práticas" },
     { day: "Quinta-feira", dayIdx: 4, time: "18:00", format: "REEL_SCRIPT", label: "Quinta de Lançamentos & Notícias Tech" },
     { day: "Sexta-feira", dayIdx: 5, time: "17:30", format: "CAROUSEL", label: "Sexta de Engenharia de Software" },
+    { day: "Sábado", dayIdx: 6, time: "15:00", format: "REEL_SCRIPT", label: "Sábado de Side-Projects, IA & Infraestrutura" },
     { day: "Domingo", dayIdx: 0, time: "19:30", format: "CAROUSEL", label: "Domingo de Planejamento & Carreira Dev" },
   ];
 
@@ -384,8 +385,9 @@ COMO VOCÊ DEVE SE COMPORTAR (REGRAS ESTRATÉGICAS):
 
 3. **QUANDO O CRIADOR APROVAR UM TEMA ESPECÍFICO** (ex: "gostei da opção 2", "vamos na primeira", "pode fazer essa", "quero o tema de IA"):
    - Defina "actionTaken": "SCHEDULED_FOR_GRADE" ou "DISPATCHED_TO_PIPELINE".
-   - Aloque a pauta no próximo slot livre disponível e preencha "dispatchedPauta".
-   - Responda confirmando o dia/horário escolhido.
+   - **REGRA CRÍTICA DE CONTINUIDADE DO DIA/HORÁRIO**: Se na sua mensagem anterior ou na conversa recente você propôs ou sugeriu um dia e horário específico (ex: "sábado às 15:00", "este sábado", "hoje às 19:00"), você DEVE OBRIGATORIAMENTE alocar a pauta no dia e horário combinado ("scheduledDay": "Sábado", "scheduledTime": "15:00" na Semana Atual se ainda não passou) e NUNCA jogar para outra semana ou dia sem motivo!
+   - Caso contrário, aloque a pauta no próximo slot livre disponível e preencha "dispatchedPauta".
+   - Responda confirmando o dia/horário exato escolhido.
 
 4. **QUANDO O CRIADOR NÃO QUISER ESSES E SUGERIR OUTRO TEMA / TÍTULO** (ex: "não quero nenhum desses, quero o [título]", "prefiro falar sobre X"):
    - Analise o cenário geral (Radar + Analytics):

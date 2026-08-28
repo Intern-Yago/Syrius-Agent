@@ -13,7 +13,11 @@ import { getServerHost, setServerHost, api } from "../services/api";
 import { colors } from "../theme/colors";
 import { Server, Wifi, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react-native";
 
-export function SettingsScreen() {
+interface SettingsScreenProps {
+  onOpenMenu?: () => void;
+}
+
+export function SettingsScreen({ onOpenMenu }: SettingsScreenProps) {
   const [host, setHost] = useState<string>("");
   const [testing, setTesting] = useState<boolean>(false);
   const [status, setStatus] = useState<"connected" | "disconnected" | "checking">("checking");
@@ -66,6 +70,7 @@ export function SettingsScreen() {
         title="Configurações de Rede"
         subtitle="Conexão com o Syrius Desktop API Gateway"
         badge="GATEWAY DE REDE"
+        onOpenMenu={onOpenMenu}
       />
 
       <View style={styles.content}>

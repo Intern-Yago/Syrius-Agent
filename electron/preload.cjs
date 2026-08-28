@@ -46,6 +46,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   addTopicToSchedule: (payload) => ipcRenderer.invoke("schedule:add-topic", payload),
   getPendingRecommendations: () => ipcRenderer.invoke("schedule:get-pending-recommendations"),
   clearPendingRecommendations: () => ipcRenderer.invoke("schedule:clear-pending-recommendations"),
+  onScheduleUpdate: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on("schedule:update", listener);
+    return () => ipcRenderer.removeListener("schedule:update", listener);
+  },
 
   // Configurações, Perfil Dinâmico e E-mail
   getSettings: () => ipcRenderer.invoke("settings:get"),
@@ -156,4 +161,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("agency:status-change", listener);
     return () => ipcRenderer.removeListener("agency:status-change", listener);
   },
+
+  // Gestor de Tráfego Pago & Propaganda (Ads Manager)
+  getAdsBudgetSummary: () => ipcRenderer.invoke("ads:get-budget-summary"),
+  updateAdsBudgetConfig: (data) => ipcRenderer.invoke("ads:update-budget-config", data),
+  getAdsCampaigns: () => ipcRenderer.invoke("ads:list-campaigns"),
+  saveAdsCampaign: (campaign) => ipcRenderer.invoke("ads:save-campaign", campaign),
+  deleteAdsCampaign: (id) => ipcRenderer.invoke("ads:delete-campaign", id),
+  updateAdsCampaignStatus: (payload) => ipcRenderer.invoke("ads:update-campaign-status", payload),
+  analyzeAdsPostMortem: (data) => ipcRenderer.invoke("ads:analyze-postmortem", data),
+  getAdsOpportunities: (forceRefresh) => ipcRenderer.invoke("ads:analyze-opportunities", forceRefresh),
+  analyzePostForBoost: (postId) => ipcRenderer.invoke("ads:analyze-post-candidate", postId),
+  generateAdsAudience: (payload) => ipcRenderer.invoke("ads:generate-audience", payload),
+  calculateAdsProjection: (params) => ipcRenderer.invoke("ads:calculate-projection", params),
+  chatAdsConsultant: (payload) => ipcRenderer.invoke("ads:chat-consultant", payload),
+  getAdsAudiences: () => ipcRenderer.invoke("ads:list-audiences"),
+  saveAdsAudience: (preset) => ipcRenderer.invoke("ads:save-audience", preset),
+  deleteAdsAudience: (id) => ipcRenderer.invoke("ads:delete-audience", id),
+  syncAdsInstagramInsights: (postId) => ipcRenderer.invoke("ads:sync-instagram-insights", postId),
+  dispatchAutonomousBoost: (params) => ipcRenderer.invoke("ads:dispatch-autonomous-boost", params),
+  scheduleAutonomousBoost: (params) => ipcRenderer.invoke("ads:schedule-autonomous-boost", params),
 });

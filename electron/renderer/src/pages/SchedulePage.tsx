@@ -46,7 +46,7 @@ export function SchedulePage({
   onOpenExperiments,
 }: SchedulePageProps) {
   const { showConfirm, showAlert, toast } = useModal();
-  const { registerOrUpdateActivity } = useActivities();
+  const { registerOrUpdateActivity, isPostPublishing, activities } = useActivities();
   const [slots, setSlots] = useState<ScheduleSlot[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +88,22 @@ export function SchedulePage({
         (p.slotId && p.slotId === slot.id) ||
         (p.topic && slot.topic && p.topic.trim().toLowerCase() === slot.topic.trim().toLowerCase())
     );
+  }
+
+  function isSlotPublishing(slot: ScheduleSlot): boolean {
+    if (publishingDirectId === slot.id) return true;
+    const match = getMatchingPost(slot);
+    const postId = slot.postId || match?.id;
+    if (postId && isPostPublishing?.(postId)) return true;
+    const isActivityRunning = activities.some(
+      (a) =>
+        a.type === "publishing" &&
+        a.status === "running" &&
+        (a.id === `publish-${postId}` ||
+          a.subtitle === slot.topic ||
+          a.subtitle === match?.topic)
+    );
+    return isActivityRunning;
   }
 
   const isWeekCompleted =
@@ -139,6 +155,73 @@ export function SchedulePage({
 
   useEffect(() => {
     loadSchedule(selectedWeekOffset);
+  }, [selectedWeekOffset]);
+
+  // Sincronização em tempo real via IPC e atividades
+  useEffect(() => {
+    let unsubs: Array<(() => void) | undefined> = [];
+
+    if (window.electronAPI?.onScheduleUpdate) {
+      unsubs.push(
+        window.electronAPI.onScheduleUpdate(() => {
+          loadSchedule(selectedWeekOffset);
+        })
+      );
+    }
+
+    if (window.electronAPI?.onPublishProgress) {
+      unsubs.push(
+        window.electronAPI.onPublishProgress((task: any) => {
+          if (task?.status === "completed" || task?.status === "error") {
+            loadSchedule(selectedWeekOffset);
+          }
+        })
+      );
+    }
+
+    if (window.electronAPI?.onSchedulePublishAlert) {
+      unsubs.push(
+        window.electronAPI.onSchedulePublishAlert(() => {
+          loadSchedule(selectedWeekOffset);
+        })
+      );
+    }
+
+    return () => {
+      unsubs.forEach((u) => u?.());
+    };
+  }, [selectedWeekOffset]);
+
+  // Reage automaticamente quando uma atividade de publicação é concluída
+  useEffect(() => {
+    const hasCompletedPublish = activities.some(
+      (a) => a.type === "publishing" && a.status === "completed"
+    );
+    if (hasCompletedPublish) {
+      loadSchedule(selectedWeekOffset);
+    }
+  }, [activities, selectedWeekOffset]);
+
+  // Polling suave em background a cada 4 segundos para manter o cronograma 100% atualizado
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        if (window.electronAPI?.getSchedule) {
+          const freshSlots = await window.electronAPI.getSchedule(selectedWeekOffset);
+          if (freshSlots && Array.isArray(freshSlots)) {
+            setSlots(freshSlots);
+          }
+        }
+        if (window.electronAPI?.getPosts) {
+          const freshPosts = await window.electronAPI.getPosts();
+          if (freshPosts && Array.isArray(freshPosts)) {
+            setPosts(freshPosts);
+          }
+        }
+      } catch {}
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, [selectedWeekOffset]);
 
   async function handleToggleAutoplay() {
@@ -1414,33 +1497,60 @@ export function SchedulePage({
                       {timingInfo?.isOverdue ? (
                         <button
                           className="btn-slot-produce"
-                          style={{ flex: 1, background: "#ea580c", borderColor: "#f97316", color: "#fff", fontWeight: "700", fontSize: "11px" }}
+                          style={{
+                            flex: 1,
+                            background: "#ea580c",
+                            borderColor: "#f97316",
+                            color: "#fff",
+                            fontWeight: "700",
+                            fontSize: "11px",
+                            opacity: isSlotPublishing(slot) ? 0.7 : 1,
+                            cursor: isSlotPublishing(slot) ? "not-allowed" : "pointer",
+                          }}
                           onClick={() => handleDirectPublish(slot)}
-                          disabled={publishingDirectId === slot.id}
+                          disabled={isSlotPublishing(slot)}
                           title="Post pronto e em atraso - publicar imediatamente no Instagram"
                         >
-                          {publishingDirectId === slot.id ? <IconLoader size={12} /> : null}
-                          <span>{publishingDirectId === slot.id ? "Publicando..." : "Publicar Agora"}</span>
+                          {isSlotPublishing(slot) ? <IconLoader size={12} className="spin" /> : null}
+                          <span>{isSlotPublishing(slot) ? "Publicando..." : "Publicar Agora"}</span>
                         </button>
                       ) : timingInfo?.isDueNow ? (
                         <button
                           className="btn-slot-produce"
-                          style={{ flex: 1, background: "#0ea5e9", borderColor: "#38bdf8", color: "#fff", fontWeight: "700", fontSize: "11px" }}
+                          style={{
+                            flex: 1,
+                            background: "#0ea5e9",
+                            borderColor: "#38bdf8",
+                            color: "#fff",
+                            fontWeight: "700",
+                            fontSize: "11px",
+                            opacity: isSlotPublishing(slot) ? 0.7 : 1,
+                            cursor: isSlotPublishing(slot) ? "not-allowed" : "pointer",
+                          }}
                           onClick={() => handleDirectPublish(slot)}
-                          disabled={publishingDirectId === slot.id}
+                          disabled={isSlotPublishing(slot)}
                           title="Horário de publicação atingido - publicar agora no Instagram"
                         >
-                          {publishingDirectId === slot.id ? <IconLoader size={12} /> : null}
-                          <span>{publishingDirectId === slot.id ? "Publicando..." : "Publicar Agora"}</span>
+                          {isSlotPublishing(slot) ? <IconLoader size={12} className="spin" /> : null}
+                          <span>{isSlotPublishing(slot) ? "Publicando..." : "Publicar Agora"}</span>
                         </button>
                       ) : (
                         <button
                           className="btn-slot-produce"
-                          style={{ flex: 1, background: "#0ea5e9", borderColor: "#38bdf8", fontSize: "11px" }}
+                          style={{
+                            flex: 1,
+                            background: "#0ea5e9",
+                            borderColor: "#38bdf8",
+                            fontSize: "11px",
+                            opacity: isSlotPublishing(slot) ? 0.7 : 1,
+                            cursor: isSlotPublishing(slot) ? "not-allowed" : "pointer",
+                          }}
                           onClick={() => setEarlyPublishSlot(slot)}
+                          disabled={isSlotPublishing(slot)}
                           title="Publicar este post imediatamente antes do dia/horário planejado"
                         >
-                          <span>Publicar Antes</span>
+                          {isSlotPublishing(slot) ? <IconLoader size={12} className="spin" /> : null}
+                          <span>{isSlotPublishing(slot) ? "Publicando..." : "Publicar Antes"}</span>
                         </button>
                       )}
                     </div>

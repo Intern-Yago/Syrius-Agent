@@ -19,6 +19,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#09090b"
       },
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "RECORD_AUDIO",
         "INTERNET"

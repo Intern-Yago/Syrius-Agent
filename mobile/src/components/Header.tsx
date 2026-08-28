@@ -1,24 +1,45 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { colors } from "../theme/colors";
-import { Sparkles, Radio } from "lucide-react-native";
+import { Menu, Sparkles, Radio } from "lucide-react-native";
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
   badge?: string;
+  onOpenMenu?: () => void;
   onPressSettings?: () => void;
   rightAction?: React.ReactNode;
 }
 
-export function Header({ title, subtitle, badge = "SYRIUS AGENT", rightAction }: HeaderProps) {
+export function Header({
+  title,
+  subtitle,
+  badge = "SYRIUS AGENT",
+  onOpenMenu,
+  rightAction,
+}: HeaderProps) {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <View style={styles.badgeContainer}>
-          <View style={styles.badgeDot} />
-          <Text style={styles.badgeText}>{badge}</Text>
+        <View style={styles.leftGroup}>
+          {onOpenMenu && (
+            <TouchableOpacity
+              style={styles.burgerBtn}
+              onPress={onOpenMenu}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Menu size={18} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.badgeContainer}>
+            <View style={styles.badgeDot} />
+            <Text style={styles.badgeText}>{badge}</Text>
+          </View>
         </View>
+
         {rightAction}
       </View>
       <Text style={styles.title}>{title}</Text>
@@ -41,6 +62,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 6,
+  },
+  leftGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  burgerBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   badgeContainer: {
     flexDirection: "row",

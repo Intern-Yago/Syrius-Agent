@@ -232,12 +232,13 @@ export function registerAgencyChatHandlers(getMainWindow?: () => any) {
 
             // Lista de slots padrão para distribuir pautas sem colisão
             const candidateSlots = [
-              { day: "Quarta-feira", time: "19:00" },
+              { day: "Sábado", time: "15:00" },
               { day: "Quinta-feira", time: "18:00" },
               { day: "Sexta-feira", time: "17:30" },
               { day: "Domingo", time: "19:30" },
               { day: "Segunda-feira", time: "18:30" },
               { day: "Terça-feira", time: "18:30" },
+              { day: "Quarta-feira", time: "19:00" },
             ];
 
             const occupiedWeekSlots = await prisma.editorialScheduleSlot.findMany({

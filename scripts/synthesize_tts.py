@@ -33,6 +33,21 @@ def normalize_voice(requested_voice: str) -> str:
     
     return "pt-BR-FranciscaNeural"
 
+import re
+
+def phonetic_clean_for_tts(text: str) -> str:
+    # Corrige pronúncia de @syrius_tech para o português neural não soletrar estranho
+    text = re.sub(r"@syrius_tech\b", "Sírius Ték", text, flags=re.IGNORECASE)
+    text = re.sub(r"@syrius\b", "Sírius", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bsyrius\s*tech\b", "Sírius Ték", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bsyrius\b", "Sírius", text, flags=re.IGNORECASE)
+    
+    # Termos técnicos comuns para fonética natural em português
+    text = re.sub(r"\bCI/CD\b", "C-I C-D", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bCLI\b", "C-L-I", text)
+    text = re.sub(r"\btry/catch\b", "try catch", text, flags=re.IGNORECASE)
+    return text
+
 async def main():
     if len(sys.argv) < 3:
         print("Usage: python synthesize_tts.py <output_path> <voice> [text]", file=sys.stderr)
@@ -50,15 +65,18 @@ async def main():
     if not text:
         text = "Olá! Teste de síntese de voz."
 
+    # Aplica normalização fonética
+    clean_text = phonetic_clean_for_tts(text)
+
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     try:
-        communicate = edge_tts.Communicate(text, target_voice)
+        communicate = edge_tts.Communicate(clean_text, target_voice)
         await communicate.save(output_path)
         print(f"DONE:{output_path}")
     except Exception as err:
         if target_voice != "pt-BR-FranciscaNeural":
-            communicate = edge_tts.Communicate(text, "pt-BR-FranciscaNeural")
+            communicate = edge_tts.Communicate(clean_text, "pt-BR-FranciscaNeural")
             await communicate.save(output_path)
             print(f"DONE:{output_path}")
         else:

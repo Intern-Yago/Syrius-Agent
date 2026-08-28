@@ -1,6 +1,6 @@
 import { executeStructuredPrompt } from "../core/gemini.js";
 
-export type SceneLayoutType = "CODE_EDITOR" | "BROWSER_MOCKUP" | "TERMINAL_CLI" | "TECH_NEWS" | "OUTPUT_SHOWCASE";
+export type SceneLayoutType = "CODE_EDITOR" | "BROWSER_MOCKUP" | "TERMINAL_CLI" | "TECH_NEWS" | "OUTPUT_SHOWCASE" | "ALT_TAB_SWITCHING";
 
 export interface ReelsCodeScene {
   layout?: SceneLayoutType;
@@ -19,7 +19,8 @@ export interface ReelsScenesResponse {
 }
 
 /**
- * Gera 4 cenas dinâmicas (Código, Notícia, Terminal ou Navegador) para o renderizador de Reels.
+ * Agente 05b — Diretor de Storyboard & Screenplay Visual AI.
+ * Analisa semanticamente a locução falada e decupa 4 cenas visuais com ritmo cinematográfico.
  */
 export async function generateReelsCodeScenes(params: {
   topic: string;
@@ -29,94 +30,58 @@ export async function generateReelsCodeScenes(params: {
   const { topic, caption, slides } = params;
 
   const prompt = `
-Você é o Diretor Criativo e Engenheiro de Software Sênior do perfil de tecnologia @syrius_tech.
+Você é o Diretor Criativo de Storyboard e Motion Design do perfil de tecnologia @syrius_tech.
 
-Sua missão é gerar 4 CENAS VISUAIS DINÂMICAS PARA UM VÍDEO VERTICAL DE REELS (1080x1920).
+Sua missão é realizar a DECUPAGEM VISUAL DE CENA para um vídeo vertical de alta retenção no Instagram Reels (1080x1920).
+Você NÃO deve agir como um robô que repete a mesma tela estática. Você é um DIRETOR DE CINEMA TECH: cada segundo visual na tela deve ilustrar com perfeição exatamente o que a voz neural está narrando naquele momento.
 
 TEMA DO VÍDEO:
 "${topic}"
 
-ROTEIRO DAS CENAS:
-${slides.map((s) => `CENA ${s.number}: ${s.title} - ${s.text}`).join("\n")}
+ROTEIRO DA LOCUÇÃO POR CENA:
+${slides.map((s) => `CENA ${s.number} (Áudio): "${s.title} - ${s.text}"`).join("\n")}
 
-${caption ? `LEGENDA:\n${caption}` : ""}
+${caption ? `LEGENDA COMPLETA:\n${caption}` : ""}
 
-SISTEMA DE MULTI-LAYOUTS VISUAIS (ESCOLHA O LAYOUT IDEAL PARA CADA CENA):
-Você tem 5 tipos de layout disponíveis:
-1. "TERMINAL_CLI": Janela de Terminal Zsh/Warp com prompts reais ($ aider, ➜ git, $ docker), logs de progresso e diffs coloridos (OBRIGATÓRIO para temas de Terminal, CLI, DevOps, Automação e Ferramentas de IA no Terminal).
-2. "CODE_EDITOR": Janela VS Code escura com código syntax-highlighted (Ideal para tutoriais de código, refatoração e Clean Code).
-3. "BROWSER_MOCKUP": Janela de navegador com URL da ferramenta, botões e visual de WebUI/Doc/GitHub (Ideal para ferramentas web, repositórios e documentações).
-4. "TECH_NEWS": Cartão de Notícia Tech com manchete impactante, métricas grandes e destaques (Ideal para lançamentos, notícias e quebras de segurança).
-5. "OUTPUT_SHOWCASE": Tela de resultado prático gerado pela ferramenta ou benchmark comparativo.
+CATÁLOGO DE LAYOUTS VISUAIS DO DIRETOR:
+1. "ALT_TAB_SWITCHING": Interface de navegador com abas abertas alternando rapidamente (ChatGPT, Docs, StackOverflow, Editor) e alertas de perda de foco. (OBRIGATÓRIO quando a locução falar de Alt-Tab, perda de contexto, distração com navegador ou troca de janelas).
+2. "BROWSER_MOCKUP": Janela de navegador com URL da ferramenta/GitHub e documentação web (Ideal quando a voz apresentar uma ferramenta, site, repositório ou release).
+3. "TERMINAL_CLI": Janela de Terminal Zsh/Warp moderna com prompts ($ aider, $ claude, ➜ git), logs e diffs coloridos (Ideal quando a voz falar de comandos, execução rápida, ferramentas CLI ou automação).
+4. "CODE_EDITOR": Janela de editor VS Code com código syntax-highlighted e números de linha (Ideal quando a voz falar de código real, sintaxe, refatoração e testes).
+5. "TECH_NEWS": Cartão de Notícia Tech com manchete impactante e alertas de quebra de paradigma (Ideal para o gancho inicial ou novidades bombásticas).
+6. "OUTPUT_SHOWCASE": Tela de resultado prático gerado pela ferramenta, benchmark comparativo, tempo economizado e veredito sênior com CTA (Ideal para o fechamento da Cena 4).
 
-REGRAS DE CONTEÚDO PARA TERMINAL_CLI:
-- Use prompts realistas: linhas começando com "$ ", "➜ ", "❯ " ou "[AI] ".
-- Mostre comandos de ferramentas reais como Aider, Warp, Ollama, Docker, Copilot CLI, K8s, Turborepo.
-- Mostre diffs com "+ " (adição) e "- " (remoção) ou mensagens de sucesso "[✓] ".
-- Não use emojis nas linhas de código nem nos títulos.
-- Cada linha de texto/código DEVE TER NO MÁXIMO 40 CARACTERES.
-- Cada cena deve ter entre 4 e 7 linhas informativas ou de código.
+DIRETRIZES DO DIRETOR DE CENA:
+- Faça o CASAMENTO PERFEITO entre o que a voz está dizendo e o que os olhos estão vendo:
+  * Exemplo: Se o áudio fala "Você perde tempo dando Alt-Tab pro ChatGPT" -> Cena 1 DEVE SER "ALT_TAB_SWITCHING" com badge "CONTEXT SWITCHING" e alerta visual de perda de foco.
+  * Se o áudio em seguida diz "Com essa ferramenta de IA direto no terminal..." -> Cena 2 DEVE TRANSICIONAR para "TERMINAL_CLI" mostrando o prompt $ rodando sem sair da IDE.
+  * Se o áudio diz "Ela refatora sua função e roda os testes..." -> Cena 3 DEVE TRANSICIONAR para "CODE_EDITOR" ou "TERMINAL_CLI" com diffs verdes/vermelhos.
+  * Se o áudio encerra com "Você economiza 2h por dia, salve pra testar..." -> Cena 4 DEVE SER "OUTPUT_SHOWCASE" com "+2h/dia economizadas" e CTA.
+- Cada linha de código ou texto DEVE TER NO MÁXIMO 42 CARACTERES.
+- Não use emojis nos blocos de código.
+- REGRA OBRIGATÓRIA PARA OUTPUT_SHOWCASE (Última Cena / Veredito):
+  * "headline": Deve ser um resumo impactante ESPECÍFICO DO TEMA (ex: "Node.js 22 LTS: O que muda", "Clean Code: Zero Try/Catch Aninhados").
+  * "metrics": OBRIGATÓRIO conter 2 cards de métricas/destaques reais do tema (ex: [{"label": "VERSÃO", "value": "v22 LTS"}, {"label": "SUPORTE TS", "value": "100% Nativo"}] ou [{"label": "LEGIBILIDADE", "value": "+85%"}, {"label": "LINHAS DE CÓDIGO", "value": "-40%"}]).
+  * "lines": OBRIGATÓRIO conter 3 a 4 bullet points resumindo os maiores aprendizados ou takeaways reais do tema.
 
 RETORNE EXCLUSIVAMENTE NO FORMATO JSON ABAIXO:
 {
   "scenes": [
     {
-      "layout": "TECH_NEWS",
-      "badge": "LANCAMENTO OFICIAL",
-      "badge_color": "#38bdf8",
-      "header_title": "tech.news / release",
-      "headline": "Título curto e provocativo da notícia",
-      "tag": "NEWS_ALERT",
+      "layout": "TECH_NEWS | ALT_TAB_SWITCHING | TERMINAL_CLI | CODE_EDITOR | BROWSER_MOCKUP | OUTPUT_SHOWCASE",
+      "badge": "BREAKING UPDATE | VEREDITO SYRIUS TECH | GUIA PRÁTICO",
+      "badge_color": "#c084fc",
+      "header_title": "título curto do cabeçalho",
+      "headline": "Manchete impactante específica do tema",
+      "tag": "VERDICT",
       "metrics": [
-        { "label": "Impacto", "value": "70% mais rapido" }
+        { "label": "DESTAQUE 1", "value": "v22.0 LTS" },
+        { "label": "DESTAQUE 2", "value": "100% Nativo" }
       ],
       "lines": [
-        "Lancamento oficial da nova release",
-        "Reducao drastica de latencia",
-        "Suporte nativo a novas arquiteturas",
-        "Disponivel para todos os desenvolvedores"
-      ]
-    },
-    {
-      "layout": "BROWSER_MOCKUP",
-      "badge": "ARQUITETURA E DOC",
-      "badge_color": "#a855f7",
-      "header_title": "https://github.com/projeto/repo",
-      "headline": "Por debaixo dos panos",
-      "tag": "DOCS",
-      "lines": [
-        "// Documentacao Oficial",
-        "Engine reconstruida do zero",
-        "Execucao assincrona com zero-copy",
-        "Compatibilidade total com TypeScript"
-      ]
-    },
-    {
-      "layout": "TERMINAL_CLI",
-      "badge": "INSTALACAO RAPIDA",
-      "badge_color": "#10b981",
-      "header_title": "bash - dev terminal",
-      "headline": "Como rodar hoje",
-      "tag": "CLI_DEMO",
-      "lines": [
-        "$ npx create-turbo-app@latest",
-        "[+] Download de pacotes concluido",
-        "[+] Build concluido em 420ms",
-        "[✓] Servidor rodando em localhost:3000"
-      ]
-    },
-    {
-      "layout": "OUTPUT_SHOWCASE",
-      "badge": "VEREDITO SENIOR",
-      "badge_color": "#38bdf8",
-      "header_title": "verdict.log",
-      "headline": "Conclusao tecnica",
-      "tag": "VERDICT",
-      "lines": [
-        "Vale a pena migrar em projetos novos",
-        "Performance comprovada em producao",
-        "Link oficial do repo na legenda",
-        "Salve este Reel para testar depois"
+        "Primeiro ponto chave do aprendizado",
+        "Segundo ponto chave do aprendizado",
+        "Terceiro ponto chave do aprendizado"
       ]
     }
   ]

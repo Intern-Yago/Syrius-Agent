@@ -11,17 +11,42 @@ export interface PublishResult {
   error?: string;
 }
 
+let cachedInstagramAccountId = "17841448657491982";
+
+export async function getInstagramAccountId(): Promise<string> {
+  if (cachedInstagramAccountId) return cachedInstagramAccountId;
+  try {
+    const token = env.INSTAGRAM_ACCESS_TOKEN;
+    if (token) {
+      const res = await fetch(`https://graph.facebook.com/${env.INSTAGRAM_API_VERSION}/me/accounts?fields=instagram_business_account{id}&access_token=${token}`);
+      const data: any = await res.json();
+      const igId = data?.data?.[0]?.instagram_business_account?.id;
+      if (igId) {
+        cachedInstagramAccountId = igId;
+        return igId;
+      }
+    }
+  } catch {}
+  return "17841448657491982";
+}
+
 async function metaRequest<T>(endpoint: string, method = "POST", params: Record<string, string> = {}): Promise<T> {
   const token = env.INSTAGRAM_ACCESS_TOKEN;
   if (!token) {
     throw new Error("INSTAGRAM_ACCESS_TOKEN não configurado no .env");
   }
 
+  // Resolve /me/ para o ID oficial da conta do Instagram (@syrius_tech)
+  const igAccountId = await getInstagramAccountId();
+  const resolvedEndpoint = endpoint.startsWith("/me/")
+    ? endpoint.replace(/^\/me\//, `/${igAccountId}/`)
+    : endpoint;
+
   let url: string;
   let options: RequestInit;
 
   if (method.toUpperCase() === "POST") {
-    url = `https://graph.instagram.com/${env.INSTAGRAM_API_VERSION}${endpoint}`;
+    url = `https://graph.facebook.com/${env.INSTAGRAM_API_VERSION}${resolvedEndpoint}`;
     const bodyParams = new URLSearchParams({
       ...params,
       access_token: token,
@@ -38,7 +63,7 @@ async function metaRequest<T>(endpoint: string, method = "POST", params: Record<
       ...params,
       access_token: token,
     });
-    url = `https://graph.instagram.com/${env.INSTAGRAM_API_VERSION}${endpoint}?${query.toString()}`;
+    url = `https://graph.facebook.com/${env.INSTAGRAM_API_VERSION}${resolvedEndpoint}?${query.toString()}`;
     options = {
       method: "GET",
     };
@@ -537,47 +562,75 @@ export async function deleteInstagramMedia(mediaId: string): Promise<{ success: 
 }
 
 /**
- * Roteador unificado de publicação baseado no formato do post
+ * Trava em memória para impedir publicações concorrentes duplicadas do mesmo post
+ */
+const publishingLocks = new Set<string>();
+
+/**
+ * Roteador unificado de publicação baseado no formato do post com trava anti-duplicação
  */
 export async function publishPost(
   postId: string,
   onProgress?: PublishProgressCallback,
   options?: { deletePrevious?: boolean }
 ): Promise<PublishResult> {
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    include: { slides: { select: { id: true } } },
-  });
-
-  if (!post) throw new Error(`Post ID ${postId} não encontrado.`);
-
-  if (options?.deletePrevious && post.instagramMediaId) {
-    onProgress?.("Excluindo publicação anterior no Instagram...", 5);
-    await deleteInstagramMedia(post.instagramMediaId);
+  if (publishingLocks.has(postId)) {
+    console.warn(`[Publisher Mutex] Publicação do post ${postId} já está em andamento. Rejeitando requisição concorrente.`);
+    return {
+      success: false,
+      error: "Este post já está sendo publicado no momento. Aguarde a finalização.",
+    };
   }
 
-  const format = (post.format || "").toUpperCase();
+  publishingLocks.add(postId);
 
-  // Reels de Vídeo
-  if (format === "REEL_SCRIPT" || format === "REEL" || format === "REELS") {
-    return publishReelsVideo(postId, onProgress);
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: { slides: { select: { id: true } } },
+    });
+
+    if (!post) throw new Error(`Post ID ${postId} não encontrado.`);
+
+    // Se o post já está publicado no banco e não foi solicitada substituição, aborta para evitar duplicidade
+    if (post.status === "PUBLISHED" && !options?.deletePrevious) {
+      console.warn(`[Publisher] Post ${postId} já possui status PUBLISHED. Abortando nova publicação duplicada.`);
+      return {
+        success: false,
+        error: "Este post já foi publicado no Instagram anteriormente.",
+      };
+    }
+
+    if (options?.deletePrevious && post.instagramMediaId) {
+      onProgress?.("Excluindo publicação anterior no Instagram...", 5);
+      await deleteInstagramMedia(post.instagramMediaId);
+    }
+
+    const format = (post.format || "").toUpperCase();
+
+    // Reels de Vídeo
+    if (format === "REEL_SCRIPT" || format === "REEL" || format === "REELS") {
+      return await publishReelsVideo(postId, onProgress);
+    }
+
+    // Story de foto
+    if (format === "STORY_PHOTO" || format === "STORIES" || format === "STORY") {
+      return await publishStoryPhoto(postId, onProgress);
+    }
+
+    // Carrossel: se tem o formato de carrossel OU possui múltiplos slides no banco
+    if (
+      format.includes("CAROUSEL") ||
+      format.includes("CARROSSEL") ||
+      format.includes("ALBUM") ||
+      post.slides.length > 1
+    ) {
+      return await publishCarousel(postId, onProgress);
+    }
+
+    // Padrão: Post Solo (SINGLE_IMAGE)
+    return await publishSingleImage(postId, onProgress);
+  } finally {
+    publishingLocks.delete(postId);
   }
-
-  // Story de foto
-  if (format === "STORY_PHOTO" || format === "STORIES" || format === "STORY") {
-    return publishStoryPhoto(postId, onProgress);
-  }
-
-  // Carrossel: se tem o formato de carrossel OU possui múltiplos slides no banco
-  if (
-    format.includes("CAROUSEL") ||
-    format.includes("CARROSSEL") ||
-    format.includes("ALBUM") ||
-    post.slides.length > 1
-  ) {
-    return publishCarousel(postId, onProgress);
-  }
-
-  // Padrão: Post Solo (SINGLE_IMAGE)
-  return publishSingleImage(postId, onProgress);
 }

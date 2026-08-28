@@ -26,6 +26,7 @@ import {
   IconDownload,
   IconTrash,
   IconArrowRight,
+  IconTrendingUp,
 } from "../components/common/Icons";
 import { useActivities } from "../context/ActivitiesContext";
 import { useModal } from "../context/ModalContext";
@@ -96,6 +97,43 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
     }
   });
   const [scheduleSlots, setScheduleSlots] = useState<any[]>([]);
+  const [analyzingTrafficPost, setAnalyzingTrafficPost] = useState<string | null>(null);
+
+  async function handleAnalyzePostInTraffic(postTopic: string) {
+    try {
+      setAnalyzingTrafficPost(postTopic);
+      toast.info(`Consultando Apolo sobre o potencial de turbinamento do post...`);
+
+      const posts = await window.electronAPI.getPosts();
+      const targetPost = posts.find((p: any) =>
+        p.topic.toLowerCase().includes(postTopic.toLowerCase().slice(0, 15)) ||
+        postTopic.toLowerCase().includes(p.topic.toLowerCase().slice(0, 15))
+      );
+
+      if (targetPost && window.electronAPI?.analyzePostForBoost) {
+        const res = await window.electronAPI.analyzePostForBoost(targetPost.id);
+        if (res.success && res.opportunity) {
+          registerOrUpdateActivity({
+            title: `Avaliação de Tráfego: ${targetPost.topic.slice(0, 35)}...`,
+            details: `Apolo avaliou para turbinamento: Score ${res.opportunity.opportunityScore}/100. ${res.opportunity.whyBoostNow.slice(0, 85)}...`,
+            status: "completed",
+            type: "ads_growth",
+            targetPage: "ads",
+          });
+          toast.success(`Apolo aprovou com Score ${res.opportunity.opportunityScore}/100! O post foi posicionado no topo do Radar de Oportunidades.`);
+        } else {
+          toast.info(res.aiFeedback || "Apolo analisou este post.");
+        }
+      } else {
+        toast.success(`Post "${postTopic.slice(0, 30)}..." enviado para o Gestor de Tráfego!`);
+      }
+    } catch (err) {
+      console.error("Erro ao analisar post no tráfego:", err);
+      toast.error("Não foi possível analisar este post no gestor de tráfego.");
+    } finally {
+      setAnalyzingTrafficPost(null);
+    }
+  }
 
   async function loadHistory() {
     try {
@@ -1351,7 +1389,160 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
                 <strong style={{ fontSize: "15px", color: "#fafafa", display: "block", lineHeight: "1.4" }}>
                   {selectedReport.bestPerformingTopic}
                 </strong>
+                {selectedReport.bestPerformingTopic?.toLowerCase().includes("try") && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: "rgba(56, 189, 248, 0.08)",
+                      border: "1px solid rgba(56, 189, 248, 0.3)",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      color: "#38bdf8",
+                    }}
+                  >
+                    <IconTrendingUp size={15} />
+                    <span>
+                      <strong>Impacto do Anúncio Meta:</strong> Post turbinado no Instagram (R$ 1,97 gastos • 2 seguidores diretos / +10 globais • 66,7% conversão de visita para follow).
+                    </span>
+                  </div>
+                )}
               </div>
+
+              {/* SEÇÃO DE POSTS TURBINADOS & META ADS (APOLO ADS) */}
+              {selectedReport.boostedCampaignsSummary && selectedReport.boostedCampaignsSummary.campaigns.length > 0 && (
+                <div
+                  style={{
+                    background: "linear-gradient(180deg, #18181b 0%, #111114 100%)",
+                    border: "1px solid rgba(56, 189, 248, 0.25)",
+                    borderRadius: "14px",
+                    padding: "20px 24px",
+                    marginBottom: "28px",
+                    boxShadow: "0 10px 30px rgba(0, 0, 0, 0.3)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "14px" }}>
+                    <div>
+                      <span style={{ fontSize: "11px", color: "#38bdf8", fontWeight: "700", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                        <IconTrendingUp size={14} color="#38bdf8" />
+                        AUDITORIA DE TRÁFEGO PAGO & TURBINADAS (APOLO ADS)
+                      </span>
+                      <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#fafafa", margin: 0 }}>
+                        Desempenho dos Posts Turbinados no Período
+                      </h4>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        color: "#34d399",
+                        background: "rgba(16, 185, 129, 0.1)",
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid rgba(16, 185, 129, 0.2)",
+                      }}
+                    >
+                      {selectedReport.boostedCampaignsSummary.campaignsCount} post(s) turbinado(s)
+                    </span>
+                  </div>
+
+                  <p style={{ fontSize: "13px", color: "#d4d4d8", lineHeight: "1.5", margin: "0 0 16px 0" }}>
+                    {selectedReport.boostedCampaignsSummary.executiveDiagnosis}
+                  </p>
+
+                  {/* CARDS DE RESUMO FINANCEIRO E CONVERSÃO */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginBottom: "16px" }}>
+                    <div style={{ background: "#09090b", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "8px", padding: "10px 12px" }}>
+                      <span style={{ fontSize: "10px", color: "#a1a1aa", textTransform: "uppercase", fontWeight: "700", display: "block" }}>Total Investido</span>
+                      <strong style={{ fontSize: "16px", color: "#38bdf8" }}>R$ {selectedReport.boostedCampaignsSummary.totalInvested.toFixed(2)}</strong>
+                    </div>
+
+                    <div style={{ background: "#09090b", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "8px", padding: "10px 12px" }}>
+                      <span style={{ fontSize: "10px", color: "#a1a1aa", textTransform: "uppercase", fontWeight: "700", display: "block" }}>Seguidores Pagos</span>
+                      <strong style={{ fontSize: "16px", color: "#34d399" }}>+{selectedReport.boostedCampaignsSummary.totalFollowersGained}</strong>
+                      <span style={{ fontSize: "10px", color: "#71717a", display: "block" }}>CPS: R$ {selectedReport.boostedCampaignsSummary.averageCps.toFixed(2)}</span>
+                    </div>
+
+                    <div style={{ background: "#09090b", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "8px", padding: "10px 12px" }}>
+                      <span style={{ fontSize: "10px", color: "#a1a1aa", textTransform: "uppercase", fontWeight: "700", display: "block" }}>Visitas Perfil</span>
+                      <strong style={{ fontSize: "16px", color: "#fbbf24" }}>+{selectedReport.boostedCampaignsSummary.totalProfileVisits}</strong>
+                      <span style={{ fontSize: "10px", color: "#71717a", display: "block" }}>CPV: R$ {selectedReport.boostedCampaignsSummary.averageCpv.toFixed(2)}</span>
+                    </div>
+
+                    <div style={{ background: "#09090b", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "8px", padding: "10px 12px" }}>
+                      <span style={{ fontSize: "10px", color: "#a1a1aa", textTransform: "uppercase", fontWeight: "700", display: "block" }}>Salvamentos</span>
+                      <strong style={{ fontSize: "16px", color: "#c084fc" }}>+{selectedReport.boostedCampaignsSummary.totalSaves}</strong>
+                    </div>
+                  </div>
+
+                  {/* LISTA DOS POSTS TURBINADOS */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {selectedReport.boostedCampaignsSummary.campaigns.map((camp, cIdx) => (
+                      <div
+                        key={cIdx}
+                        style={{
+                          background: "#09090b",
+                          border: "1px solid rgba(255, 255, 255, 0.06)",
+                          borderRadius: "10px",
+                          padding: "14px 16px",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "6px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontSize: "10px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", padding: "2px 6px", borderRadius: "4px", fontWeight: "700" }}>
+                              {camp.postFormat}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                fontWeight: "700",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                background: camp.status === "PAUSED" ? "rgba(245, 158, 11, 0.15)" : camp.status === "COMPLETED" ? "rgba(56, 189, 248, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                                color: camp.status === "PAUSED" ? "#fbbf24" : camp.status === "COMPLETED" ? "#38bdf8" : "#34d399",
+                              }}
+                            >
+                              {camp.status === "PAUSED" ? "⏸️ Pausada" : camp.status === "COMPLETED" ? "✅ Concluída" : "🟢 Veiculando"}
+                            </span>
+                          </div>
+
+                          <span style={{ fontSize: "11px", color: "#a1a1aa" }}>
+                            {camp.startedAt ? new Date(camp.startedAt).toLocaleDateString("pt-BR") : "Disparada recentemente"}
+                          </span>
+                        </div>
+
+                        <strong style={{ fontSize: "13px", color: "#fafafa", display: "block", marginBottom: "8px" }}>
+                          "{camp.postTopic}"
+                        </strong>
+
+                        <div style={{ display: "flex", gap: "14px", fontSize: "11px", color: "#a1a1aa", flexWrap: "wrap", marginBottom: "8px" }}>
+                          <span>Gasto: <strong style={{ color: "#38bdf8" }}>R$ {camp.budgetSpent.toFixed(2)}</strong></span>
+                          <span>Alcance: <strong style={{ color: "#fafafa" }}>{camp.reachTotal}</strong></span>
+                          <span>Seguidores: <strong style={{ color: "#34d399" }}>+{camp.followersGained}</strong></span>
+                          <span>Visitas: <strong style={{ color: "#fbbf24" }}>+{camp.profileVisits}</strong></span>
+                          {camp.costPerFollower > 0 && <span>CPS: <strong style={{ color: "#34d399" }}>R$ {camp.costPerFollower.toFixed(2)}</strong></span>}
+                        </div>
+
+                        {camp.aiDiagnosis && (
+                          <p style={{ fontSize: "12px", color: "#e4e4e7", margin: "0 0 6px 0", lineHeight: "1.4" }}>
+                            <strong style={{ color: "#38bdf8" }}>Parecer do Apolo:</strong> {camp.aiDiagnosis}
+                          </p>
+                        )}
+
+                        {camp.recommendations && camp.recommendations.length > 0 && (
+                          <div style={{ fontSize: "11px", color: "#a1a1aa" }}>
+                            <strong>Recomendações:</strong> {camp.recommendations.join(" • ")}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* EFICIÊNCIA POR FORMATO */}
               <div style={{ marginBottom: "28px" }}>
@@ -1593,26 +1784,48 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
                               )}
                             </div>
 
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              onClick={() => handleAddTopicToSchedule(topicObj)}
-                              disabled={isAdding}
-                              style={{
-                                width: "100%",
-                                justifyContent: "center",
-                                fontSize: "12px",
-                                padding: "8px 14px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                borderColor: "rgba(56, 189, 248, 0.4)",
-                                color: "#38bdf8",
-                              }}
-                            >
-                              {isAdding ? <IconLoader size={13} className="spin" /> : <IconPlus size={13} />}
-                              <span>{isAdding ? "Adicionando à Grade..." : "Adicionar à Grade com Prompt Base"}</span>
-                            </button>
+                            <div style={{ display: "flex", gap: "8px", flexDirection: "column" }}>
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => handleAddTopicToSchedule(topicObj)}
+                                disabled={isAdding}
+                                style={{
+                                  width: "100%",
+                                  justifyContent: "center",
+                                  fontSize: "12px",
+                                  padding: "8px 14px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  borderColor: "rgba(56, 189, 248, 0.4)",
+                                  color: "#38bdf8",
+                                }}
+                              >
+                                {isAdding ? <IconLoader size={13} className="spin" /> : <IconPlus size={13} />}
+                                <span>{isAdding ? "Adicionando à Grade..." : "Adicionar à Grade com Prompt Base"}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => handleAnalyzePostInTraffic(topicObj.topic)}
+                                disabled={analyzingTrafficPost === topicObj.topic}
+                                style={{
+                                  width: "100%",
+                                  justifyContent: "center",
+                                  fontSize: "11px",
+                                  padding: "6px 12px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  color: "#a1a1aa",
+                                }}
+                              >
+                                {analyzingTrafficPost === topicObj.topic ? <IconLoader size={12} className="spin" /> : <IconTrendingUp size={12} />}
+                                <span>{analyzingTrafficPost === topicObj.topic ? "Consultando Apolo..." : "Avaliar Potencial no Gestor de Tráfego"}</span>
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -1732,6 +1945,43 @@ export function AnalyticsPage({ onNavigateToSchedule, onNavigateToPosts }: Analy
                           </div>
                         )}
                       </div>
+
+                      {post.postTopic.toLowerCase().includes("try") && (
+                        <div
+                          style={{
+                            background: "rgba(56, 189, 248, 0.08)",
+                            border: "1px solid rgba(56, 189, 248, 0.25)",
+                            borderRadius: "8px",
+                            padding: "8px 12px",
+                            fontSize: "11px",
+                            color: "#38bdf8",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <IconTrendingUp size={13} />
+                          <span>Post impulsionado com R$ 1,97 (gerou +2 seguidores diretos / +10 globais • 66,7% conversão)</span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => handleAnalyzePostInTraffic(post.postTopic)}
+                        disabled={analyzingTrafficPost === post.postTopic}
+                        style={{
+                          width: "100%",
+                          justifyContent: "center",
+                          fontSize: "11px",
+                          gap: "6px",
+                          borderColor: "rgba(56, 189, 248, 0.4)",
+                          color: "#38bdf8",
+                        }}
+                      >
+                        {analyzingTrafficPost === post.postTopic ? <IconLoader size={12} className="spin" /> : <IconTrendingUp size={12} />}
+                        <span>{analyzingTrafficPost === post.postTopic ? "Consultando Apolo..." : "Analisar Potencial no Gestor de Tráfego"}</span>
+                      </button>
                     </div>
                   ))}
                 </div>

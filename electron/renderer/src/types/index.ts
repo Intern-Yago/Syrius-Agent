@@ -5,6 +5,7 @@ export type Page =
   | "schedule"
   | "trending"
   | "posts"
+  | "ads"
   | "interactions"
   | "analytics"
   | "tests"
@@ -16,6 +17,7 @@ export type ActivityType =
   | "image_regeneration"
   | "video_regeneration"
   | "analytics"
+  | "ads_growth"
   | "tests"
   | "schedule_ai"
   | "trending_scan"
@@ -381,6 +383,113 @@ export interface TrendingTopicItem {
   updatedAt: string;
 }
 
+export interface BoostCampaign {
+  id: string;
+  postId?: string | null;
+  postTopic: string;
+  postFormat?: string | null;
+  platform: string;
+  budgetSpent: number;
+  currency: string;
+  durationDays: number;
+  dailyBudget?: number | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  objective: string;
+  followersGained: number;
+  savesCount: number;
+  profileVisits: number;
+  reachTotal: number;
+  impressions: number;
+  clicksCount: number;
+  costPerFollower?: number | null;
+  costPerSave?: number | null;
+  costPerVisit?: number | null;
+  targetAudience?: any;
+  aiDiagnosis?: string | null;
+  recommendations?: string[] | null;
+  status: "ACTIVE" | "COMPLETED" | "PLANNED" | string;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BoostOpportunity {
+  postId?: string;
+  topic: string;
+  format: string;
+  opportunityScore: number;
+  tier: "HOT" | "MEDIUM" | "LOW_RISK" | "AVOID";
+  whyBoostNow: string;
+  recommendedObjective: "PROFILE_VISITS" | "POST_ENGAGEMENT" | "MORE_MESSAGES" | string;
+  recommendedDailyBudget: number;
+  recommendedDurationDays: number;
+  totalEstimatedInvestment: number;
+  estimatedNewFollowers: string;
+  estimatedSaves: string;
+  targetAudienceSnippet: {
+    ageRange: string;
+    locations: string[];
+    topInterests: string[];
+  };
+  boostAngleAdvice: string;
+  bestDayTimeWindow?: string;
+  bestTimeRationale?: string;
+}
+
+export interface TargetAudiencePreset {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  objective: string;
+  minAge: number;
+  maxAge: number;
+  genders: string;
+  locations: string[];
+  interests: string[];
+  jobTitles: string[];
+  behaviors: string[];
+  exclusions: string[];
+  suggestedAction?: string | null;
+  isSystemDefault?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BudgetProjection {
+  totalBudget: number;
+  estimatedReachMin: number;
+  estimatedReachMax: number;
+  estimatedImpressionsMin: number;
+  estimatedImpressionsMax: number;
+  estimatedProfileVisitsMin: number;
+  estimatedProfileVisitsMax: number;
+  estimatedFollowersMin: number;
+  estimatedFollowersMax: number;
+  estimatedSavesMin: number;
+  estimatedSavesMax: number;
+  estimatedCostPerFollowerMin: number;
+  estimatedCostPerFollowerMax: number;
+  roiTier: "EXCELENTE" | "ALTO" | "MODERADO";
+  analysisNote: string;
+}
+
+export interface TrafficBudgetSummary {
+  monthlyBudget: number;
+  totalSpentThisMonth: number;
+  remainingBudget: number;
+  strategyMode: "CONSERVATIVE" | "OPPORTUNISTIC" | "AGGRESSIVE";
+  autoBoostEnabled: boolean;
+  autoBoostMinScore: number;
+  autoBoostDailyBudget: number;
+  notifyEmailOnSchedule: boolean;
+  burnRateStatus: "HEALTHY" | "LOW" | "DEPLETED";
+  daysRemainingInMonth: number;
+  dailyIdealAllowance: number;
+  statusMessage: string;
+}
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -402,6 +511,7 @@ declare global {
       onPublishProgress?: (callback: (data: any) => void) => () => void;
       getActiveRegenerations?: () => Promise<any>;
       onRegenerateProgress?: (callback: (data: any) => void) => () => void;
+      generatePostCaptionAndHashtags?: (postId: string) => Promise<{ success: boolean; caption?: string; hashtags?: string[]; error?: string }>;
       getSchedule?: () => Promise<ScheduleSlot[]>;
       saveScheduleSlot?: (slot: ScheduleSlot) => Promise<ScheduleSlot[]>;
       saveScheduleAll?: (slots: ScheduleSlot[], weekOffset?: number) => Promise<ScheduleSlot[]>;
@@ -450,8 +560,37 @@ declare global {
       refreshTrendingTopics?: () => Promise<{ success: boolean; topics?: TrendingTopicItem[]; error?: string }>;
       ignoreTrendingTopic?: (topicId: string) => Promise<{ success: boolean; error?: string }>;
       markTrendingAsGenerated?: (topicId: string, postId: string) => Promise<{ success: boolean; error?: string }>;
+
+      // Gestor de Tráfego Pago & Propaganda (Ads Manager)
+      getAdsBudgetSummary?: () => Promise<{ success: boolean; summary?: TrafficBudgetSummary; error?: string }>;
+      updateAdsBudgetConfig?: (data: { monthlyBudget?: number; strategyMode?: any }) => Promise<{ success: boolean; summary?: TrafficBudgetSummary; error?: string }>;
+      getAdsCampaigns?: () => Promise<{ campaigns: BoostCampaign[]; summary: any }>;
+      saveAdsCampaign?: (campaign: Partial<BoostCampaign>) => Promise<{ success: boolean; campaign?: BoostCampaign; error?: string }>;
+      deleteAdsCampaign?: (id: string) => Promise<{ success: boolean; error?: string }>;
+      updateAdsCampaignStatus?: (payload: { id: string; status: "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED" | "DELETED" }) => Promise<{ success: boolean; message?: string; status?: string; error?: string }>;
+      analyzeAdsPostMortem?: (data: any) => Promise<{ success: boolean; analysis?: any; error?: string }>;
+      getAdsOpportunities?: (forceRefresh?: boolean) => Promise<{ success: boolean; candidates?: BoostOpportunity[]; accountBudgetRecommendation?: any; error?: string }>;
+      analyzePostForBoost?: (postId: string) => Promise<{ success: boolean; isRecommended?: boolean; opportunity?: BoostOpportunity; aiFeedback?: string; error?: string }>;
+      generateAdsAudience?: (payload: { theme?: string; postId?: string; objective?: string }) => Promise<{ success: boolean; audience?: any; error?: string }>;
+      calculateAdsProjection?: (params: { dailyBudget: number; durationDays: number; objective: string }) => Promise<{ success: boolean; projection?: BudgetProjection; error?: string }>;
+      chatAdsConsultant?: (payload: { message: string; history?: any[] }) => Promise<{ success: boolean; reply?: string; suggestedQuestions?: string[]; error?: string }>;
+      getAdsAudiences?: () => Promise<TargetAudiencePreset[]>;
+      saveAdsAudience?: (preset: Partial<TargetAudiencePreset>) => Promise<{ success: boolean; preset?: TargetAudiencePreset; error?: string }>;
+      deleteAdsAudience?: (id: string) => Promise<{ success: boolean; error?: string }>;
+      syncAdsInstagramInsights?: (postId: string) => Promise<{
+        success: boolean;
+        metrics?: {
+          impressions: number;
+          reach: number;
+          likes: number;
+          comments: number;
+          saves: number;
+          shares: number;
+          profileVisits: number;
+          suggestedSpent: number;
+        };
+        error?: string;
+      }>;
     };
   }
 }
-
-

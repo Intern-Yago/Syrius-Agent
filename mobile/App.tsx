@@ -1,137 +1,81 @@
 import React, { useState } from "react";
-import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, StatusBar } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ScheduleScreen } from "./src/screens/ScheduleScreen";
-import { AgencyMeetingScreen } from "./src/screens/AgencyMeetingScreen";
-import { PostsScreen } from "./src/screens/PostsScreen";
-import { SettingsScreen } from "./src/screens/SettingsScreen";
-import { colors } from "./src/theme/colors";
-import { Calendar, Bot, Layers, Wifi } from "lucide-react-native";
+import { View, StyleSheet, StatusBar, LogBox } from "react-native";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 
-export default function App() {
-  const [currentTab, setCurrentTab] = useState<"schedule" | "agency" | "posts" | "settings">("schedule");
+LogBox.ignoreLogs([
+  "Expo AV has been deprecated",
+  "[expo-av]",
+  "SafeAreaView has been deprecated",
+  "Each child in a list should have a unique",
+]);
+LogBox.ignoreAllLogs(true);
+
+import { DashboardScreen } from "./src/screens/DashboardScreen";
+import { AgencyMeetingScreen } from "./src/screens/AgencyMeetingScreen";
+import { ActivitiesScreen } from "./src/screens/ActivitiesScreen";
+import { ScheduleScreen } from "./src/screens/ScheduleScreen";
+import { TrendingScreen } from "./src/screens/TrendingScreen";
+import { PostsScreen } from "./src/screens/PostsScreen";
+import { AdsScreen } from "./src/screens/AdsScreen";
+import { InteractionsScreen } from "./src/screens/InteractionsScreen";
+import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
+import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { SidebarDrawer, MobileTab } from "./src/components/SidebarDrawer";
+import { colors } from "./src/theme/colors";
+
+function MainApp() {
+  const [currentTab, setCurrentTab] = useState<MobileTab>("home");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const insets = useSafeAreaInsets();
 
   return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} translucent={true} />
+
+      {/* Conteúdo da Tela Ativa (100% Espelho do Electron) */}
+      <View style={styles.content}>
+        {currentTab === "home" && (
+          <DashboardScreen
+            onOpenMenu={() => setDrawerOpen(true)}
+            onNavigate={(tab) => setCurrentTab(tab)}
+          />
+        )}
+        {currentTab === "agency" && <AgencyMeetingScreen onOpenMenu={() => setDrawerOpen(true)} />}
+        {currentTab === "activities" && <ActivitiesScreen onOpenMenu={() => setDrawerOpen(true)} />}
+        {currentTab === "schedule" && <ScheduleScreen onOpenMenu={() => setDrawerOpen(true)} />}
+        {currentTab === "trending" && <TrendingScreen onOpenMenu={() => setDrawerOpen(true)} />}
+        {currentTab === "posts" && <PostsScreen onOpenMenu={() => setDrawerOpen(true)} />}
+        {currentTab === "ads" && <AdsScreen onOpenMenu={() => setDrawerOpen(true)} />}
+        {currentTab === "interactions" && <InteractionsScreen onOpenMenu={() => setDrawerOpen(true)} />}
+        {currentTab === "analytics" && <AnalyticsScreen onOpenMenu={() => setDrawerOpen(true)} />}
+        {currentTab === "settings" && <SettingsScreen onOpenMenu={() => setDrawerOpen(true)} />}
+      </View>
+
+      {/* Menu Lateral Deslizante com todas as opções do Electron */}
+      <SidebarDrawer
+        visible={drawerOpen}
+        currentTab={currentTab}
+        onSelectTab={(tab) => setCurrentTab(tab)}
+        onClose={() => setDrawerOpen(false)}
+      />
+    </View>
+  );
+}
+
+export default function App() {
+  return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-
-        {/* Conteúdo da Aba Ativa */}
-        <View style={styles.content}>
-          {currentTab === "schedule" && <ScheduleScreen />}
-          {currentTab === "agency" && <AgencyMeetingScreen />}
-          {currentTab === "posts" && <PostsScreen />}
-          {currentTab === "settings" && <SettingsScreen />}
-        </View>
-
-        {/* Barra de Navegação Inferior (Bottom Tabs) */}
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setCurrentTab("schedule")}
-          >
-            <Calendar
-              size={20}
-              color={currentTab === "schedule" ? colors.primary : colors.textDim}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                currentTab === "schedule" && styles.tabLabelActive,
-              ]}
-            >
-              Grade
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setCurrentTab("agency")}
-          >
-            <Bot
-              size={20}
-              color={currentTab === "agency" ? colors.purple : colors.textDim}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                currentTab === "agency" && { color: colors.purple, fontWeight: "700" },
-              ]}
-            >
-              Estelar
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setCurrentTab("posts")}
-          >
-            <Layers
-              size={20}
-              color={currentTab === "posts" ? colors.primary : colors.textDim}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                currentTab === "posts" && styles.tabLabelActive,
-              ]}
-            >
-              Acervo
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setCurrentTab("settings")}
-          >
-            <Wifi
-              size={20}
-              color={currentTab === "settings" ? colors.primary : colors.textDim}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                currentTab === "settings" && styles.tabLabelActive,
-              ]}
-            >
-              Rede
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <MainApp />
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
     flex: 1,
-  },
-  tabBar: {
-    flexDirection: "row",
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-    paddingVertical: 10,
-    paddingBottom: 14,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  tabLabel: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  tabLabelActive: {
-    color: colors.primary,
-    fontWeight: "700",
   },
 });

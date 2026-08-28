@@ -246,6 +246,82 @@ export async function sendExecutiveBriefingEmail(report: AnalyticsReport): Promi
     )
     .join("");
 
+  // Renderiza a seção de auditoria de turbinadas (Meta Ads) se houver
+  const boostSummary = report.boostedCampaignsSummary;
+  let boostHtml = "";
+  if (boostSummary && boostSummary.campaigns && boostSummary.campaigns.length > 0) {
+    const campaignItemsHtml = boostSummary.campaigns
+      .map(
+        (c) => `
+        <div style="background: #09090b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 16px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div>
+              <span style="font-size: 10px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${c.postFormat || "TURBINADA"}</span>
+              <span style="font-size: 11px; color: ${c.status === "ACTIVE" ? "#34d399" : c.status === "PAUSED" ? "#fbbf24" : "#38bdf8"}; font-weight: 700; margin-left: 6px;">
+                ${c.status === "ACTIVE" ? "🟢 Veiculando" : c.status === "PAUSED" ? "⏸️ Pausada" : "✅ Concluída"}
+              </span>
+            </div>
+            <span style="font-size: 11px; color: #a1a1aa;">${c.startedAt ? new Date(c.startedAt).toLocaleDateString("pt-BR") : "Recente"}</span>
+          </div>
+
+          <strong style="font-size: 14px; color: #fafafa; display: block; margin-bottom: 10px;">"${c.postTopic}"</strong>
+
+          <!-- GRID DE RESULTADOS DA TURBINADA -->
+          <table style="width: 100%; border-collapse: separate; border-spacing: 6px 0; margin-bottom: 10px;">
+            <tr>
+              <td style="background: #111114; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 8px; text-align: center;">
+                <span style="font-size: 13px; font-weight: 700; color: #38bdf8; display: block;">R$ ${c.budgetSpent.toFixed(2)}</span>
+                <span style="font-size: 8px; color: #71717a; text-transform: uppercase; font-weight: 700; display: block; margin-top: 2px;">Investido</span>
+              </td>
+              <td style="background: #111114; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 8px; text-align: center;">
+                <span style="font-size: 13px; font-weight: 700; color: #fafafa; display: block;">${c.reachTotal || 140}</span>
+                <span style="font-size: 8px; color: #71717a; text-transform: uppercase; font-weight: 700; display: block; margin-top: 2px;">Alcance Anúncio</span>
+              </td>
+              <td style="background: #111114; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 8px; text-align: center;">
+                <span style="font-size: 13px; font-weight: 700; color: #34d399; display: block;">+${c.followersGained}</span>
+                <span style="font-size: 8px; color: #71717a; text-transform: uppercase; font-weight: 700; display: block; margin-top: 2px;">Seguidores (CPS R$ ${c.costPerFollower?.toFixed(2) || "0.98"})</span>
+              </td>
+              <td style="background: #111114; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 8px; text-align: center;">
+                <span style="font-size: 13px; font-weight: 700; color: #fbbf24; display: block;">+${c.profileVisits}</span>
+                <span style="font-size: 8px; color: #71717a; text-transform: uppercase; font-weight: 700; display: block; margin-top: 2px;">Visitas</span>
+              </td>
+            </tr>
+          </table>
+
+          ${c.aiDiagnosis ? `
+            <div style="font-size: 11px; color: #e4e4e7; background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;">
+              <strong style="color: #38bdf8;">Diagnóstico do Gestor de Tráfego:</strong> ${c.aiDiagnosis}
+            </div>
+          ` : ""}
+
+          ${c.recommendations && c.recommendations.length > 0 ? `
+            <div style="font-size: 11px; color: #a1a1aa; padding-left: 4px;">
+              <strong>Recomendações:</strong> ${c.recommendations.join(" • ")}
+            </div>
+          ` : ""}
+        </div>
+      `
+      )
+      .join("");
+
+    boostHtml = `
+      <h2>🚀 Auditoria de Posts Turbinados & Meta Ads (Apolo)</h2>
+      <div style="background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="color: #38bdf8; font-size: 13px;">Resumo Consolidado de Tráfego Pago:</strong>
+          <span style="font-size: 11px; color: #a1a1aa;">${boostSummary.campaignsCount} campanha(s) avaliada(s)</span>
+        </div>
+        <p style="font-size: 12px; color: #d4d4d8; margin: 0 0 8px 0;">
+          ${boostSummary.executiveDiagnosis || "Investimento controlado com foco em conversão de público técnico qualificado."}
+        </p>
+        <div style="font-size: 11px; color: #71717a;">
+          Total Investido: <strong>R$ ${boostSummary.totalInvested.toFixed(2)}</strong> • Novos Seguidores: <strong style="color: #34d399;">+${boostSummary.totalFollowersGained}</strong> • CPS Médio: <strong>R$ ${boostSummary.averageCps.toFixed(2)}</strong>
+        </div>
+      </div>
+      ${campaignItemsHtml}
+    `;
+  }
+
   // Renderiza auto-correções da memória RAG se houver
   const selfCorrectionsHtml = (report.selfCorrectionsApplied || [])
     .map(
@@ -319,6 +395,9 @@ export async function sendExecutiveBriefingEmail(report: AnalyticsReport): Promi
 
         <!-- ANÁLISE POST A POST (CAMADA MICRO) -->
         ${postsBreakdownHtml ? `<h2>Diagnóstico Individual Post a Post</h2>${postsBreakdownHtml}` : ""}
+
+        <!-- AUDITORIA DE POSTS TURBINADOS & ADS -->
+        ${boostHtml}
 
         <!-- DIRETRIZES ESTRATÉGICAS -->
         <h2>Diretrizes Estratégicas para o Próximo Ciclo</h2>

@@ -12,6 +12,7 @@ import {
   IconAlertTriangle,
   IconActivity,
   IconTrendingUp,
+  IconMegaphone,
   IconX,
 } from "../common/Icons";
 import logoImg from "../../assets/logo.png";
@@ -160,6 +161,31 @@ export function Sidebar({ currentPage, onNavigate, running, systemAlert, onDismi
             <IconLibrary size={16} />
           </span>
           <span>Publicações</span>
+        </button>
+
+        <button
+          className={currentPage === "ads" ? "nav-item active" : "nav-item"}
+          onClick={() => onNavigate("ads")}
+        >
+          <span className="nav-icon" style={{ color: "#38bdf8" }}>
+            <IconMegaphone size={16} />
+          </span>
+          <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+            <span>Propaganda & Ads</span>
+            <span
+              style={{
+                background: "rgba(56, 189, 248, 0.15)",
+                color: "#38bdf8",
+                fontSize: "9px",
+                fontWeight: "700",
+                padding: "1px 5px",
+                borderRadius: "6px",
+                border: "1px solid rgba(56, 189, 248, 0.3)",
+              }}
+            >
+              Tráfego
+            </span>
+          </span>
         </button>
 
         <button

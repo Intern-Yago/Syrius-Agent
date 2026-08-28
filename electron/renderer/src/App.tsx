@@ -14,6 +14,7 @@ import { InteractionsPage } from "./pages/InteractionsPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { TestsPage } from "./pages/TestsPage";
 import { TrendingPage } from "./pages/TrendingPage";
+import { AdsPage } from "./pages/AdsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { IconX, IconLoader, IconClock, IconTag, IconCalendar } from "./components/common/Icons";
 import { ActivitiesProvider, useActivities } from "./context/ActivitiesContext";
@@ -585,6 +586,15 @@ function AppContent() {
                 setRepoModalOpen(true);
               }}
               onOpenExperiments={() => setExperimentsModalOpen(true)}
+            />
+          )}
+
+          {currentPage === "ads" && (
+            <AdsPage
+              onNavigateToPost={(postId) => {
+                setNavTargetId(postId);
+                setCurrentPage("posts");
+              }}
             />
           )}
 

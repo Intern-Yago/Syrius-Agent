@@ -4,7 +4,8 @@
   "description": "Syrius Agent - Autonomous Instagram & Social Media Growth Engine with Gemini 2.5 & Recraft v3",
   "main": "dist-electron/electron/main.js",
   "scripts": {
-    "dev": "concurrently -k -n \"DESKTOP_UI,ELECTRON,EXPO_MOBILE\" -c \"cyan,blue,magenta\" \"npm run dev:renderer\" \"npm run dev:electron\" \"npm run dev:mobile\"",
+    "dev": "node scripts/dev-dashboard.mjs",
+    "dev:classic": "concurrently -k -n \"DESKTOP_UI,ELECTRON,EXPO_MOBILE\" -c \"cyan,blue,magenta\" \"npm run dev:renderer\" \"npm run dev:electron\" \"npm run dev:mobile\"",
     "dev:desktop": "concurrently -k -n \"DESKTOP_UI,ELECTRON\" -c \"cyan,blue\" \"npm run dev:renderer\" \"npm run dev:electron\"",
     "dev:mobile": "npm --prefix mobile run start",
     "predev": "npm run build:electron",

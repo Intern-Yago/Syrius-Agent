@@ -82,6 +82,10 @@ import {
 } from "./ipc/agency-chat.js";
 
 import {
+  registerTrafficAdsIPC,
+} from "./ipc/traffic-ads.js";
+
+import {
   startMediaServer,
 } from "./media-server.js";
 
@@ -314,6 +318,7 @@ app.whenReady().then(async () => {
   registerGitHubIPC();
   registerExperimentsIPC();
   registerAgencyChatHandlers(() => mainWindow);
+  registerTrafficAdsIPC();
 
   // Inicia o API Gateway Server para o Syrius Mobile App
   try {

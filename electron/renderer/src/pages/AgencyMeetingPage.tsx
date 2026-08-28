@@ -93,7 +93,23 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
     const unsub = window.electronAPI.onAgencyStatusChange((data) => {
       if (data.isProcessing) {
         setLoading(true);
-        loadChatHistory();
+        if (data.userText) {
+          setMessages((prev) => {
+            const alreadyHas = prev.some((m) => m.text === data.userText && m.sender === "user");
+            if (!alreadyHas) {
+              return [
+                ...prev,
+                {
+                  id: `pending-user-${Date.now()}`,
+                  sender: "user",
+                  text: data.userText,
+                  timestamp: new Date().toISOString(),
+                },
+              ];
+            }
+            return prev;
+          });
+        }
       } else {
         setLoading(false);
         loadChatHistory();
@@ -135,16 +151,35 @@ export function AgencyMeetingPage({ onProduceSlot, onNavigateToPosts, onNavigate
 
   async function loadChatHistory() {
     try {
+      let history: ChatMessage[] = [];
       if (window.electronAPI?.agencyGetHistory) {
-        const history = await window.electronAPI.agencyGetHistory();
-        setMessages(history);
+        history = await window.electronAPI.agencyGetHistory();
       }
+
+      let isProc = false;
+      let userTxt: string | null = null;
       if (window.electronAPI?.agencyIsProcessing) {
         const proc = await window.electronAPI.agencyIsProcessing();
-        if (proc?.isProcessing) {
-          setLoading(true);
+        isProc = Boolean(proc?.isProcessing);
+        userTxt = proc?.userText || null;
+      }
+
+      if (isProc) {
+        setLoading(true);
+        if (userTxt && !history.some((m) => m.text === userTxt && m.sender === "user")) {
+          history = [
+            ...history,
+            {
+              id: `pending-user-${Date.now()}`,
+              sender: "user",
+              text: userTxt,
+              timestamp: new Date().toISOString(),
+            },
+          ];
         }
       }
+
+      setMessages(history);
     } catch (err) {
       console.error("Erro ao carregar histórico:", err);
     }
